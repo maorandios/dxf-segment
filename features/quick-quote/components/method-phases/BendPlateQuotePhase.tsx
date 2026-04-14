@@ -1,7 +1,7 @@
 "use client";
 
 import type { MaterialType } from "@/types/materials";
-import type { BendPlateQuoteItem } from "../../bend-plate/types";
+import type { BendPlateQuoteItem, BendTemplateId } from "../../bend-plate/types";
 import { BendPlateBuilder } from "../../bend-plate/BendPlateBuilder";
 
 interface BendPlateQuotePhaseProps {
@@ -13,6 +13,7 @@ interface BendPlateQuotePhaseProps {
   onResetAll: () => void;
   onBack: () => void;
   onComplete: () => void;
+  initialTemplate?: BendTemplateId;
 }
 
 export function BendPlateQuotePhase({
@@ -24,6 +25,7 @@ export function BendPlateQuotePhase({
   onResetAll,
   onBack,
   onComplete,
+  initialTemplate,
 }: BendPlateQuotePhaseProps) {
   return (
     <BendPlateBuilder
@@ -35,6 +37,7 @@ export function BendPlateQuotePhase({
       onResetAll={onResetAll}
       onBack={onBack}
       onComplete={onComplete}
+      initialTemplate={initialTemplate}
     />
   );
 }

@@ -81,6 +81,75 @@
 
   --success: 163 100% 44.1%;
   --warning: 38 92% 50%;
+
+  /* Omega soft UI (also for portaled drawer — must live on :root / html.light) */
+  --omega-page-bg: hsl(205 24% 7%);
+  --omega-surface: hsl(199 30% 11%);
+  --omega-nav-surface: rgba(22, 38, 48, 0.92);
+  --omega-shadow-raised: 0 8px 36px -10px rgba(0, 0, 0, 0.55),
+    0 2px 14px -4px rgba(0, 0, 0, 0.35);
+  --omega-shadow-floating: 0 20px 60px -16px rgba(0, 0, 0, 0.58),
+    0 8px 32px -10px rgba(0, 0, 0, 0.42);
+  --omega-shadow-nav: 0 -14px 52px -12px rgba(0, 0, 0, 0.58),
+    0 -6px 26px -10px rgba(0, 0, 0, 0.4);
+  --omega-shadow-drawer: 14px 0 60px -14px rgba(0, 0, 0, 0.62);
+  --omega-menu-overlay: rgba(0, 0, 0, 0.62);
+}
+
+/* Light theme — toggled via `html.light` (see Omega theme switch + inline boot script) */
+html.light {
+  color-scheme: light;
+  --background: 210 20% 98%;
+  --foreground: 220 25% 10%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 220 25% 10%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 25% 10%;
+
+  --primary: 163 94% 38%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 220 25% 10%;
+
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 10% 38%;
+
+  --accent: 220 14% 93%;
+  --accent-foreground: 220 25% 10%;
+
+  --destructive: 0 72% 48%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 13% 88%;
+  --input: 220 13% 92%;
+  --ring: 163 94% 38%;
+
+  --sidebar-bg: 210 20% 98%;
+  --sidebar-fg: 220 25% 10%;
+  --sidebar-accent: 220 14% 96%;
+  --sidebar-border: 220 13% 88%;
+
+  --success: 163 94% 38%;
+  --warning: 38 92% 45%;
+
+  --omega-page-bg: #f8f8f8;
+  --omega-surface: hsl(0 0% 100%);
+  --omega-nav-surface: rgba(255, 255, 255, 0.9);
+  --omega-shadow-raised: 0 4px 28px -6px rgba(15, 23, 42, 0.09),
+    0 2px 14px -4px rgba(15, 23, 42, 0.05);
+  --omega-shadow-floating: 0 16px 52px -14px rgba(15, 23, 42, 0.14),
+    0 6px 24px -8px rgba(15, 23, 42, 0.08);
+  --omega-shadow-nav: 0 -12px 48px -12px rgba(15, 23, 42, 0.12),
+    0 -4px 22px -8px rgba(15, 23, 42, 0.07);
+  --omega-shadow-drawer: 10px 0 52px -10px rgba(15, 23, 42, 0.16);
+  --omega-menu-overlay: rgba(15, 23, 42, 0.28);
+}
+
+html.light {
+  --color-input: #e8ecf0;
 }
 
 * {
@@ -124,8 +193,8 @@ body {
     ):not([type="image"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="color"]),
   textarea,
   select {
-    background-color: rgb(12, 19, 24);
-    border-color: rgba(255, 255, 255, 0.08);
+    background-color: hsl(var(--input));
+    border-color: hsl(var(--border));
   }
 
   table th,
@@ -166,7 +235,7 @@ input[type="number"] {
   appearance: textfield;
 }
 
-/* WebKit autofill — match field bg rgb(12, 19, 24) */
+/* WebKit autofill — match themed field surface */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -178,8 +247,8 @@ select:-webkit-autofill:hover,
 select:-webkit-autofill:focus {
   -webkit-text-fill-color: hsl(var(--foreground));
   caret-color: hsl(var(--foreground));
-  -webkit-box-shadow: 0 0 0 1000px #0c1318 inset;
-  box-shadow: 0 0 0 1000px #0c1318 inset;
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--input)) inset;
+  box-shadow: 0 0 0 1000px hsl(var(--input)) inset;
   transition: background-color 99999s ease-out 0s;
 }
 
@@ -192,6 +261,111 @@ select:-webkit-autofill:focus {
   50% {
     opacity: 0.48;
   }
+}
+
+/* Omega side menu — smooth slide + optional opacity; overlay: fade + backdrop blur */
+@keyframes omega-sidebar-in {
+  from {
+    transform: translate3d(-100%, 0, 0);
+    opacity: 0.96;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes omega-sidebar-out {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(-100%, 0, 0);
+    opacity: 0.96;
+  }
+}
+
+/* Overlay: opacity only — backdrop-filter does not animate reliably cross-browser */
+@keyframes omega-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes omega-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/*
+ * Omega menu — use attribute selectors (Radix data-state); Tailwind data: variants often skip custom animations
+ */
+.omega-menu-overlay-el[data-state="open"] {
+  animation: omega-overlay-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.omega-menu-overlay-el[data-state="closed"] {
+  animation: omega-overlay-out 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.omega-sidebar-panel[data-state="open"] {
+  animation: omega-sidebar-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.omega-sidebar-panel[data-state="closed"] {
+  animation: omega-sidebar-out 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/*
+ * Omega — soft floating UI (diffuse shadows, large radii; tokens on :root / html.light above)
+ */
+.omega-app {
+  background: var(--omega-page-bg);
+  transition: background-color 0.35s ease;
+}
+
+.omega-app-surface-header {
+  background: var(--omega-surface);
+  box-shadow: var(--omega-shadow-raised);
+}
+
+.omega-app-surface-card {
+  background: var(--omega-surface);
+  box-shadow: var(--omega-shadow-floating);
+}
+
+.omega-app-bottom-nav {
+  background: var(--omega-nav-surface);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--omega-shadow-nav);
+}
+
+.omega-app-drawer {
+  background: var(--omega-surface);
+  box-shadow: var(--omega-shadow-drawer);
+}
+
+.omega-app-menu-overlay {
+  background-color: var(--omega-menu-overlay);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  will-change: opacity;
+}
+
+.omega-sidebar-panel {
+  will-change: transform, opacity;
+}
+
+.omega-app-icon-hit {
+  background: var(--omega-surface);
+  box-shadow: var(--omega-shadow-raised);
 }
 
 /* Quote / industrial shells — use with Card-like wrappers */

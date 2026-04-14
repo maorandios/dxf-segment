@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Noto_Sans_Hebrew } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
-import { AppTopBar } from "@/components/shared/AppTopBar";
+import { RootChrome } from "@/components/layout/RootChrome";
+import { OMEGA_THEME_BOOT_SCRIPT } from "@/lib/theme/omegaColorScheme";
 import messages from "@/messages/he.json";
 
 const notoSansHebrew = Noto_Sans_Hebrew({
@@ -26,12 +28,12 @@ export default function RootLayout({
       <body
         className={`${notoSansHebrew.variable} ${notoSansHebrew.className} antialiased`}
       >
-        <div className="flex h-svh min-h-0 flex-col overflow-hidden bg-background">
-          <AppTopBar />
-          <div className="flex min-h-0 min-w-0 w-full max-w-none flex-1 flex-col overflow-auto">
-            {children}
-          </div>
-        </div>
+        <Script
+          id="omega-theme-boot"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: OMEGA_THEME_BOOT_SCRIPT }}
+        />
+        <RootChrome>{children}</RootChrome>
       </body>
     </html>
   );

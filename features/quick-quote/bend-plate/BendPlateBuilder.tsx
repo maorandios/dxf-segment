@@ -262,6 +262,24 @@ interface BendPlateBuilderProps {
   onBack: () => void;
   /** Finish this phase and return to the quote method step (e.g. after validation). */
   onComplete: () => void;
+  /** When set, opens the shape editor immediately for this template (e.g. deep-link from Omega). */
+  initialTemplate?: BendTemplateId;
+}
+
+function initialFormForMaterialAndTemplate(
+  materialType: MaterialType,
+  template?: BendTemplateId
+): BendPlateFormState {
+  if (!template) return createDefaultBendPlateFormState();
+  const next = createFormStateForTemplate(template);
+  return {
+    ...next,
+    global: {
+      ...next.global,
+      material: defaultMaterialGradeForFamily(materialType),
+      finish: phase2DefaultFinish(materialType),
+    },
+  };
 }
 
 export function BendPlateBuilder({
@@ -273,10 +291,15 @@ export function BendPlateBuilder({
   onResetAll,
   onBack,
   onComplete,
+  initialTemplate,
 }: BendPlateBuilderProps) {
-  const [screen, setScreen] = useState<"hub" | "editor">("hub");
+  const [screen, setScreen] = useState<"hub" | "editor">(() =>
+    initialTemplate ? "editor" : "hub"
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<BendPlateFormState>(() => createDefaultBendPlateFormState());
+  const [form, setForm] = useState<BendPlateFormState>(() =>
+    initialFormForMaterialAndTemplate(materialType, initialTemplate)
+  );
 
   const { pts, calc } = useMemo(
     () => computeBendGeometry(form, materialType),
@@ -428,8 +451,8 @@ function BendPlateHub({
 
   return (
     <div className={cn("flex w-full min-w-0 flex-col gap-0", BEND_HUB_VIEWPORT)} dir="rtl">
-      <div className="flex min-h-0 min-w-0 flex-1 gap-0">
-        <aside className="flex h-full min-h-0 w-full max-w-[min(336px,33.6vw)] shrink-0 flex-col border-e border-white/[0.08] bg-card/60">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0 lg:flex-row">
+        <aside className="flex h-auto min-h-0 w-full max-w-none shrink-0 flex-col border-b border-white/[0.08] bg-card/60 lg:h-full lg:max-w-[min(336px,33.6vw)] lg:border-b-0 lg:border-e">
           <div className="shrink-0 space-y-2 px-5 pt-5 pb-4 sm:px-7 sm:pt-6 sm:pb-5">
             <h1 className="text-xl font-semibold text-foreground leading-snug">
               {t(`${BP}.sidebarTitle`)}
@@ -832,8 +855,35 @@ function BendPlateShapeEditor({
   return (
     <div className={cn(BEND_PLATE_FILL)} dir="rtl">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <aside className="flex w-2/5 min-w-0 flex-col border-e border-white/[0.08] bg-card/60">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {/* 2D preview on top; controllers scroll below (mobile-first vertical stack). */}
+          <div className="relative flex min-h-[min(38vh,320px)] w-full shrink-0 flex-col overflow-hidden bg-background lg:min-h-[min(42vh,400px)]">
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[#0f1419] p-1.5 sm:p-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className={cn(
+                    "absolute left-2 top-2 z-10 gap-1.5 shadow-md sm:left-3 sm:top-3",
+                    "[color-scheme:dark]"
+                  )}
+                  onClick={() => setPreview3dOpen(true)}
+                >
+                  {t(`${ED}.preview3d`)}
+                </Button>
+                <ProfilePreview2D
+                  pts={pts}
+                  segments={profileSegmentDims}
+                  bendAnglesDeg={profileBendAnglesDeg}
+                  fill
+                  className="h-full w-full min-h-0 rounded-md border-0 bg-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          <aside className="flex min-h-0 min-w-0 w-full flex-1 flex-col border-t border-white/[0.08] bg-card/60">
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5">
               <div className="space-y-6">
               <div className="space-y-3">
@@ -948,32 +998,6 @@ function BendPlateShapeEditor({
             </div>
             </div>
           </aside>
-
-          <div className="flex w-3/5 min-h-0 min-w-0 flex-col overflow-hidden bg-background">
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[#0f1419] p-1.5 sm:p-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className={cn(
-                    "absolute left-2 top-2 z-10 gap-1.5 shadow-md sm:left-3 sm:top-3",
-                    "[color-scheme:dark]"
-                  )}
-                  onClick={() => setPreview3dOpen(true)}
-                >
-                  {t(`${ED}.preview3d`)}
-                </Button>
-                <ProfilePreview2D
-                  pts={pts}
-                  segments={profileSegmentDims}
-                  bendAnglesDeg={profileBendAnglesDeg}
-                  fill
-                  className="h-full w-full min-h-0 rounded-md border-0 bg-transparent"
-                />
-              </div>
-            </div>
-          </div>
         </div>
 
         <div
