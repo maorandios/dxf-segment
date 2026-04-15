@@ -6,8 +6,7 @@ import {
   OMEGA_COLOR_SCHEME_KEY,
   type OmegaColorScheme,
 } from "@/lib/theme/omegaColorScheme";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { List, ListItem, Toggle } from "konsta/react";
 
 function subscribe(onChange: () => void) {
   const root = document.documentElement;
@@ -42,31 +41,25 @@ export function OmegaThemeToggle() {
     getServerLightSnapshot
   );
 
-  const onCheckedChange = useCallback((checked: boolean) => {
-    const next: OmegaColorScheme = checked ? "light" : "dark";
+  const onCheckedChange = useCallback(() => {
+    const next: OmegaColorScheme = isLight ? "dark" : "light";
     applyOmegaColorScheme(next);
-  }, []);
+  }, [isLight]);
 
   return (
-    <div
-      className="flex items-center justify-between gap-3 rounded-xl px-4 py-3.5"
-      dir="rtl"
-      suppressHydrationWarning
-    >
-      <Label
-        htmlFor="omega-light-mode"
-        className="cursor-pointer text-base font-medium text-foreground"
-      >
-        תצוגה בהירה
-      </Label>
-      <div dir="ltr" className="shrink-0" suppressHydrationWarning>
-        <Switch
-          id="omega-light-mode"
-          checked={isLight}
-          onCheckedChange={onCheckedChange}
-          aria-label={isLight ? "מצב בהיר פעיל" : "מצב כהה פעיל"}
-        />
-      </div>
-    </div>
+    <List strong inset nested>
+      <ListItem
+        label
+        title="תצוגה בהירה"
+        after={
+          <Toggle
+            component="div"
+            className="-my-1"
+            checked={isLight}
+            onChange={onCheckedChange}
+          />
+        }
+      />
+    </List>
   );
 }

@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import "konsta/react/theme.css";
+@import url("https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap");
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   --color-background: hsl(var(--background));
@@ -328,6 +332,7 @@ select:-webkit-autofill:focus {
 .omega-app {
   background: var(--omega-page-bg);
   transition: background-color 0.35s ease;
+  font-family: var(--font-rubik), "Rubik", sans-serif;
 }
 
 .omega-app-surface-header {

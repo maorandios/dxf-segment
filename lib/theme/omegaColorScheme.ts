@@ -15,7 +15,9 @@ export function getStoredOmegaColorScheme(): OmegaColorScheme | null {
 
 export function applyOmegaColorScheme(scheme: OmegaColorScheme): void {
   if (typeof document === "undefined") return;
-  document.documentElement.classList.toggle("light", scheme === "light");
+  const cl = document.documentElement.classList;
+  cl.toggle("light", scheme === "light");
+  cl.toggle("dark", scheme === "dark");
   try {
     window.localStorage.setItem(OMEGA_COLOR_SCHEME_KEY, scheme);
   } catch {
@@ -23,7 +25,11 @@ export function applyOmegaColorScheme(scheme: OmegaColorScheme): void {
   }
 }
 
-/** Inline boot snippet — keep in sync with applyOmegaColorScheme */
+/**
+ * Inline boot snippet — keep in sync with applyOmegaColorScheme.
+ * Sets both "light" and "dark" classes on <html> so Tailwind dark: variants
+ * and Konsta UI dark mode work immediately (no flash).
+ */
 export const OMEGA_THEME_BOOT_SCRIPT = `!function(){try{var t=localStorage.getItem(${JSON.stringify(
   OMEGA_COLOR_SCHEME_KEY
-)});document.documentElement.classList.toggle("light",t==="light");}catch(e){}}();`;
+)});var l=t==="light";document.documentElement.classList.toggle("light",l);document.documentElement.classList.toggle("dark",!l);}catch(e){document.documentElement.classList.add("dark");}}();`;
