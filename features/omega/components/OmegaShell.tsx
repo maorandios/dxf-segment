@@ -55,6 +55,7 @@ export function OmegaShell({ children }: { children: React.ReactNode }) {
           <Menu className="size-5" />
         </button>
         <span className="text-lg font-semibold tracking-tight">Omega</span>
+        <span className="text-[9px] opacity-30 absolute bottom-0.5 left-1/2 -translate-x-1/2">v3</span>
         <div className="size-10" />
       </header>
 
