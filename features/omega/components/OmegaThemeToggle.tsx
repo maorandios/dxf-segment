@@ -6,7 +6,7 @@ import {
   OMEGA_COLOR_SCHEME_KEY,
   type OmegaColorScheme,
 } from "@/lib/theme/omegaColorScheme";
-import { List, ListItem, Toggle } from "konsta/react";
+import { Sun, Moon } from "lucide-react";
 
 function subscribe(onChange: () => void) {
   const root = document.documentElement;
@@ -41,25 +41,32 @@ export function OmegaThemeToggle() {
     getServerLightSnapshot
   );
 
-  const onCheckedChange = useCallback(() => {
+  const toggle = useCallback(() => {
     const next: OmegaColorScheme = isLight ? "dark" : "light";
     applyOmegaColorScheme(next);
   }, [isLight]);
 
   return (
-    <List strong inset nested>
-      <ListItem
-        label
-        title="תצוגה בהירה"
-        after={
-          <Toggle
-            component="div"
-            className="-my-1"
-            checked={isLight}
-            onChange={onCheckedChange}
-          />
-        }
-      />
-    </List>
+    <button
+      type="button"
+      onClick={toggle}
+      className="flex w-full items-center justify-between rounded-xl px-4 py-3 bg-white/5"
+    >
+      <span className="flex items-center gap-3">
+        {isLight ? <Sun className="size-5" /> : <Moon className="size-5" />}
+        <span>{isLight ? "תצוגה בהירה" : "תצוגה כהה"}</span>
+      </span>
+      <span
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${
+          isLight ? "bg-primary" : "bg-white/20"
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block size-5 translate-y-0.5 rounded-full bg-white shadow transition-transform ${
+            isLight ? "translate-x-1" : "translate-x-5"
+          }`}
+        />
+      </span>
+    </button>
   );
 }

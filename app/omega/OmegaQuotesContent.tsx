@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { BlockTitle, List, ListItem, Button, Block, Badge } from "konsta/react";
 
 type QuoteRow = {
   id: number;
@@ -42,38 +41,38 @@ export function OmegaQuotesContent() {
 
   return (
     <div dir="rtl">
-      <BlockTitle large>הצעות מחיר</BlockTitle>
+      <h2 className="mb-4 text-xl font-bold">הצעות מחיר</h2>
 
-      <List strong inset>
+      <div className="rounded-2xl bg-[var(--omega-surface)] divide-y divide-white/5 overflow-hidden">
         {DUMMY_QUOTES.map((row) => (
-          <ListItem
+          <div
             key={row.id}
-            title={row.name}
-            subtitle={formatDate(row.date)}
-            after={
-              <Badge
-                colors={{
-                  bg:
-                    row.status === "הושלם"
-                      ? "bg-green-500"
-                      : "bg-gray-500",
-                  text: "text-white",
-                }}
-              >
-                {row.status}
-              </Badge>
-            }
-            link
-            chevronMaterial={false}
-          />
+            className="flex items-center justify-between px-4 py-3 text-sm active:bg-white/5 transition-colors"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="font-medium truncate">{row.name}</p>
+              <p className="text-xs opacity-50 mt-0.5">{formatDate(row.date)}</p>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium text-white ${
+                row.status === "הושלם" ? "bg-green-500" : "bg-gray-500"
+              }`}
+            >
+              {row.status}
+            </span>
+          </div>
         ))}
-      </List>
+      </div>
 
-      <Block className="pb-4">
-        <Button large rounded onClick={() => router.push("/omega/new")}>
+      <div className="mt-4 px-4 pb-4">
+        <button
+          type="button"
+          onClick={() => router.push("/omega/new")}
+          className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white active:bg-primary/80 transition-colors"
+        >
           יצירת הצעה חדשה
-        </Button>
-      </Block>
+        </button>
+      </div>
     </div>
   );
 }

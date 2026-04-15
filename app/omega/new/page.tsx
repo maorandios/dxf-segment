@@ -1,15 +1,8 @@
 "use client";
 
 import { Layers, Shapes } from "lucide-react";
-import { BlockTitle, Card } from "konsta/react";
 
-const CARDS: {
-  title: string;
-  description: string;
-  icon: typeof Layers;
-  iconBg: string;
-  iconColor: string;
-}[] = [
+const CARDS = [
   {
     title: "פלטה שטוחה",
     description: "הגדרת פלטה לפי אורך, רוחב, עובי וכמות",
@@ -29,25 +22,21 @@ const CARDS: {
 export default function OmegaNewPartPage() {
   return (
     <div dir="rtl">
-      <BlockTitle large>בחירת סוג חלק</BlockTitle>
+      <h2 className="mb-4 text-xl font-bold">בחירת סוג חלק</h2>
 
-      <div className="space-y-4 px-4">
+      <div className="space-y-3">
         {CARDS.map(({ title, description, icon: Icon, iconBg, iconColor }) => (
-          <Card key={title} raised>
+          <div key={title} className="rounded-2xl bg-[var(--omega-surface)] p-4 shadow-sm">
             <div className="flex items-start gap-4">
-              <span
-                className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${iconBg} ${iconColor}`}
-              >
+              <span className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${iconBg} ${iconColor}`}>
                 <Icon className="size-6" aria-hidden />
               </span>
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="text-lg font-semibold">{title}</p>
-                <p className="text-sm leading-relaxed opacity-70">
-                  {description}
-                </p>
+                <p className="text-sm leading-relaxed opacity-70">{description}</p>
               </div>
             </div>
-          </Card>
+          </div>
         ))}
       </div>
     </div>
