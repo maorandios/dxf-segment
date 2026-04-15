@@ -682,7 +682,6 @@ function BendPlateHub({
           className={cn(
             "flex w-[calc(100vw-1.5rem)] max-w-xl flex-col gap-0 overflow-hidden border-white/10 bg-card p-0 sm:rounded-xl"
           )}
-          dir="rtl"
           showCloseButton={false}
         >
           <div className="shrink-0 border-b border-white/10 px-5 pb-4 pt-5 sm:px-6 sm:pb-5 sm:pt-6">
@@ -737,7 +736,7 @@ function BendPlateHub({
       </Dialog>
 
       <Dialog open={hubValidationOpen} onOpenChange={setHubValidationOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${BP}.hubValidationTitle`)}</DialogTitle>
             <DialogDescription>{t(`${BP}.hubValidationDescription`)}</DialogDescription>
@@ -751,7 +750,7 @@ function BendPlateHub({
       </Dialog>
 
       <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${BP}.confirmResetTitle`)}</DialogTitle>
             <DialogDescription>{t(`${BP}.confirmResetDescription`)}</DialogDescription>
@@ -932,7 +931,7 @@ function BendPlateShapeEditor({
                       <SelectTrigger className="h-9">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent dir="rtl">
+                      <SelectContent>
                         {selectOptionsWithCurrent(
                           materialConfig.enabledGrades,
                           gradeSelectValue
@@ -955,7 +954,7 @@ function BendPlateShapeEditor({
                       <SelectTrigger className="h-9 max-w-full">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent dir="rtl">
+                      <SelectContent>
                         {selectOptionsWithCurrent(
                           materialConfig.enabledFinishes,
                           finishSelectValue
@@ -1021,7 +1020,7 @@ function BendPlateShapeEditor({
       </div>
 
       <Dialog open={preview3dOpen} onOpenChange={setPreview3dOpen}>
-        <DialogContent className="max-w-[min(96vw,56rem)] gap-0 p-0" dir="rtl" showCloseButton={false}>
+        <DialogContent className="max-w-[min(96vw,56rem)] gap-0 p-0" showCloseButton={false}>
           <DialogHeader className="border-b border-white/[0.08] px-6 py-4 sm:text-start">
             <DialogTitle>{t(`${ED}.preview3dTitle`)}</DialogTitle>
             <DialogDescription className="text-sm">{t(`${ED}.preview3dDescription`)}</DialogDescription>
@@ -1044,7 +1043,7 @@ function BendPlateShapeEditor({
       </Dialog>
 
       <Dialog open={saveValidationOpen} onOpenChange={setSaveValidationOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${ED}.saveValidationTitle`)}</DialogTitle>
             <DialogDescription>{t(`${ED}.saveValidationDescription`)}</DialogDescription>
@@ -1063,7 +1062,7 @@ function BendPlateShapeEditor({
       </Dialog>
 
       <Dialog open={backConfirmOpen} onOpenChange={setBackConfirmOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${ED}.editorBackTitle`)}</DialogTitle>
             <DialogDescription>{t(`${ED}.editorBackDescription`)}</DialogDescription>
@@ -1552,7 +1551,7 @@ function TemplateFields({
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent dir="rtl">
+            <SelectContent>
               {[2, 3, 4, 5, 6, 7].map((x) => (
                 <SelectItem key={x} value={String(x)}>
                   {t(`${ED}.segmentsN`, { n: x })}

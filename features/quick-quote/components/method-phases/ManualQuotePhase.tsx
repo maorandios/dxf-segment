@@ -547,7 +547,7 @@ export function ManualQuotePhase({
       </div>
 
       <Dialog open={validationDialogOpen} onOpenChange={setValidationDialogOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${MP}.validationDialogTitle`)}</DialogTitle>
             <DialogDescription>{t(`${MP}.validationDialogDescription`)}</DialogDescription>
@@ -566,7 +566,7 @@ export function ManualQuotePhase({
       </Dialog>
 
       <Dialog open={backConfirmOpen} onOpenChange={setBackConfirmOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${MP}.confirmBackTitle`)}</DialogTitle>
             <DialogDescription>{t(`${MP}.confirmBackDescription`)}</DialogDescription>
@@ -583,7 +583,7 @@ export function ManualQuotePhase({
       </Dialog>
 
       <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${MP}.confirmResetTitle`)}</DialogTitle>
             <DialogDescription>{t(`${MP}.confirmResetDescription`)}</DialogDescription>

@@ -277,7 +277,7 @@ export function DxfQuotePhase({
       </div>
 
       <Dialog open={validationDialogOpen} onOpenChange={setValidationDialogOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t("quote.dxfPhase.validationDialogTitle")}</DialogTitle>
             <DialogDescription>{t("quote.dxfPhase.validationDialogDescription")}</DialogDescription>
@@ -296,7 +296,7 @@ export function DxfQuotePhase({
       </Dialog>
 
       <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t("quote.dxfPhase.confirmResetTitle")}</DialogTitle>
             <DialogDescription>{t("quote.dxfPhase.confirmResetDescription")}</DialogDescription>
@@ -313,7 +313,7 @@ export function DxfQuotePhase({
       </Dialog>
 
       <Dialog open={backConfirmOpen} onOpenChange={setBackConfirmOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t("quote.dxfPhase.confirmBackTitle")}</DialogTitle>
             <DialogDescription>{t("quote.dxfPhase.confirmBackDescription")}</DialogDescription>

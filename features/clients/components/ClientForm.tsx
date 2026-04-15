@@ -93,7 +93,7 @@ export function ClientForm({
   return (
     <Form {...form}>
       <Dialog open={unsavedDialogOpen} onOpenChange={setUnsavedDialogOpen}>
-        <DialogContent showCloseButton={false} className="sm:max-w-md" dir="rtl">
+        <DialogContent showCloseButton={false} className="sm:max-w-md">
           <DialogHeader className="text-right sm:text-right">
             <DialogTitle className="sr-only">
               {t("clientEdit.unsavedTitle")}

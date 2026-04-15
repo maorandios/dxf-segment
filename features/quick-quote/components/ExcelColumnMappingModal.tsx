@@ -204,7 +204,6 @@ export function ExcelColumnMappingModal({
     <>
       <Dialog open={open} onOpenChange={handleMainDialogOpenChange}>
         <DialogContent
-          dir="rtl"
           showCloseButton={false}
           className="w-[min(calc(100vw-2rem),112rem)] max-w-[min(calc(100vw-2rem),112rem)] max-h-[min(92vh,960px)] flex flex-col gap-0 p-0"
         >
@@ -412,7 +411,7 @@ export function ExcelColumnMappingModal({
       </Dialog>
 
       <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
-        <DialogContent dir="rtl" showCloseButton={false} className="sm:max-w-md z-[100]">
+        <DialogContent showCloseButton={false} className="sm:max-w-md z-[100]">
           <DialogHeader className="text-start sm:text-start">
             <DialogTitle>{t("quote.excelColumnMapping.discardTitle")}</DialogTitle>
             <DialogDescription>

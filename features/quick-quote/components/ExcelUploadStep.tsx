@@ -1577,7 +1577,7 @@ export function ExcelUploadStep({
       </div>
 
       <Dialog open={phaseBackConfirmOpen} onOpenChange={setPhaseBackConfirmOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${EI}.confirmBackTitle`)}</DialogTitle>
             <DialogDescription>{t(`${EI}.confirmBackDescription`)}</DialogDescription>
@@ -1594,7 +1594,7 @@ export function ExcelUploadStep({
       </Dialog>
 
       <Dialog open={phaseResetConfirmOpen} onOpenChange={setPhaseResetConfirmOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${EI}.confirmResetTitle`)}</DialogTitle>
             <DialogDescription>{t(`${EI}.confirmResetDescription`)}</DialogDescription>
@@ -1785,7 +1785,7 @@ export function ExcelUploadStep({
       </Dialog>
 
       <Dialog open={phaseCompleteDialogOpen} onOpenChange={setPhaseCompleteDialogOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader className="sm:text-start">
             <DialogTitle>{t(`${EI}.validationDialogTitle`)}</DialogTitle>
             <DialogDescription>{t(`${EI}.validationDialogDescription`)}</DialogDescription>

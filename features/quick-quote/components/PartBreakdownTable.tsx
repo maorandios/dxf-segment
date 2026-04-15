@@ -301,7 +301,6 @@ function MultiSelectFilter({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          dir="rtl"
           className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
           onCloseAutoFocus={(e) => e.preventDefault()}
         >

@@ -62,7 +62,6 @@ export function ClientsTable({
         <DialogContent
           showCloseButton={false}
           className="sm:max-w-md"
-          dir="rtl"
         >
           <DialogHeader className="space-y-3 text-right sm:text-right">
             <DialogTitle className="sr-only">
