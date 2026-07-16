@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import type {
   DuplicateUserAction,
   FinalIntakeMappingRow,
+  GeometryComparisonCandidate,
   RequestPartOccurrence,
   ResolvedCommercialField,
 } from "@/lib/ai-intake/schemas";
@@ -57,6 +58,8 @@ export function formatFieldProvenance(
       return t("aiIntake.final.provenance.override");
     case "EMAIL_AUTHORITATIVE":
       return t("aiIntake.final.source.EMAIL");
+    case "EMAIL_EXPLICIT_SUPERSESSION":
+      return t("aiIntake.final.provenance.emailSupersession");
     case "USER_RESOLUTION":
       return t("aiIntake.final.source.USER_RESOLUTION");
     case "CONFLICT": {
@@ -102,7 +105,11 @@ function previousDetail(
 
 function emailAuthoritativeHint(row: FinalIntakeMappingRow): string | null {
   const qty = row.fieldResolutions.quantity;
-  if (qty.resolutionStatus === "EMAIL_AUTHORITATIVE" && row.quantity != null) {
+  if (
+    (qty.resolutionStatus === "EMAIL_AUTHORITATIVE" ||
+      qty.resolutionStatus === "EMAIL_EXPLICIT_SUPERSESSION") &&
+    row.quantity != null
+  ) {
     return t("aiIntake.final.emailAuthoritativeHint");
   }
   if (qty.resolutionStatus === "OVERRIDE" && row.quantity != null) {
@@ -115,6 +122,244 @@ function emailAuthoritativeHint(row: FinalIntakeMappingRow): string | null {
     }
   }
   return null;
+}
+
+function emailQuantityConflictCandidates(row: FinalIntakeMappingRow) {
+  if (!row.issues.includes("MULTIPLE_EMAIL_QUANTITY_VALUES")) return [];
+  return row.fieldResolutions.quantity.candidates.filter(
+    (c) => c.sourceType === "EMAIL"
+  );
+}
+
+function EmailQuantityConflictPanel({
+  partId,
+  candidates,
+  onResolve,
+}: {
+  partId: string;
+  candidates: Array<{
+    value: string | number;
+    statementIndex?: number | null;
+    sourceExcerpt?: string | null;
+  }>;
+  onResolve: (partId: string, quantity: number) => void;
+}) {
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customValue, setCustomValue] = useState("");
+
+  return (
+    <div className="space-y-1 text-[10px] font-normal text-muted-foreground" dir="rtl">
+      <div>{t("aiIntake.final.emailConflict.valuesFound")}</div>
+      <ul className="list-disc space-y-0.5 ps-4">
+        {candidates.map((c, i) => (
+          <li key={`${c.value}-${c.statementIndex ?? i}`}>
+            {c.value}
+            {c.sourceExcerpt ? ` — "${c.sourceExcerpt}"` : ""}
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-1 pt-1">
+        {candidates.map((c, i) => (
+          <Button
+            key={`pick-${c.value}-${i}`}
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px]"
+            onClick={() => onResolve(partId, c.value as number)}
+          >
+            {t("aiIntake.final.emailConflict.useValue", {
+              n: String(c.value),
+            })}
+          </Button>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 text-[11px]"
+          onClick={() => setCustomOpen((v) => !v)}
+        >
+          {t("aiIntake.final.emailConflict.enterOther")}
+        </Button>
+      </div>
+      {customOpen && (
+        <div className="flex items-center gap-1 pt-1">
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={customValue}
+            onChange={(e) => setCustomValue(e.target.value)}
+            className="h-7 w-20 rounded border border-white/15 bg-transparent px-2 text-[11px] tabular-nums"
+            dir="ltr"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px]"
+            onClick={() => {
+              const n = Number(customValue);
+              if (Number.isFinite(n) && n > 0) onResolve(partId, n);
+            }}
+          >
+            {t("aiIntake.final.emailConflict.applyOther")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function geometryBadgeLabel(row: FinalIntakeMappingRow): string {
+  const status = row.geometryComparisonStatus;
+  if (status === "NOT_AVAILABLE") {
+    return t("aiIntake.final.geometry.notComparable");
+  }
+  if (status === "MATCH") {
+    return t("aiIntake.final.geometry.matchDocs");
+  }
+  if (status === "MISMATCH") {
+    const types = Array.from(
+      new Set(
+        row.geometryComparisons
+          .filter((c) => c.comparisonStatus === "MISMATCH")
+          .map((c) => c.sourceType)
+      )
+    );
+    if (types.length === 1 && types[0] === "XLSX") {
+      return t("aiIntake.final.geometry.gapExcel");
+    }
+    if (types.length === 1 && types[0] === "PDF") {
+      return t("aiIntake.final.geometry.gapPdf");
+    }
+    return t("aiIntake.final.geometry.gapDocs");
+  }
+  return t("aiIntake.final.geometry.partial");
+}
+
+function geometryBadgeClass(row: FinalIntakeMappingRow): string {
+  switch (row.geometryComparisonStatus) {
+    case "MATCH":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+    case "MISMATCH":
+      return "border-amber-500/40 bg-amber-500/10 text-amber-100";
+    case "PARTIAL":
+      return "border-sky-500/40 bg-sky-500/10 text-sky-200";
+    default:
+      return "border-white/15 bg-white/5 text-muted-foreground";
+  }
+}
+
+function formatDocDims(c: GeometryComparisonCandidate): string {
+  if (c.documentWidthMm != null && c.documentHeightMm != null) {
+    return `${formatDecimal(c.documentWidthMm, 1)} × ${formatDecimal(c.documentHeightMm, 1)} mm`;
+  }
+  if (c.rawWidth != null || c.rawHeight != null) {
+    const w = c.rawWidth ?? "—";
+    const h = c.rawHeight ?? "—";
+    const wu = c.rawWidthUnit ?? "?";
+    const hu = c.rawHeightUnit ?? "?";
+    return `${w} ${wu} × ${h} ${hu}`;
+  }
+  return "—";
+}
+
+function GeometryComparisonPanel({
+  row,
+}: {
+  row: FinalIntakeMappingRow;
+}) {
+  if (row.geometryComparisons.length === 0) return null;
+  return (
+    <div className="mt-1 space-y-2 text-[10px] font-normal text-muted-foreground" dir="rtl">
+      <div className="rounded border border-white/10 bg-white/5 p-2 space-y-1">
+        <div className="font-medium text-foreground/90">
+          {t("aiIntake.final.geometry.dxfLabel")}
+        </div>
+        <div dir="ltr">
+          {row.widthMm != null && row.heightMm != null
+            ? `${formatDecimal(row.widthMm, 1)} × ${formatDecimal(row.heightMm, 1)} mm`
+            : "—"}
+        </div>
+        {row.plateAreaMm2 != null && (
+          <div dir="ltr">
+            {t("aiIntake.final.geometry.plateAreaLabel")}:{" "}
+            {formatInteger(row.plateAreaMm2)} mm²
+          </div>
+        )}
+        {row.netContourAreaMm2 != null && (
+          <div dir="ltr">
+            {t("aiIntake.final.geometry.netContourLabel")}:{" "}
+            {formatInteger(row.netContourAreaMm2)} mm²
+          </div>
+        )}
+      </div>
+      {row.geometryComparisons.map((c, i) => (
+        <div
+          key={`${c.sourceType}-${c.sourceLabel}-${i}`}
+          className="rounded border border-white/10 bg-white/5 p-2 space-y-1"
+        >
+          <div className="font-medium text-foreground/90">
+            {c.sourceType === "XLSX"
+              ? t("aiIntake.final.source.XLSX")
+              : t("aiIntake.final.source.PDF")}
+            {" · "}
+            {c.comparisonStatus === "MATCH"
+              ? t("aiIntake.final.geometry.statusMatch")
+              : c.comparisonStatus === "MATCH_AFTER_DOCUMENT_ROUNDING"
+                ? t("aiIntake.final.geometry.statusRoundedMatch")
+                : c.comparisonStatus === "MISMATCH"
+                  ? t("aiIntake.final.geometry.statusMismatch")
+                  : c.comparisonStatus === "PARTIAL_MATCH"
+                    ? t("aiIntake.final.geometry.statusPartial")
+                    : t("aiIntake.final.geometry.statusNotComparable")}
+          </div>
+          <div dir="ltr">{formatDocDims(c)}</div>
+          {c.documentAreaMm2 != null && (
+            <div dir="ltr">
+              {t("aiIntake.final.geometry.docAreaLabel")}:{" "}
+              {c.rawArea != null && c.rawAreaUnit === "M2"
+                ? `${c.rawArea} m²`
+                : `${formatInteger(c.documentAreaMm2)} mm²`}
+            </div>
+          )}
+          {c.areaComparisonNote && (
+            <div className="text-sky-200/90">{c.areaComparisonNote}</div>
+          )}
+          <div>
+            {t("aiIntake.final.geometry.sourceLabel")}: {c.sourceLabel}
+          </div>
+          {c.comparisonStatus === "MATCH_AFTER_DOCUMENT_ROUNDING" && (
+            <div className="text-sky-200">
+              {t("aiIntake.final.geometry.roundedMatchMsg")}
+            </div>
+          )}
+          {c.issues.includes("DOCUMENT_DXF_DIMENSION_MISMATCH") && (
+            <div className="text-amber-200">
+              {t("aiIntake.final.geometry.dimMismatchMsg")}
+            </div>
+          )}
+          {c.issues.includes("DOCUMENT_DXF_AREA_MISMATCH") && (
+            <div className="text-amber-200">
+              {t("aiIntake.final.geometry.areaMismatchMsg")}
+            </div>
+          )}
+          {c.issues.includes("DOCUMENT_DIMENSIONS_AREA_INCONSISTENT") && (
+            <div className="text-amber-200">
+              {t("aiIntake.final.geometry.docInconsistentMsg")}
+            </div>
+          )}
+          {c.issues.includes("DOCUMENT_GEOMETRY_UNIT_AMBIGUOUS") && (
+            <div className="text-amber-200">
+              {t("aiIntake.final.geometry.unitAmbiguousMsg")}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function showDuplicateBadge(row: FinalIntakeMappingRow): boolean {
@@ -169,6 +414,7 @@ interface FinalMappingTableProps {
   onPreview?: (row: FinalIntakeMappingRow) => void;
   canPreview?: (row: FinalIntakeMappingRow) => boolean;
   onDuplicateResolve?: (partId: string, action: DuplicateUserAction) => void;
+  onEmailQuantityResolve?: (partId: string, quantity: number) => void;
 }
 
 export function FinalMappingTable({
@@ -176,6 +422,7 @@ export function FinalMappingTable({
   onPreview,
   canPreview,
   onDuplicateResolve,
+  onEmailQuantityResolve,
 }: FinalMappingTableProps) {
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
 
@@ -194,6 +441,7 @@ export function FinalMappingTable({
             <TableHead>{t("aiIntake.final.col.partId")}</TableHead>
             <TableHead>{t("aiIntake.final.col.dxfFile")}</TableHead>
             <TableHead>{t("aiIntake.final.col.dimensions")}</TableHead>
+            <TableHead>{t("aiIntake.final.col.geometryCheck")}</TableHead>
             <TableHead>{t("aiIntake.final.col.area")}</TableHead>
             <TableHead>{t("aiIntake.final.col.quantity")}</TableHead>
             <TableHead>{t("aiIntake.final.col.thickness")}</TableHead>
@@ -215,7 +463,14 @@ export function FinalMappingTable({
             const qtyResolvedByEmail =
               row.fieldResolutions.quantity.resolutionStatus ===
                 "EMAIL_AUTHORITATIVE" ||
+              row.fieldResolutions.quantity.resolutionStatus ===
+                "EMAIL_EXPLICIT_SUPERSESSION" ||
               row.fieldResolutions.quantity.resolutionStatus === "OVERRIDE";
+            const emailQtyConflict = emailQuantityConflictCandidates(row);
+            const canResolveEmailQty =
+              emailQtyConflict.length >= 2 &&
+              Boolean(row.partId) &&
+              Boolean(onEmailQuantityResolve);
             const rowKey = `${row.partId}-${row.dxfFileId ?? "none"}-${row.status}-${row.displayLabel ?? ""}-${rowIndex}`;
             const expanded = Boolean(expandedKeys[rowKey]);
             const dupBadge = showDuplicateBadge(row);
@@ -357,19 +612,67 @@ export function FinalMappingTable({
                     ? `${formatDecimal(row.widthMm, 1)} × ${formatDecimal(row.heightMm, 1)}`
                     : "—"}
                 </TableCell>
+                <TableCell className="min-w-[140px] text-xs" dir="rtl">
+                  <div className="space-y-1">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "rounded-md text-[10px] font-normal",
+                        geometryBadgeClass(row)
+                      )}
+                    >
+                      {geometryBadgeLabel(row)}
+                    </Badge>
+                    {row.geometryComparisons.length > 0 && (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-auto px-0 py-0 text-[11px] text-muted-foreground"
+                          onClick={() =>
+                            setExpandedKeys((prev) => ({
+                              ...prev,
+                              [`${rowKey}:geo`]: !prev[`${rowKey}:geo`],
+                            }))
+                          }
+                        >
+                          {expandedKeys[`${rowKey}:geo`]
+                            ? t("aiIntake.final.geometry.hideCompare")
+                            : t("aiIntake.final.geometry.showCompare")}
+                        </Button>
+                        {expandedKeys[`${rowKey}:geo`] && (
+                          <GeometryComparisonPanel row={row} />
+                        )}
+                      </>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="tabular-nums" dir="ltr">
-                  {row.areaMm2 != null ? formatInteger(row.areaMm2) : "—"}
+                  {row.plateAreaMm2 != null ? formatInteger(row.plateAreaMm2) : "—"}
                 </TableCell>
                 <TableCell className="tabular-nums font-medium" dir="ltr">
-                  <div className="space-y-0.5">
-                    <div>{row.quantity ?? "—"}</div>
+                  <div className="space-y-1">
+                    <div>
+                      {canResolveEmailQty
+                        ? t("aiIntake.final.emailConflict.needsDecision")
+                        : (row.quantity ?? "—")}
+                    </div>
                     {qtyResolvedByEmail && previousDetail(row, "QUANTITY") && (
                       <div className="text-[10px] font-normal text-muted-foreground">
                         {previousDetail(row, "QUANTITY")}
                       </div>
                     )}
-                    {row.fieldResolutions.quantity.resolutionStatus ===
-                      "CONFLICT" &&
+                    {canResolveEmailQty && (
+                      <EmailQuantityConflictPanel
+                        partId={row.partId!}
+                        candidates={emailQtyConflict}
+                        onResolve={onEmailQuantityResolve!}
+                      />
+                    )}
+                    {!canResolveEmailQty &&
+                      row.fieldResolutions.quantity.resolutionStatus ===
+                        "CONFLICT" &&
                       row.fieldResolutions.quantity.candidates.length > 0 && (
                         <div className="text-[10px] font-normal text-muted-foreground">
                           {row.fieldResolutions.quantity.candidates

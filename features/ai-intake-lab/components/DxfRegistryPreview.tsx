@@ -73,7 +73,7 @@ export function DxfRegistryPreview({
                 <span className="block text-[11px] opacity-70">
                   {t("aiIntake.registry.col.area")}
                 </span>
-                {item.areaMm2 != null ? formatInteger(item.areaMm2) : "—"}
+                {item.plateAreaMm2 != null ? formatInteger(item.plateAreaMm2) : "—"}
               </div>
               <div>
                 <span className="block text-[11px] opacity-70">

@@ -4,6 +4,7 @@ import { expandExtractionToFacts } from "./expandExtractionToFacts";
 import {
   emailExtractionSchema,
   singleDocumentExtractionSchema,
+  emptyDocumentGeometry,
   type AggregatedSourceExtraction,
   type AiRequestExtraction,
   type ExtractedDocumentRow,
@@ -14,6 +15,7 @@ import {
   type UnresolvedRequestItem,
 } from "./schemas";
 import { validateSingleDocumentExtraction } from "./validateDocumentExtraction";
+import { normalizeEmailFacts } from "./emailFactNormalize";
 
 export type DocumentFileInput = {
   documentId: string;
@@ -56,13 +58,23 @@ COMPLETENESS:
 - Fill cell addresses when known (e.g. "A5", "B5"); otherwise null.
 - excerpt should be a short raw line/snippet from THIS document.
 
+DOCUMENT GEOMETRY (documentGeometry — evidence only):
+- Extract explicit numeric width/height/area/perimeter/weight ONLY when present as structured fields or clear numeric columns.
+- Preserve units exactly as stated: MM, CM, M for length; MM2, CM2, M2 for area.
+- Do NOT convert units. Do NOT reinterpret suspicious units.
+- If a header says meters (m) but values look like millimeters, keep unit M and add issue DOCUMENT_GEOMETRY_UNIT_AMBIGUOUS.
+- Do NOT calculate missing dimensions from area.
+- Do NOT derive geometry from the DXF registry.
+- Do NOT parse geometry from free-text description/notes (e.g. "Plate 300 x 300 mm").
+- If no geometry columns exist, set all documentGeometry fields to null.
+
 MATCHING:
 - matchedDxfPartId may ONLY be a canonicalPartId from the DXF registry.
 - If uncertain, set matchedDxfPartId to null and use unresolvedItems.
 - False matches are more harmful than unresolved rows.
 - Formatting-only variations MAY map: P-100, P_100, P 100, p100 → P100.
 - Never select the numerically closest part or repair a changed digit (P1084 ≠ P1094).
-- Do not calculate dimensions, area, weight, nesting, or pricing.
+- Do not calculate dimensions, area, weight, nesting, or pricing for missing values.
 - No chain-of-thought. Keep excerpts short (<240 chars).
 
 Do NOT invent a file name. Location fields describe where the data appears inside the attached file.`;
@@ -74,12 +86,27 @@ YOUR ONLY JOB:
 - You do NOT receive XLSX or PDF attachments. Do not invent document rows.
 
 OUTPUT STRUCTURE (strict):
-1. emailFacts — email-only values, defaults, overrides and exclusions.
+1. emailFacts — one fact object per explicit statement in the email (do not merge).
 2. unresolvedItems — email references that cannot be mapped reliably.
 3. warnings — short warnings.
 
-RULES:
-- Use instructionType OVERRIDE only for clear corrections/replacements of a specific part field.
+CRITICAL — PRESERVE EVERY STATEMENT:
+- Return ONE emailFact for EVERY explicit part-specific field value occurrence.
+- If the email says quantity 28 and later quantity 30, return BOTH facts.
+- Do NOT summarize, merge, or keep only the latest mention.
+- statementIndex is 1-based in email appearance order.
+- factId must be unique (e.g. "email:1:QUANTITY", "email:2:QUANTITY").
+
+explicitlySupersedesPrevious:
+- true ONLY when the statement clearly replaces/ignores a previous value
+  (e.g. "במקום 28", "התעלם מהכמות הקודמת", "עודכנה מ־28 ל־30",
+  "הכמות הסופית היא 30", "לא 28 אלא 30", "updated from 28 to 30").
+- false for mere additional mentions or sequence words such as
+  "בהמשך", "לאחר מכן", "בנוסף", "וגם" without replacement language.
+- Do NOT infer supersession from statement order alone.
+
+OTHER RULES:
+- Use instructionType OVERRIDE only for clear corrections/replacements.
 - sourceExcerpt must quote the relevant email phrase.
 - matchedDxfPartId may ONLY be a canonicalPartId from the DXF registry.
 - If uncertain, set matchedDxfPartId to null and use unresolvedItems.
@@ -172,6 +199,7 @@ function injectDocumentMetadata(
       description: row.description,
       notes: row.notes,
       action: row.action,
+      documentGeometry: row.documentGeometry ?? emptyDocumentGeometry(),
       source: {
         type: descriptor.sourceType,
         fileName: descriptor.fileName,
@@ -459,7 +487,8 @@ export async function extractEmailFactsWithOpenAI(args: {
     const ids = new Set(args.registry.map((r) => r.canonicalPartId));
     const warnings = [...modelResult.warnings];
 
-    const emailFacts = modelResult.emailFacts.map((fact, index) => {
+    const normalized = normalizeEmailFacts(modelResult.emailFacts);
+    const emailFacts = normalized.map((fact, index) => {
       if (fact.matchedDxfPartId != null && !ids.has(fact.matchedDxfPartId)) {
         warnings.push(
           `Rejected unknown matchedDxfPartId "${fact.matchedDxfPartId}" on email fact ${index}`
@@ -468,6 +497,30 @@ export async function extractEmailFactsWithOpenAI(args: {
       }
       return fact;
     });
+
+    // Soft warning if only one quantity fact but body mentions multiple quantities for same part
+    const qtyFacts = emailFacts.filter(
+      (f) => f.field === "QUANTITY" && f.matchedDxfPartId
+    );
+    if (qtyFacts.length === 1 && /\d+/.test(args.body)) {
+      const partId = qtyFacts[0]!.matchedDxfPartId!;
+      const qtyMentions = [
+        ...args.body.matchAll(
+          new RegExp(
+            `${partId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\d]{0,40}?(\\d+)`,
+            "gi"
+          )
+        ),
+      ];
+      const distinctMentions = new Set(
+        qtyMentions.map((m) => m[1]).filter(Boolean)
+      );
+      if (distinctMentions.size > 1 && qtyFacts.length < distinctMentions.size) {
+        warnings.push(
+          `EMAIL_POSSIBLY_COLLAPSED_STATEMENTS:part=${partId}:mentions=${[...distinctMentions].join(",")}:facts=${qtyFacts.length}`
+        );
+      }
+    }
 
     const unresolvedItems: UnresolvedRequestItem[] =
       modelResult.unresolvedItems.map((item) => ({
@@ -492,7 +545,7 @@ export async function extractEmailFactsWithOpenAI(args: {
       warnings,
       usage: usageFromResponse(response.usage),
       durationMs,
-      status: "SUCCESS",
+      status: "SUCCESS" as const,
       errorCode: null,
     };
   } catch (err) {

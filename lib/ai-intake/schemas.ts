@@ -17,6 +17,11 @@ const factBase = {
   instructionType: z.enum(["VALUE", "DEFAULT", "OVERRIDE", "EXCLUSION"]),
   source: factSourceSchema,
   issues: z.array(z.string()),
+  /** Email statement order (1-based). Null for document-derived facts. */
+  statementIndex: z.number().int().nullable().optional(),
+  /** Email only: clear replacement of a prior email value. */
+  explicitlySupersedesPrevious: z.boolean().optional(),
+  emailFactId: z.string().nullable().optional(),
 };
 
 export const extractedRequestFactSchema = z.discriminatedUnion("field", [
@@ -65,6 +70,54 @@ const documentLocationSchema = z.object({
   excerpt: z.string().nullable(),
 });
 
+const lengthUnitSchema = z.enum(["MM", "CM", "M"]).nullable();
+const areaUnitSchema = z.enum(["MM2", "CM2", "M2"]).nullable();
+
+/** Explicit structured geometry from XLSX/PDF — evidence only, never authoritative. */
+export const extractedDocumentGeometrySchema = z.object({
+  width: z.number().nullable(),
+  widthUnit: lengthUnitSchema,
+  height: z.number().nullable(),
+  heightUnit: lengthUnitSchema,
+  area: z.number().nullable(),
+  areaUnit: areaUnitSchema,
+  perimeter: z.number().nullable(),
+  perimeterUnit: lengthUnitSchema,
+  unitWeightKg: z.number().nullable(),
+  totalWeightKg: z.number().nullable(),
+  widthCell: z.string().nullable(),
+  heightCell: z.string().nullable(),
+  areaCell: z.string().nullable(),
+  perimeterCell: z.string().nullable(),
+  unitWeightCell: z.string().nullable(),
+  totalWeightCell: z.string().nullable(),
+});
+
+export type ExtractedDocumentGeometry = z.infer<
+  typeof extractedDocumentGeometrySchema
+>;
+
+export function emptyDocumentGeometry(): ExtractedDocumentGeometry {
+  return {
+    width: null,
+    widthUnit: null,
+    height: null,
+    heightUnit: null,
+    area: null,
+    areaUnit: null,
+    perimeter: null,
+    perimeterUnit: null,
+    unitWeightKg: null,
+    totalWeightKg: null,
+    widthCell: null,
+    heightCell: null,
+    areaCell: null,
+    perimeterCell: null,
+    unitWeightCell: null,
+    totalWeightCell: null,
+  };
+}
+
 /** Model-only row (no file identity — server injects documentId/fileName). */
 export const singleDocumentModelRowSchema = z.object({
   matchedDxfPartId: z.string().nullable(),
@@ -75,6 +128,7 @@ export const singleDocumentModelRowSchema = z.object({
   description: z.string().nullable(),
   notes: z.string().nullable(),
   action: z.enum(["INCLUDE", "EXCLUDE"]).nullable(),
+  documentGeometry: extractedDocumentGeometrySchema,
   location: documentLocationSchema,
   issues: z.array(z.string()),
 });
@@ -112,6 +166,7 @@ export const extractedDocumentRowSchema = z.object({
   description: z.string().nullable(),
   notes: z.string().nullable(),
   action: z.enum(["INCLUDE", "EXCLUDE"]).nullable(),
+  documentGeometry: extractedDocumentGeometrySchema,
   source: z.object({
     type: z.enum(["XLSX", "PDF"]),
     fileName: z.string().min(1),
@@ -129,46 +184,45 @@ export const extractedDocumentRowSchema = z.object({
 
 export type ExtractedDocumentRow = z.infer<typeof extractedDocumentRowSchema>;
 
+const emailFactCommon = {
+  factId: z.string().min(1),
+  statementIndex: z.number().int().positive(),
+  matchedDxfPartId: z.string().nullable(),
+  rawPartReference: z.string().nullable(),
+  explicitlySupersedesPrevious: z.boolean(),
+  sourceExcerpt: z.string(),
+};
+
 export const extractedEmailFactSchema = z.discriminatedUnion("field", [
   z.object({
-    matchedDxfPartId: z.string().nullable(),
-    rawPartReference: z.string().nullable(),
+    ...emailFactCommon,
     field: z.literal("QUANTITY"),
     value: z.number(),
     instructionType: z.enum(["VALUE", "DEFAULT", "OVERRIDE"]),
-    sourceExcerpt: z.string(),
   }),
   z.object({
-    matchedDxfPartId: z.string().nullable(),
-    rawPartReference: z.string().nullable(),
+    ...emailFactCommon,
     field: z.literal("THICKNESS"),
     value: z.number(),
     instructionType: z.enum(["VALUE", "DEFAULT", "OVERRIDE"]),
-    sourceExcerpt: z.string(),
   }),
   z.object({
-    matchedDxfPartId: z.string().nullable(),
-    rawPartReference: z.string().nullable(),
+    ...emailFactCommon,
     field: z.literal("MATERIAL"),
     value: z.string(),
     instructionType: z.enum(["VALUE", "DEFAULT", "OVERRIDE"]),
-    sourceExcerpt: z.string(),
   }),
   z.object({
-    matchedDxfPartId: z.string().nullable(),
-    rawPartReference: z.string().nullable(),
+    ...emailFactCommon,
     field: z.literal("INCLUDE"),
     value: z.boolean(),
     instructionType: z.enum(["VALUE", "EXCLUSION"]),
-    sourceExcerpt: z.string(),
   }),
   z.object({
-    matchedDxfPartId: z.string().nullable(),
-    rawPartReference: z.string().nullable(),
+    ...emailFactCommon,
     field: z.literal("EXCLUDE"),
     value: z.boolean(),
     instructionType: z.enum(["VALUE", "EXCLUSION"]),
-    sourceExcerpt: z.string(),
   }),
 ]);
 
@@ -300,6 +354,9 @@ export type FieldCandidate<T extends string | number> = {
   sourceType: "XLSX" | "PDF" | "EMAIL";
   sourceLabel: string;
   instructionType?: "VALUE" | "OVERRIDE" | "DEFAULT";
+  statementIndex?: number | null;
+  sourceExcerpt?: string | null;
+  explicitlySupersedesPrevious?: boolean;
 };
 
 export type FieldResolutionStatus =
@@ -307,6 +364,7 @@ export type FieldResolutionStatus =
   | "CONSENSUS"
   | "OVERRIDE"
   | "EMAIL_AUTHORITATIVE"
+  | "EMAIL_EXPLICIT_SUPERSESSION"
   | "USER_RESOLUTION"
   | "CONFLICT"
   | "MISSING";
@@ -350,6 +408,40 @@ export type DuplicateOccurrenceStatus =
 
 export type DuplicateUserAction = "IGNORE" | "SUM" | "KEEP_SEPARATE";
 
+export type GeometryComparisonStatus =
+  | "MATCH"
+  | "MATCH_AFTER_DOCUMENT_ROUNDING"
+  | "MISMATCH"
+  | "PARTIAL_MATCH"
+  | "NOT_COMPARABLE";
+
+export type GeometryComparisonCandidate = {
+  sourceType: "XLSX" | "PDF";
+  sourceLabel: string;
+  documentWidthMm: number | null;
+  documentHeightMm: number | null;
+  documentAreaMm2: number | null;
+  documentPerimeterMm: number | null;
+  documentUnitWeightKg: number | null;
+  documentTotalWeightKg: number | null;
+  /** Raw source values for UI when units are ambiguous / not converted. */
+  rawWidth: number | null;
+  rawWidthUnit: "MM" | "CM" | "M" | null;
+  rawHeight: number | null;
+  rawHeightUnit: "MM" | "CM" | "M" | null;
+  rawArea: number | null;
+  rawAreaUnit: "MM2" | "CM2" | "M2" | null;
+  areaComparisonNote: string | null;
+  comparisonStatus: GeometryComparisonStatus;
+  issues: string[];
+};
+
+export type RowGeometryComparisonStatus =
+  | "MATCH"
+  | "MISMATCH"
+  | "PARTIAL"
+  | "NOT_AVAILABLE";
+
 export type FinalIntakeMappingStatus =
   | "READY"
   | "NEEDS_REVIEW"
@@ -369,7 +461,10 @@ export type FinalIntakeMappingRow = {
   dxfFilename: string | null;
   widthMm: number | null;
   heightMm: number | null;
-  areaMm2: number | null;
+  /** Bounding-box plate envelope (width × height). Main table "שטח". */
+  plateAreaMm2: number | null;
+  /** Net contour area from geometry engine — debug / weight only. */
+  netContourAreaMm2: number | null;
   perimeterMm: number | null;
   quantity: number | null;
   thicknessMm: number | null;
@@ -412,6 +507,8 @@ export type FinalIntakeMappingRow = {
   duplicateStatus: DuplicateOccurrenceStatus;
   ignoredOccurrences: RequestPartOccurrence[];
   duplicateIssues: string[];
+  geometryComparisons: GeometryComparisonCandidate[];
+  geometryComparisonStatus: RowGeometryComparisonStatus;
 };
 
 export type AiIntakeAnalyzeSuccess = {

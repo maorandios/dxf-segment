@@ -22,6 +22,10 @@ import {
   filterFactsForOccurrencePolicy,
   type PartOccurrenceClassification,
 } from "./requestOccurrences";
+import {
+  compareDocumentsToDxfGeometry,
+  hasBlockingGeometryIssue,
+} from "./compareDocumentDxfGeometry";
 
 export type ResolveFieldResult = {
   value: string | number | null;
@@ -121,6 +125,9 @@ function candidateFromFact(
       pageNumber: fact.source.pageNumber,
     }),
     instructionType: fact.instructionType,
+    statementIndex: fact.statementIndex ?? null,
+    sourceExcerpt: fact.source.excerpt,
+    explicitlySupersedesPrevious: Boolean(fact.explicitlySupersedesPrevious),
   };
 }
 
@@ -141,7 +148,7 @@ function collectFieldCandidates(
     }
     const c = candidateFromFact(fact);
     if (!c) continue;
-    const key = `${c.sourceType}:${c.instructionType ?? ""}:${c.sourceLabel}:${String(c.value)}`;
+    const key = `${c.sourceType}:${c.instructionType ?? ""}:${c.statementIndex ?? ""}:${c.sourceLabel}:${String(c.value)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(c);
@@ -280,10 +287,44 @@ export function resolveCommercialField(
   }
 
   // 3. Part-specific EMAIL VALUE (authoritative over documents)
+  // Sort by statementIndex for supersession selection
+  const emailSorted = [...partEmailValues].sort((a, b) => {
+    const ai = a.statementIndex ?? 0;
+    const bi = b.statementIndex ?? 0;
+    return ai - bi;
+  });
   const emailValueDistinct = uniqueValues(
-    partEmailValues.map((v) => v.value as string | number)
+    emailSorted.map((v) => v.value as string | number)
   );
+
   if (emailValueDistinct.length > 1) {
+    const superseding = emailSorted.filter(
+      (f) => f.explicitlySupersedesPrevious === true
+    );
+    const supersedeDistinct = uniqueValues(
+      superseding.map((f) => f.value as string | number)
+    );
+
+    // Exactly one distinct superseding value → use it
+    if (supersedeDistinct.length === 1) {
+      const winVal = supersedeDistinct[0]!;
+      pushDifferingAsPrevious(
+        field,
+        winVal,
+        [...documentValues, ...emailSorted],
+        previousValues
+      );
+      return {
+        value: winVal,
+        source: "EMAIL",
+        resolutionStatus: "EMAIL_EXPLICIT_SUPERSESSION",
+        previousValues,
+        issues,
+        candidates,
+      };
+    }
+
+    // Multiple distinct superseding values, or none → conflict
     issues.push(`MULTIPLE_EMAIL_${field}_VALUES`);
     return {
       value: null,
@@ -294,6 +335,7 @@ export function resolveCommercialField(
       candidates,
     };
   }
+
   if (emailValueDistinct.length === 1) {
     const winVal = emailValueDistinct[0]!;
     const docDistinct = uniqueValues(
@@ -303,10 +345,18 @@ export function resolveCommercialField(
     if (docDistinct.length > 1) {
       issues.push("DOCUMENT_CONFLICT_RESOLVED_BY_EMAIL");
     }
+    if (emailSorted.length > 1) {
+      issues.push("EMAIL_DUPLICATE_STATEMENT");
+    }
+    const anySupersede = emailSorted.some(
+      (f) => f.explicitlySupersedesPrevious === true
+    );
     return {
       value: winVal,
       source: "EMAIL",
-      resolutionStatus: "EMAIL_AUTHORITATIVE",
+      resolutionStatus: anySupersede
+        ? "EMAIL_EXPLICIT_SUPERSESSION"
+        : "EMAIL_AUTHORITATIVE",
       previousValues,
       issues,
       candidates,
@@ -668,6 +718,31 @@ export function reconcileFinalMapping(args: {
           }
         : emptyOccurrenceFields();
 
+    const thicknessValue =
+      typeof thick.value === "number" ? thick.value : null;
+    const materialValue =
+      typeof mat.value === "string" ? mat.value : null;
+
+    const geometryResult = compareDocumentsToDxfGeometry({
+      documentRows: documentRows ?? [],
+      partId,
+      dxf: {
+        widthMm: reg?.widthMm ?? null,
+        heightMm: reg?.heightMm ?? null,
+        plateAreaMm2: reg?.plateAreaMm2 ?? null,
+        netContourAreaMm2: reg?.netContourAreaMm2 ?? null,
+        perimeterMm: reg?.perimeterMm ?? null,
+      },
+      resolved: {
+        thicknessMm: thicknessValue,
+        material: materialValue,
+        quantity: quantityValue,
+      },
+    });
+    for (const code of geometryResult.issues) {
+      if (!issues.includes(code)) issues.push(code);
+    }
+
     let status: FinalIntakeMappingStatus;
 
     if (reg?.revisionIssue) {
@@ -710,7 +785,8 @@ export function reconcileFinalMapping(args: {
         issues.includes("MULTIPLE_EMAIL_MATERIAL_VALUES") ||
         issues.includes("MULTIPLE_OVERRIDES_QUANTITY") ||
         issues.includes("MULTIPLE_OVERRIDES_THICKNESS") ||
-        issues.includes("MULTIPLE_OVERRIDES_MATERIAL");
+        issues.includes("MULTIPLE_OVERRIDES_MATERIAL") ||
+        hasBlockingGeometryIssue(issues);
 
       if (
         inRegistry &&
@@ -766,11 +842,12 @@ export function reconcileFinalMapping(args: {
       dxfFilename: reg?.filename ?? null,
       widthMm: reg?.widthMm ?? null,
       heightMm: reg?.heightMm ?? null,
-      areaMm2: reg?.areaMm2 ?? null,
+      plateAreaMm2: reg?.plateAreaMm2 ?? null,
+      netContourAreaMm2: reg?.netContourAreaMm2 ?? null,
       perimeterMm: reg?.perimeterMm ?? null,
       quantity: quantityValue,
-      thicknessMm: typeof thick.value === "number" ? thick.value : null,
-      material: typeof mat.value === "string" ? mat.value : null,
+      thicknessMm: thicknessValue,
+      material: materialValue,
       description: pickDescription(facts),
       action: excluded ? "EXCLUDE" : requested ? "INCLUDE" : null,
       fieldSources: {
@@ -795,6 +872,8 @@ export function reconcileFinalMapping(args: {
       contributingFacts: facts,
       sourceEvidence: sourceEvidenceFromFacts(facts, reg?.filename ?? null),
       issues,
+      geometryComparisons: geometryResult.comparisons,
+      geometryComparisonStatus: geometryResult.geometryComparisonStatus,
       ...occurrenceFields,
     });
   }
@@ -818,7 +897,8 @@ export function reconcileFinalMapping(args: {
       dxfFilename: null,
       widthMm: null,
       heightMm: null,
-      areaMm2: null,
+      plateAreaMm2: null,
+      netContourAreaMm2: null,
       perimeterMm: null,
       quantity: null,
       thicknessMm: null,
@@ -860,6 +940,8 @@ export function reconcileFinalMapping(args: {
         },
       ],
       issues: [item.reason || "REQUEST_WITHOUT_DXF"],
+      geometryComparisons: [],
+      geometryComparisonStatus: "NOT_AVAILABLE",
       ...emptyOccurrenceFields(),
     });
   }

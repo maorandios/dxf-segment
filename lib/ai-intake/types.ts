@@ -48,7 +48,16 @@ export type DxfPartRegistryItem = {
 
   widthMm: number | null;
   heightMm: number | null;
-  areaMm2: number | null;
+  /**
+   * Rectangular plate envelope: widthMm × heightMm (bounding box).
+   * Used for display and document-vs-DXF plate-area comparison.
+   */
+  plateAreaMm2: number | null;
+  /**
+   * Net closed-contour area from the geometry engine (may exclude holes).
+   * Debug / weight semantics — not labeled "plate area".
+   */
+  netContourAreaMm2: number | null;
   perimeterMm: number | null;
 
   geometryStatus: DxfGeometryStatus;

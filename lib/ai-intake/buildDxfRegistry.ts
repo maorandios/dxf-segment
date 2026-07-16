@@ -1,4 +1,5 @@
 import type { ProcessedGeometry } from "@/types";
+import { plateAreaMm2FromBoundingBox } from "@/lib/geometry/plateAreaFromBoundingBox";
 import { partIdentityKey } from "./normalizePartId";
 import {
   DXF_ISSUE,
@@ -25,22 +26,38 @@ export function geometryMetricsFromProcessed(
   processed: ProcessedGeometry | null | undefined
 ): Pick<
   DxfPartRegistryItem,
-  "widthMm" | "heightMm" | "areaMm2" | "perimeterMm" | "geometryStatus"
+  | "widthMm"
+  | "heightMm"
+  | "plateAreaMm2"
+  | "netContourAreaMm2"
+  | "perimeterMm"
+  | "geometryStatus"
 > {
   if (!processed) {
     return {
       widthMm: null,
       heightMm: null,
-      areaMm2: null,
+      plateAreaMm2: null,
+      netContourAreaMm2: null,
       perimeterMm: null,
       geometryStatus: "INVALID",
     };
   }
   const bb = processed.boundingBox;
+  const widthMm = Number.isFinite(bb?.width) ? bb.width : null;
+  const heightMm = Number.isFinite(bb?.height) ? bb.height : null;
+  const plateAreaMm2 =
+    widthMm != null &&
+    heightMm != null &&
+    widthMm > 0 &&
+    heightMm > 0
+      ? plateAreaMm2FromBoundingBox(widthMm, heightMm)
+      : null;
   return {
-    widthMm: Number.isFinite(bb?.width) ? bb.width : null,
-    heightMm: Number.isFinite(bb?.height) ? bb.height : null,
-    areaMm2: Number.isFinite(processed.area) ? processed.area : null,
+    widthMm,
+    heightMm,
+    plateAreaMm2,
+    netContourAreaMm2: Number.isFinite(processed.area) ? processed.area : null,
     perimeterMm: Number.isFinite(processed.perimeter) ? processed.perimeter : null,
     geometryStatus: mapGeometryStatus(processed.status, true),
   };
@@ -121,7 +138,8 @@ export function buildRegistryItemFromParsed(
     filename: input.filename,
     widthMm: metrics.widthMm,
     heightMm: metrics.heightMm,
-    areaMm2: metrics.areaMm2,
+    plateAreaMm2: metrics.plateAreaMm2,
+    netContourAreaMm2: metrics.netContourAreaMm2,
     perimeterMm: metrics.perimeterMm,
     geometryStatus: metrics.geometryStatus,
     warnings,

@@ -36,6 +36,9 @@ export function expandDocumentRowToFacts(
     instructionType: "VALUE" as const,
     source,
     issues: [...row.issues],
+    statementIndex: null as number | null,
+    explicitlySupersedesPrevious: false,
+    emailFactId: null as string | null,
   };
 
   const facts: ExtractedRequestFact[] = [];
@@ -118,6 +121,12 @@ export function expandEmailFactToAtomic(
     excerpt: fact.sourceExcerpt,
   };
 
+  const emailMeta = {
+    statementIndex: fact.statementIndex,
+    explicitlySupersedesPrevious: fact.explicitlySupersedesPrevious,
+    emailFactId: fact.factId,
+  };
+
   if (fact.field === "QUANTITY") {
     return {
       matchedDxfPartId: fact.matchedDxfPartId,
@@ -127,6 +136,7 @@ export function expandEmailFactToAtomic(
       instructionType: fact.instructionType,
       source,
       issues: [],
+      ...emailMeta,
     };
   }
   if (fact.field === "THICKNESS") {
@@ -138,6 +148,7 @@ export function expandEmailFactToAtomic(
       instructionType: fact.instructionType,
       source,
       issues: [],
+      ...emailMeta,
     };
   }
   if (fact.field === "MATERIAL") {
@@ -149,6 +160,7 @@ export function expandEmailFactToAtomic(
       instructionType: fact.instructionType,
       source,
       issues: [],
+      ...emailMeta,
     };
   }
   if (fact.field === "INCLUDE") {
@@ -160,6 +172,7 @@ export function expandEmailFactToAtomic(
       instructionType: fact.instructionType,
       source,
       issues: [],
+      ...emailMeta,
     };
   }
   return {
@@ -170,6 +183,7 @@ export function expandEmailFactToAtomic(
     instructionType: fact.instructionType,
     source,
     issues: [],
+    ...emailMeta,
   };
 }
 

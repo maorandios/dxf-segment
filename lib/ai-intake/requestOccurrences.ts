@@ -1,4 +1,5 @@
 import { normalizePartId } from "./normalizePartId";
+import { hasBlockingGeometryIssue } from "./compareDocumentDxfGeometry";
 import type {
   DuplicateOccurrenceStatus,
   DuplicateUserAction,
@@ -359,13 +360,14 @@ export function applyDuplicateUserResolution(
       row.thicknessMm > 0;
     const matOk =
       typeof row.material === "string" && row.material.trim().length > 0;
-    const otherBlocking = issues.some(
-      (i) =>
-        i.includes("CONFLICT") ||
-        i.startsWith("MULTIPLE_") ||
-        i.startsWith("MISSING_") ||
-        i === "REPEATED_PART_DIFFERENT_QUANTITY"
-    );
+    const otherBlocking =
+      issues.some(
+        (i) =>
+          i.includes("CONFLICT") ||
+          i.startsWith("MULTIPLE_") ||
+          i.startsWith("MISSING_") ||
+          i === "REPEATED_PART_DIFFERENT_QUANTITY"
+      ) || hasBlockingGeometryIssue(issues);
     const terminalBlocked =
       row.status === "DXF_IDENTITY_CONFLICT" ||
       row.status === "DXF_REVISION_CONFLICT" ||
@@ -404,6 +406,7 @@ export function applyDuplicateUserResolution(
     const issues = row.issues.filter(
       (i) => i !== "IDENTICAL_REQUEST_ROW_DUPLICATE"
     );
+    const canReady = !hasBlockingGeometryIssue(issues);
     return [
       {
         ...row,
@@ -428,7 +431,7 @@ export function applyDuplicateUserResolution(
           currentlyIgnored: false,
         })),
         issues,
-        status: "READY",
+        status: canReady ? "READY" : "NEEDS_REVIEW",
         displayLabel: null,
       },
     ];
@@ -442,6 +445,11 @@ export function applyDuplicateUserResolution(
     (o) => o.occurrenceId !== primaryOcc.occurrenceId
   );
 
+  const keepIssues = row.issues.filter(
+    (i) => i !== "IDENTICAL_REQUEST_ROW_DUPLICATE"
+  );
+  const keepReady = !hasBlockingGeometryIssue(keepIssues);
+
   const primaryRow: FinalIntakeMappingRow = {
     ...row,
     duplicateStatus: "RESOLVED_KEEP_SEPARATE",
@@ -450,8 +458,8 @@ export function applyDuplicateUserResolution(
     requestOccurrences: [primaryOcc],
     occurrenceCount: 1,
     duplicateOccurrenceCount: 0,
-    issues: row.issues.filter((i) => i !== "IDENTICAL_REQUEST_ROW_DUPLICATE"),
-    status: "READY",
+    issues: keepIssues,
+    status: keepReady ? "READY" : "NEEDS_REVIEW",
     quantity: primaryOcc.quantity,
     displayLabel: null,
   };

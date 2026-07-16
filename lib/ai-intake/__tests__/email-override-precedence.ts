@@ -1,7 +1,9 @@
 import { expandExtractionToFacts } from "../expandExtractionToFacts";
 import { reconcileFinalMapping } from "../reconcileFinalMapping";
 import type { AiRequestExtraction, ExtractedDocumentRow } from "../schemas";
+import { emptyDocumentGeometry } from "../schemas";
 import type { DxfPartRegistryItem } from "../types";
+import { emailFacts } from "./emailFactHelpers";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`);
@@ -17,6 +19,7 @@ const xlsxRow: ExtractedDocumentRow = {
   description: null,
   notes: null,
   action: "INCLUDE",
+  documentGeometry: emptyDocumentGeometry(),
   source: {
     type: "XLSX",
     fileName: "parts.xlsx",
@@ -42,6 +45,7 @@ const pdfRow: ExtractedDocumentRow = {
   description: null,
   notes: null,
   action: "INCLUDE",
+  documentGeometry: emptyDocumentGeometry(),
   source: {
     type: "PDF",
     fileName: "parts.pdf",
@@ -72,7 +76,8 @@ const registry: DxfPartRegistryItem[] = [
     filename: "P1095.dxf",
     widthMm: 100,
     heightMm: 50,
-    areaMm2: 5000,
+    plateAreaMm2: 5000,
+    netContourAreaMm2: 4800,
     perimeterMm: 300,
     geometryStatus: "VALID",
     warnings: [],
@@ -111,7 +116,7 @@ function run(label: string, extraction: AiRequestExtraction) {
 {
   const row = run("t2", {
     documentRows: [xlsxRow, pdfRow],
-    emailFacts: [
+    emailFacts: emailFacts([
       {
         matchedDxfPartId: "P1095",
         rawPartReference: "P1095",
@@ -120,7 +125,7 @@ function run(label: string, extraction: AiRequestExtraction) {
         instructionType: "OVERRIDE",
         sourceExcerpt: "quantity changed to 65",
       },
-    ],
+    ]),
     unresolvedItems: [],
     warnings: [],
   });
@@ -173,7 +178,7 @@ function run(label: string, extraction: AiRequestExtraction) {
 {
   const row = run("t3", {
     documentRows: [xlsxRow, pdfRow],
-    emailFacts: [
+    emailFacts: emailFacts([
       {
         matchedDxfPartId: "P1095",
         rawPartReference: "P1095",
@@ -190,7 +195,7 @@ function run(label: string, extraction: AiRequestExtraction) {
         instructionType: "OVERRIDE",
         sourceExcerpt: "70",
       },
-    ],
+    ]),
     unresolvedItems: [],
     warnings: [],
   });
@@ -207,7 +212,7 @@ function run(label: string, extraction: AiRequestExtraction) {
 {
   const row = run("t4", {
     documentRows: [xlsxRow, pdfRow],
-    emailFacts: [
+    emailFacts: emailFacts([
       {
         matchedDxfPartId: "P1095",
         rawPartReference: "P1095",
@@ -216,7 +221,7 @@ function run(label: string, extraction: AiRequestExtraction) {
         instructionType: "VALUE",
         sourceExcerpt: "P1095 quantity is 65",
       },
-    ],
+    ]),
     unresolvedItems: [],
     warnings: [],
   });

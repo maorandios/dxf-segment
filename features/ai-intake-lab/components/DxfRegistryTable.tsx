@@ -140,7 +140,7 @@ export function DxfRegistryTable({ items, onPreview }: DxfRegistryTableProps) {
                     : "—"}
                 </TableCell>
                 <TableCell className="tabular-nums" dir="ltr">
-                  {item.areaMm2 != null ? formatInteger(item.areaMm2) : "—"}
+                  {item.plateAreaMm2 != null ? formatInteger(item.plateAreaMm2) : "—"}
                 </TableCell>
                 <TableCell className="tabular-nums" dir="ltr">
                   {item.perimeterMm != null

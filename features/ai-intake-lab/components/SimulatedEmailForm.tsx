@@ -20,6 +20,7 @@ import {
 import { buildSlimRegistryForAi } from "@/lib/ai-intake/slimRegistry";
 import { reconcileFinalMapping } from "@/lib/ai-intake/reconcileFinalMapping";
 import { applyDuplicateUserResolution } from "@/lib/ai-intake/requestOccurrences";
+import { applyEmailQuantityUserResolution } from "@/lib/ai-intake/emailConflictResolve";
 import type {
   AiIntakeAnalyzeResponse,
   AiIntakeAnalyzeSuccess,
@@ -83,6 +84,9 @@ export function SimulatedEmailForm() {
   const [duplicateResolutions, setDuplicateResolutions] = useState<
     Record<string, DuplicateUserAction>
   >({});
+  const [emailQuantityResolutions, setEmailQuantityResolutions] = useState<
+    Record<string, number>
+  >({});
 
   const dxfAttachments = useMemo(
     () => attachments.filter((a) => a.kind === "dxf"),
@@ -131,23 +135,44 @@ export function SimulatedEmailForm() {
     });
     const out: FinalIntakeMappingRow[] = [];
     for (const row of rows) {
-      const action = row.partId ? duplicateResolutions[row.partId] : undefined;
-      if (action) {
-        out.push(...applyDuplicateUserResolution(row, action));
-      } else {
-        out.push(row);
+      let next = row;
+      const dupAction = row.partId ? duplicateResolutions[row.partId] : undefined;
+      if (dupAction) {
+        const applied = applyDuplicateUserResolution(next, dupAction);
+        out.push(...applied);
+        continue;
       }
+      const emailQty = row.partId
+        ? emailQuantityResolutions[row.partId]
+        : undefined;
+      if (emailQty != null) {
+        next = applyEmailQuantityUserResolution(next, emailQty);
+      }
+      out.push(next);
     }
     return out;
-  }, [analyzeResult, registryItems, duplicateResolutions]);
+  }, [
+    analyzeResult,
+    registryItems,
+    duplicateResolutions,
+    emailQuantityResolutions,
+  ]);
 
   useEffect(() => {
     setDuplicateResolutions({});
+    setEmailQuantityResolutions({});
   }, [analyzeResult]);
 
   const handleDuplicateResolve = useCallback(
     (partId: string, action: DuplicateUserAction) => {
       setDuplicateResolutions((prev) => ({ ...prev, [partId]: action }));
+    },
+    []
+  );
+
+  const handleEmailQuantityResolve = useCallback(
+    (partId: string, quantity: number) => {
+      setEmailQuantityResolutions((prev) => ({ ...prev, [partId]: quantity }));
     },
     []
   );
@@ -421,6 +446,7 @@ export function SimulatedEmailForm() {
           <FinalMappingTable
             rows={finalRows}
             onDuplicateResolve={handleDuplicateResolve}
+            onEmailQuantityResolve={handleEmailQuantityResolve}
             canPreview={(row) => {
               if (!row.dxfFileId) return false;
               const item = registryItems.find((r) => r.id === row.dxfFileId);

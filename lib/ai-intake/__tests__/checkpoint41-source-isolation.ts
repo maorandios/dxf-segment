@@ -11,6 +11,7 @@ import type {
   AiRequestExtraction,
   ExtractedDocumentRow,
 } from "../schemas";
+import { emptyDocumentGeometry } from "../schemas";
 import type { DxfPartRegistryItem } from "../types";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -27,6 +28,7 @@ const xlsxRow: ExtractedDocumentRow = {
   description: null,
   notes: null,
   action: "INCLUDE",
+  documentGeometry: emptyDocumentGeometry(),
   source: {
     type: "XLSX",
     fileName: "parts.xlsx",
@@ -52,6 +54,7 @@ const pdfRow: ExtractedDocumentRow = {
   description: null,
   notes: null,
   action: "INCLUDE",
+  documentGeometry: emptyDocumentGeometry(),
   source: {
     type: "PDF",
     fileName: "parts.pdf",
@@ -89,7 +92,8 @@ const registry: DxfPartRegistryItem[] = [
     filename: "P1095.dxf",
     widthMm: 100,
     heightMm: 50,
-    areaMm2: 5000,
+    plateAreaMm2: 5000,
+    netContourAreaMm2: 4800,
     perimeterMm: 300,
     geometryStatus: "VALID",
     warnings: [],

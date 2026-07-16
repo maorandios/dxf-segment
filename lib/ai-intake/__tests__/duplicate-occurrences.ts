@@ -6,6 +6,7 @@ import { expandExtractionToFacts } from "../expandExtractionToFacts";
 import { reconcileFinalMapping } from "../reconcileFinalMapping";
 import { applyDuplicateUserResolution } from "../requestOccurrences";
 import type { AiRequestExtraction, ExtractedDocumentRow } from "../schemas";
+import { emptyDocumentGeometry } from "../schemas";
 import type { DxfPartRegistryItem } from "../types";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -27,7 +28,8 @@ const registry: DxfPartRegistryItem[] = [
     filename: "P1095.dxf",
     widthMm: 100,
     heightMm: 50,
-    areaMm2: 5000,
+    plateAreaMm2: 5000,
+    netContourAreaMm2: 4800,
     perimeterMm: 300,
     geometryStatus: "VALID",
     warnings: [],
@@ -50,6 +52,7 @@ function rowAt(
     description: null,
     notes: null,
     action: "INCLUDE",
+    documentGeometry: emptyDocumentGeometry(),
     source: {
       type: "XLSX",
       fileName: "רשימה 2.xls",
@@ -219,6 +222,7 @@ function summarize(row: NonNullable<ReturnType<typeof reconcile>["rows"][number]
     description: null,
     notes: null,
     action: "INCLUDE",
+    documentGeometry: emptyDocumentGeometry(),
     source: {
       type: "PDF",
       fileName: "parts.pdf",

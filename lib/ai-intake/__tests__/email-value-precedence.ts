@@ -9,7 +9,9 @@ import type {
   ExtractedDocumentRow,
   ExtractedEmailFact,
 } from "../schemas";
+import { emptyDocumentGeometry } from "../schemas";
 import type { DxfPartRegistryItem } from "../types";
+import { emailFacts } from "./emailFactHelpers";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`);
@@ -25,6 +27,7 @@ const xlsxRow: ExtractedDocumentRow = {
   description: null,
   notes: null,
   action: "INCLUDE",
+  documentGeometry: emptyDocumentGeometry(),
   source: {
     type: "XLSX",
     fileName: "parts.xlsx",
@@ -50,6 +53,7 @@ const pdfRow: ExtractedDocumentRow = {
   description: null,
   notes: null,
   action: "INCLUDE",
+  documentGeometry: emptyDocumentGeometry(),
   source: {
     type: "PDF",
     fileName: "parts.pdf",
@@ -80,7 +84,8 @@ const registry: DxfPartRegistryItem[] = [
     filename: "P1095.dxf",
     widthMm: 100,
     heightMm: 50,
-    areaMm2: 5000,
+    plateAreaMm2: 5000,
+    netContourAreaMm2: 4800,
     perimeterMm: 300,
     geometryStatus: "VALID",
     warnings: [],
@@ -88,10 +93,10 @@ const registry: DxfPartRegistryItem[] = [
   },
 ];
 
-function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [xlsxRow, pdfRow]) {
+function run(emailFactsIn: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [xlsxRow, pdfRow]) {
   const extraction: AiRequestExtraction = {
     documentRows: docs,
-    emailFacts,
+    emailFacts: emailFactsIn,
     unresolvedItems: [],
     warnings: [],
   };
@@ -108,16 +113,18 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
 
 // Test 1: PDF 100 + XLSX 24 + EMAIL VALUE 65 → 65 READY
 {
-  const row = run([
-    {
-      matchedDxfPartId: "P1095",
-      rawPartReference: "P1095",
-      field: "QUANTITY",
-      value: 65,
-      instructionType: "VALUE",
-      sourceExcerpt: "עבור פלטה P1095 הכמות היא 65",
-    },
-  ]);
+  const row = run(
+    emailFacts([
+      {
+        matchedDxfPartId: "P1095",
+        rawPartReference: "P1095",
+        field: "QUANTITY",
+        value: 65,
+        instructionType: "VALUE",
+        sourceExcerpt: "עבור פלטה P1095 הכמות היא 65",
+      },
+    ])
+  );
   assert(row.quantity === 65, `t1 qty=${row.quantity}`);
   assert(row.status === "READY", `t1 status=${row.status}`);
   assert(row.fieldSources.quantity === "EMAIL", `t1 src=${row.fieldSources.quantity}`);
@@ -175,7 +182,7 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
 // Test 3: XLSX 24 + EMAIL OVERRIDE 65
 {
   const row = run(
-    [
+    emailFacts([
       {
         matchedDxfPartId: "P1095",
         rawPartReference: "P1095",
@@ -184,7 +191,7 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
         instructionType: "OVERRIDE",
         sourceExcerpt: "quantity changed to 65",
       },
-    ],
+    ]),
     [xlsxRow]
   );
   assert(row.quantity === 65, `t3 qty=${row.quantity}`);
@@ -195,7 +202,7 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
 // Test 4: XLSX 24 + EMAIL VALUE 65
 {
   const row = run(
-    [
+    emailFacts([
       {
         matchedDxfPartId: "P1095",
         rawPartReference: "P1095",
@@ -204,7 +211,7 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
         instructionType: "VALUE",
         sourceExcerpt: "P1095 quantity is 65",
       },
-    ],
+    ]),
     [xlsxRow]
   );
   assert(row.quantity === 65, `t4 qty=${row.quantity}`);
@@ -221,7 +228,7 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
     { ...xlsxRow, quantity: 24, material: "S235" },
   ];
   const row = run(
-    [
+    emailFacts([
       {
         matchedDxfPartId: null,
         rawPartReference: null,
@@ -230,7 +237,7 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
         instructionType: "DEFAULT",
         sourceExcerpt: "all parts are S275",
       },
-    ],
+    ]),
     docs
   );
   assert(row.material === "S235", `t5 mat=${row.material}`);
@@ -243,7 +250,7 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
     { ...xlsxRow, quantity: 24, material: null, thicknessMm: 20 },
   ];
   const row = run(
-    [
+    emailFacts([
       {
         matchedDxfPartId: null,
         rawPartReference: null,
@@ -252,7 +259,7 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
         instructionType: "DEFAULT",
         sourceExcerpt: "all parts are S275",
       },
-    ],
+    ]),
     docs
   );
   assert(row.material === "S275", `t6 mat=${row.material}`);
@@ -262,24 +269,26 @@ function run(emailFacts: ExtractedEmailFact[], docs: ExtractedDocumentRow[] = [x
 
 // Test 7: two distinct EMAIL quantity values
 {
-  const row = run([
-    {
-      matchedDxfPartId: "P1095",
-      rawPartReference: "P1095",
-      field: "QUANTITY",
-      value: 65,
-      instructionType: "VALUE",
-      sourceExcerpt: "65",
-    },
-    {
-      matchedDxfPartId: "P1095",
-      rawPartReference: "P1095",
-      field: "QUANTITY",
-      value: 70,
-      instructionType: "VALUE",
-      sourceExcerpt: "70",
-    },
-  ]);
+  const row = run(
+    emailFacts([
+      {
+        matchedDxfPartId: "P1095",
+        rawPartReference: "P1095",
+        field: "QUANTITY",
+        value: 65,
+        instructionType: "VALUE",
+        sourceExcerpt: "65",
+      },
+      {
+        matchedDxfPartId: "P1095",
+        rawPartReference: "P1095",
+        field: "QUANTITY",
+        value: 70,
+        instructionType: "VALUE",
+        sourceExcerpt: "70",
+      },
+    ])
+  );
   assert(row.quantity === null, `t7 qty=${row.quantity}`);
   assert(row.status === "NEEDS_REVIEW", `t7 status=${row.status}`);
   assert(
