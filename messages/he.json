@@ -1486,7 +1486,8 @@
       "expandedFactsJson": "עובדות אטומיות מורחבות (JSON)",
       "factsJson": "עובדות מאומתות (JSON)",
       "unresolvedJson": "פריטים לא מזוהים (JSON)",
-      "auditJson": "שורות ביקורת (JSON)"
+      "auditJson": "שורות ביקורת (JSON)",
+      "workbookEvidence": "ראיות חוברת Excel — snapshot / mapping / coverage (JSON)"
     },
     "registry": {
       "title": "רישום חלקי DXF",

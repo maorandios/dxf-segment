@@ -236,6 +236,42 @@ export function IntakeDebugPanel({ result }: IntakeDebugPanelProps) {
               {JSON.stringify(result.auditRows, null, 2)}
             </pre>
           </details>
+
+          {result.aggregated.documents.some((d) => d.workbookEvidence) && (
+            <>
+              <details className="rounded-[10px] border border-white/10 p-3" open>
+                <summary className="cursor-pointer text-sm font-medium">
+                  {t("aiIntake.debug.workbookEvidence")}
+                </summary>
+                <pre
+                  className="mt-2 max-h-96 overflow-auto text-[11px] leading-relaxed text-muted-foreground"
+                  dir="ltr"
+                >
+                  {JSON.stringify(
+                    result.aggregated.documents
+                      .filter((d) => d.workbookEvidence)
+                      .map((d) => ({
+                        documentId: d.documentId,
+                        fileName: d.fileName,
+                        status: d.status,
+                        parserKind: d.workbookEvidence?.parserKind,
+                        coverage: d.workbookEvidence?.coverage,
+                        mapping: d.workbookEvidence?.mapping,
+                        snapshot: d.workbookEvidence?.snapshot,
+                        rawPartRows: d.workbookEvidence?.rawPartRows,
+                        excludedTotalSubtotalRows:
+                          d.workbookEvidence?.excludedTotalSubtotalRows,
+                        unknownRows: d.workbookEvidence?.unknownRows,
+                        hiddenPartRowsRequiringReview:
+                          d.workbookEvidence?.hiddenPartRowsRequiringReview,
+                      })),
+                    null,
+                    2
+                  )}
+                </pre>
+              </details>
+            </>
+          )}
         </CardContent>
       )}
     </Card>

@@ -166,7 +166,7 @@ export function validateSourceCompleteness(args: {
       warnings.push(`MISSING_DOCUMENT_RESULT:${up.fileName}`);
       continue;
     }
-    if (found.status === "SUCCESS") {
+    if (found.status === "SUCCESS" || found.status === "PARTIAL") {
       for (const row of found.rows) {
         if (row.documentId !== up.documentId) {
           warnings.push(`ROW_DOCUMENT_ID_DRIFT:${up.fileName}`);

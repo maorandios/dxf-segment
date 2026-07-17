@@ -13,9 +13,21 @@ import {
   type SourceDocumentDescriptor,
   type SourceDocumentResult,
   type UnresolvedRequestItem,
+  type WorkbookEvidenceDebug,
 } from "./schemas";
 import { validateSingleDocumentExtraction } from "./validateDocumentExtraction";
 import { normalizeEmailFacts } from "./emailFactNormalize";
+import {
+  aiWorkbookMappingResultSchema,
+  buildWorkbookSnapshot,
+  compactWorkbookForModel,
+  reconstructRawRows,
+  rawDocumentPartRowToExtractedDocumentRow,
+  validateMappingCoverage,
+  enrichColumnHeadersFromSnapshot,
+  classifyWorkbookMetadataRows,
+  type AiWorkbookMappingResult,
+} from "./normalization";
 
 export type DocumentFileInput = {
   documentId: string;
@@ -78,6 +90,21 @@ MATCHING:
 - No chain-of-thought. Keep excerpts short (<240 chars).
 
 Do NOT invent a file name. Location fields describe where the data appears inside the attached file.`;
+
+const WORKBOOK_MAPPING_SYSTEM_INSTRUCTIONS = `You map table structure in ONE customer spreadsheet for a CNC plate quoting lab.
+
+CRITICAL:
+- You do NOT extract or invent cell values. The server already has the authoritative workbook cells.
+- Return ONLY structural mapping: sheets, tables, column letters, header rows, row roles, unmapped non-empty rows.
+- Multiple tables per sheet are allowed (stacked, side-by-side, or separated by subtotals).
+- Every non-empty row should appear either in a table's rowRoles OR in unmappedNonEmptyRows.
+- Row roles are advisory: PART, SUBTOTAL, TOTAL, HEADER, NOTE, EMPTY, UNKNOWN.
+- columns fields are Excel column letters (e.g. "B", "C"), never numeric values.
+- columnHeaders.statedUnitText is the unit text from the header when visible (e.g. "mm", "m2", "kg").
+- Do NOT copy quantities, thicknesses, materials, or any cell values into the output.
+- Do NOT invent a file name.
+- matched DXF IDs are NOT returned here; the server matches from part-reference cells.
+- No chain-of-thought.`;
 
 const EMAIL_SYSTEM_INSTRUCTIONS = `You extract RFQ instructions from a customer email for a CNC plate quoting lab.
 
@@ -305,6 +332,23 @@ export async function extractSingleDocumentWithOpenAI(args: {
   };
 
   const started = Date.now();
+  const mime = args.document.mimeType || mimeForFilename(args.document.filename);
+  const isPdf =
+    args.document.sourceType === "PDF" ||
+    args.document.filename.toLowerCase().endsWith(".pdf") ||
+    mime === "application/pdf";
+
+  if (!isPdf) {
+    return extractSpreadsheetDocument({
+      client: args.client,
+      model: args.model,
+      document: args.document,
+      registry: args.registry,
+      descriptor,
+      started,
+    });
+  }
+
   try {
     const registryJson = JSON.stringify(args.registry, null, 2);
     const userText = [
@@ -322,12 +366,6 @@ export async function extractSingleDocumentWithOpenAI(args: {
       "The attached file follows. DXF files are NOT attached. Email is NOT included.",
     ].join("\n");
 
-    const mime = args.document.mimeType || mimeForFilename(args.document.filename);
-    const isPdf =
-      args.document.sourceType === "PDF" ||
-      args.document.filename.toLowerCase().endsWith(".pdf") ||
-      mime === "application/pdf";
-
     type ContentPart =
       | { type: "input_text"; text: string }
       | {
@@ -343,7 +381,7 @@ export async function extractSingleDocumentWithOpenAI(args: {
         type: "input_file",
         filename: args.document.filename,
         file_data: toDataUrl(args.document.buffer, mime),
-        ...(isPdf ? { detail: "high" as const } : {}),
+        detail: "high",
       },
     ];
 
@@ -397,6 +435,7 @@ export async function extractSingleDocumentWithOpenAI(args: {
       errorCode: null,
       usage: usageFromResponse(response.usage),
       durationMs,
+      workbookEvidence: null,
     };
   } catch (err) {
     const code =
@@ -418,6 +457,232 @@ export async function extractSingleDocumentWithOpenAI(args: {
       errorCode: code,
       usage: { inputTokens: null, outputTokens: null, totalTokens: null },
       durationMs: Date.now() - started,
+      workbookEvidence: null,
+    };
+  }
+}
+
+async function extractSpreadsheetDocument(args: {
+  client: OpenAI;
+  model: string;
+  document: DocumentFileInput;
+  registry: SlimRegistryItem[];
+  descriptor: SourceDocumentDescriptor;
+  started: number;
+}): Promise<SourceDocumentResult> {
+  const { descriptor, started } = args;
+  const emptyUsage = {
+    inputTokens: null as number | null,
+    outputTokens: null as number | null,
+    totalTokens: null as number | null,
+  };
+
+  const parsedSnap = await buildWorkbookSnapshot({
+    documentId: descriptor.documentId,
+    fileName: descriptor.fileName,
+    buffer: args.document.buffer,
+  });
+
+  if (!parsedSnap.ok) {
+    return {
+      documentId: descriptor.documentId,
+      sourceType: descriptor.sourceType,
+      fileName: descriptor.fileName,
+      rows: [],
+      unresolvedItems: [],
+      warnings: parsedSnap.warnings,
+      status: "FAILED",
+      errorCode: "WORKBOOK_PARSE_FAILED",
+      usage: emptyUsage,
+      durationMs: Date.now() - started,
+      workbookEvidence: null,
+    };
+  }
+
+  const snapshot = parsedSnap.snapshot;
+  const compact = compactWorkbookForModel(snapshot);
+  const warnings: string[] = [
+    ...snapshot.warnings,
+    ...compact.warnings,
+    `WORKBOOK_PARSER_KIND:${snapshot.parserKind}`,
+  ];
+
+  try {
+    const registryJson = JSON.stringify(args.registry, null, 2);
+    const userText = [
+      "Map table structure for the spreadsheet described below.",
+      "Do NOT invent or copy cell values — return column letters and row roles only.",
+      "",
+      `Authoritative source (server-assigned):`,
+      `documentId=${descriptor.documentId}`,
+      `sourceType=${descriptor.sourceType}`,
+      `fileName=${descriptor.fileName}`,
+      `parserKind=${snapshot.parserKind}`,
+      "",
+      "DXF_PART_REGISTRY (for context only — do not invent values):",
+      registryJson,
+      "",
+      "DETERMINISTIC_WORKBOOK_COMPACT (server-parsed cell evidence; use for structure only):",
+      compact.compactJson,
+    ].join("\n");
+
+    const response = await args.client.responses.parse({
+      model: args.model,
+      reasoning: { effort: "none" },
+      input: [
+        { role: "system", content: WORKBOOK_MAPPING_SYSTEM_INSTRUCTIONS },
+        { role: "user", content: userText },
+      ],
+      text: {
+        format: zodTextFormat(
+          aiWorkbookMappingResultSchema,
+          "ai_workbook_mapping"
+        ),
+      },
+    });
+
+    const durationMs = Date.now() - started;
+    const parsed = response.output_parsed;
+    if (!parsed) {
+      throw Object.assign(new Error("OPENAI_SCHEMA"), { code: "OPENAI_SCHEMA" });
+    }
+    const modelResult = aiWorkbookMappingResultSchema.parse(parsed);
+    let mapping: AiWorkbookMappingResult = {
+      sheets: modelResult.sheets,
+    };
+    mapping = enrichColumnHeadersFromSnapshot(snapshot, mapping);
+    const classified = classifyWorkbookMetadataRows(snapshot, mapping);
+    mapping = classified.mapping;
+    warnings.push(...classified.info);
+
+    const coverage = validateMappingCoverage(snapshot, mapping);
+    if (!coverage.coverageComplete) {
+      warnings.push("WORKBOOK_MAPPING_INCOMPLETE");
+      warnings.push(
+        ...coverage.issues.filter((i) => !i.startsWith("INFO_"))
+      );
+    } else {
+      warnings.push(...coverage.issues.filter((i) => i.startsWith("INFO_")));
+    }
+    if (compact.truncated) {
+      warnings.push("WORKBOOK_MAPPING_LIMIT_EXCEEDED");
+    }
+
+    const reconstructed = reconstructRawRows({
+      snapshot,
+      mapping,
+      registry: args.registry,
+    });
+    // INFO metadata lines stay as info; UNMAPPED inside tables stay as warnings
+    for (const w of reconstructed.warnings) {
+      warnings.push(w);
+    }
+
+    const adaptedRows = reconstructed.partRows.map((r) =>
+      rawDocumentPartRowToExtractedDocumentRow(r)
+    );
+
+    const unresolvedItems: UnresolvedRequestItem[] =
+      modelResult.unresolvedItems.map((item) => ({
+        rawPartReference: item.rawPartReference,
+        description: item.description,
+        possibleDxfPartIds: [],
+        reason: item.reason,
+        source: {
+          type: descriptor.sourceType,
+          fileName: descriptor.fileName,
+          sheetName: item.location.sheetName,
+          rowNumber: item.location.visibleRowNumber,
+          cellReferences: [],
+          pageNumber: item.location.pageNumber,
+          excerpt: item.location.excerpt,
+        },
+      }));
+
+    const validated = validateSingleDocumentExtraction(
+      {
+        ...descriptor,
+        rows: dedupeExactSameDocumentRows(adaptedRows),
+        unresolvedItems,
+        warnings: [...warnings, ...modelResult.warnings],
+      },
+      args.registry
+    );
+
+    const workbookEvidence: WorkbookEvidenceDebug = {
+      parserKind: snapshot.parserKind,
+      snapshot: {
+        documentId: snapshot.documentId,
+        fileName: snapshot.fileName,
+        parserKind: snapshot.parserKind,
+        sheets: snapshot.sheets.map((s) => ({
+          sheetName: s.sheetName,
+          usedRange: s.usedRange,
+          mergedRanges: s.mergedRanges,
+          hidden: s.hidden,
+          cellCount: s.cells.length,
+          cells: s.cells,
+        })),
+        warnings: snapshot.warnings,
+      },
+      mapping,
+      coverage,
+      rawPartRows: reconstructed.partRows,
+      excludedTotalSubtotalRows: reconstructed.excludedTotalSubtotalRows,
+      unknownRows: reconstructed.unknownRows,
+      hiddenPartRowsRequiringReview:
+        reconstructed.hiddenPartRowsRequiringReview,
+    };
+
+    const status: SourceDocumentResult["status"] =
+      compact.truncated || !coverage.coverageComplete ? "PARTIAL" : "SUCCESS";
+
+    return {
+      documentId: descriptor.documentId,
+      sourceType: descriptor.sourceType,
+      fileName: descriptor.fileName,
+      rows: validated.rows,
+      unresolvedItems: validated.unresolvedItems,
+      warnings: validated.warnings,
+      status,
+      errorCode: status === "PARTIAL" ? "WORKBOOK_MAPPING_INCOMPLETE_OR_LIMIT" : null,
+      usage: usageFromResponse(response.usage),
+      durationMs,
+      workbookEvidence,
+    };
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code?: string }).code)
+        : "OPENAI_FAILED";
+    console.error(
+      `[ai-intake] spreadsheet mapping failed ${descriptor.fileName}`,
+      err
+    );
+    return {
+      documentId: descriptor.documentId,
+      sourceType: descriptor.sourceType,
+      fileName: descriptor.fileName,
+      rows: [],
+      unresolvedItems: [],
+      warnings: [
+        ...warnings,
+        `SOURCE_EXTRACTION_FAILED:${descriptor.fileName}:${code}`,
+      ],
+      status: "FAILED",
+      errorCode: code,
+      usage: emptyUsage,
+      durationMs: Date.now() - started,
+      workbookEvidence: {
+        parserKind: snapshot.parserKind,
+        snapshot,
+        mapping: null,
+        coverage: null,
+        rawPartRows: [],
+        excludedTotalSubtotalRows: [],
+        unknownRows: [],
+        hiddenPartRowsRequiringReview: [],
+      },
     };
   }
 }
@@ -651,7 +916,7 @@ export async function extractIsolatedSourcesWithOpenAI(args: {
       });
     }
     if (
-      found.status === "SUCCESS" &&
+      (found.status === "SUCCESS" || found.status === "PARTIAL") &&
       (found.documentId !== doc.documentId ||
         found.fileName !== doc.filename ||
         found.sourceType !== doc.sourceType)
@@ -663,7 +928,7 @@ export async function extractIsolatedSourcesWithOpenAI(args: {
   }
 
   const successfulRows = documentResults
-    .filter((d) => d.status === "SUCCESS")
+    .filter((d) => d.status === "SUCCESS" || d.status === "PARTIAL")
     .flatMap((d) => d.rows);
 
   const unresolvedItems: UnresolvedRequestItem[] = [
@@ -686,8 +951,9 @@ export async function extractIsolatedSourcesWithOpenAI(args: {
   const expandedFacts = expandExtractionToFacts(extraction);
 
   const anyDocFailed = documentResults.some((d) => d.status === "FAILED");
+  const anyDocPartial = documentResults.some((d) => d.status === "PARTIAL");
   const emailFailed = emailResult.status === "FAILED";
-  const partial = anyDocFailed || emailFailed;
+  const partial = anyDocFailed || anyDocPartial || emailFailed;
 
   const openaiCallCount =
     args.documents.length + (runEmail ? 1 : 0);

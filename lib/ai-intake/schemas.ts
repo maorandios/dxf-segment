@@ -270,6 +270,18 @@ export type SourceDocumentDescriptor = {
   fileName: string;
 };
 
+/** Checkpoint 5.1 workbook evidence attached to spreadsheet source results (debug). */
+export type WorkbookEvidenceDebug = {
+  parserKind: "EXCELJS_XLSX" | "SHEETJS_XLS";
+  snapshot: unknown;
+  mapping: unknown;
+  coverage: unknown;
+  rawPartRows: unknown;
+  excludedTotalSubtotalRows: unknown;
+  unknownRows: unknown;
+  hiddenPartRowsRequiringReview: unknown;
+};
+
 export type SourceDocumentResult = {
   documentId: string;
   sourceType: "XLSX" | "PDF";
@@ -277,7 +289,7 @@ export type SourceDocumentResult = {
   rows: ExtractedDocumentRow[];
   unresolvedItems: UnresolvedRequestItem[];
   warnings: string[];
-  status: "SUCCESS" | "FAILED";
+  status: "SUCCESS" | "FAILED" | "PARTIAL";
   errorCode: string | null;
   usage: {
     inputTokens: number | null;
@@ -285,6 +297,8 @@ export type SourceDocumentResult = {
     totalTokens: number | null;
   };
   durationMs: number;
+  /** Present for XLS/XLSX after Checkpoint 5.1 deterministic parse path. */
+  workbookEvidence?: WorkbookEvidenceDebug | null;
 };
 
 export type AggregatedSourceExtraction = {
