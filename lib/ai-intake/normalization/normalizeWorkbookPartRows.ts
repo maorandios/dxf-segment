@@ -9,8 +9,11 @@ import {
   inferAllTableUnitSystems,
   type TableUnitInferenceResult,
 } from "./inferTableUnitSystem";
+import { applyRelatedColumnUnitInheritance } from "./applyRelatedColumnUnitInheritance";
 import { normalizePartRows } from "./resolveNormalizedMeasurement";
 import { compareWithPrecision } from "./precisionCompare";
+import { buildMassColumnProfile } from "../mass/buildMassColumnProfile";
+import type { MassColumnInterpretation, MassInterpretationDebugReport } from "../mass/types";
 import type {
   AiWorkbookMappingResult,
   ColumnUnitProfile,
@@ -30,6 +33,11 @@ export type WorkbookNormalizationResult = {
     comparison: PrecisionComparisonResult;
   }>;
   tableUnitInferences: TableUnitInferenceResult[];
+  headerUnitDiagnostics?: ReturnType<
+    typeof applyRelatedColumnUnitInheritance
+  >["diagnostics"];
+  massInterpretation?: MassColumnInterpretation | null;
+  massInterpretationDebug?: MassInterpretationDebugReport | null;
 };
 
 /**
@@ -79,6 +87,14 @@ export function normalizeWorkbookPartRows(args: {
   for (const inference of tableUnitInferences) {
     applyTableUnitInferenceToProfiles({ profiles, inference });
   }
+  for (const p of profiles) enforceProfileStatusInvariant(p);
+
+  // Related-column inheritance (total fields without explicit unit)
+  const { diagnostics: headerUnitDiagnostics } =
+    applyRelatedColumnUnitInheritance({
+      profiles,
+      partRows: args.partRows,
+    });
   for (const p of profiles) enforceProfileStatusInvariant(p);
 
   // Pass C — finalize remaining unresolved profiles from provisional row votes
@@ -197,7 +213,104 @@ export function normalizeWorkbookPartRows(args: {
     });
   }
 
-  return { profiles, normalizedRows, precisionComparisons, tableUnitInferences };
+  // Pass D — provisional mass interpretation during normalize (slim registry).
+  // Authoritative resolution runs post-DXF in enrichReviewRowsWithMassInterpretation.
+  let massInterpretation: MassColumnInterpretation | null = null;
+  let massInterpretationDebug: MassInterpretationDebugReport | null = null;
+  const hasMass = normalizedRows.some(
+    (nr) =>
+      (nr.unitWeight?.raw?.rawValue != null) ||
+      (nr.totalWeight?.raw?.rawValue != null)
+  );
+  if (hasMass) {
+    const massReg = args.registry.map((r) => ({
+      canonicalPartId: r.canonicalPartId,
+      plateAreaMm2: r.plateAreaMm2 ?? null,
+      netContourAreaMm2: r.netContourAreaMm2 ?? null,
+      widthMm: r.widthMm ?? null,
+      heightMm: r.heightMm ?? null,
+    }));
+    const built = buildMassColumnProfile({
+      documentId: args.documentId,
+      sheetName: args.partRows[0]?.source.sheetName ?? null,
+      tableId: args.partRows[0]?.source.tableId ?? null,
+      unitWeightColumn:
+        profiles.find((p) => p.semanticField === "UNIT_WEIGHT")?.columnLetter ??
+        null,
+      totalWeightColumn:
+        profiles.find((p) => p.semanticField === "TOTAL_WEIGHT")?.columnLetter ??
+        null,
+      normalizedRows: normalizedRows.map((nr) => ({
+        occurrenceId: nr.raw.occurrenceId,
+        partId: nr.raw.matchedDxfPartId,
+        raw: nr.raw,
+        quantity: nr.raw.quantity
+          ? {
+              raw: nr.raw.quantity,
+              normalizedValue:
+                typeof nr.raw.quantity.rawValue === "number"
+                  ? nr.raw.quantity.rawValue
+                  : null,
+            }
+          : null,
+        thickness: nr.thickness,
+        area: nr.area,
+        unitWeight: nr.unitWeight,
+        totalWeight: nr.totalWeight,
+      })),
+      registry: massReg,
+    });
+    massInterpretation = built.interpretation;
+    massInterpretationDebug = built.debug;
+
+    // When unit uniquely resolved, inherit onto related column profiles (no mutation of raws).
+    if (
+      massInterpretation.resolvedUnit &&
+      (massInterpretation.status === "RESOLVED_BY_MASS_BASIS_CONSISTENCY" ||
+        massInterpretation.status === "RESOLVED_BY_EXPLICIT_HEADER_UNIT" ||
+        massInterpretation.status === "RESOLVED_UNIT_BASIS_AMBIGUOUS")
+    ) {
+      for (const field of ["UNIT_WEIGHT", "TOTAL_WEIGHT"] as const) {
+        const profile = profiles.find((p) => p.semanticField === field);
+        if (!profile) continue;
+        if (profile.statedHeaderUnit) continue;
+        if (
+          profile.resolvedUnit == null ||
+          profile.resolutionStatus === "AMBIGUOUS"
+        ) {
+          profile.resolvedUnit = massInterpretation.resolvedUnit;
+          profile.resolutionStatus =
+            field === "TOTAL_WEIGHT" &&
+            massInterpretation.semanticRelationship.status === "RESOLVED"
+              ? "RESOLVED_BY_RELATED_COLUMN"
+              : "RESOLVED_BY_ROW_CONSISTENCY";
+          profile.confidence = Math.max(
+            profile.confidence,
+            massInterpretation.confidence
+          );
+          profile.evidence.push(
+            `massInterpretation:${massInterpretation.status}:${massInterpretation.resolvedUnit}`
+          );
+        }
+      }
+      // Re-resolve mass fields with updated profiles
+      normalizedRows = normalizePartRows({
+        rows: args.partRows,
+        profiles,
+        dxfByPartId,
+      });
+    }
+  }
+
+  return {
+    profiles,
+    normalizedRows,
+    precisionComparisons,
+    tableUnitInferences,
+    headerUnitDiagnostics,
+    massInterpretation,
+    massInterpretationDebug,
+  };
 }
 
 function numRaw(raw: {

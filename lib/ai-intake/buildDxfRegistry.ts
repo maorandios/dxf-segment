@@ -4,11 +4,16 @@ import { partIdentityKey } from "./normalizePartId";
 import {
   DXF_ISSUE,
   type DxfGeometryStatus,
+  type DxfIdentity,
+  type DxfLayerMetadata,
   type DxfPartRegistryItem,
   type DxfRegistrySummary,
 } from "./types";
 import {
+  buildDxfIdentityDiagnostics,
   resolveDxfIdentity,
+  validateDxfIdentityPair,
+  type DxfIdentityDiagnostics,
   type ResolvedDxfIdentity,
 } from "./extractDxfIdentity";
 
@@ -77,20 +82,37 @@ function pushUnique(list: string[], code: string): void {
   if (!list.includes(code)) list.push(code);
 }
 
+/** Non-blocking layer / fallback notices — not identity errors. */
+export const NON_BLOCKING_IDENTITY_ISSUE_CODES = new Set<string>([
+  DXF_ISSUE.LAYER_CONFIRMED,
+  DXF_ISSUE.LAYER_DIFFERS_FROM_FILENAME,
+  DXF_ISSUE.LAYER_FALLBACK_USED,
+  DXF_ISSUE.INVALID_GEOMETRY,
+]);
+
 /**
  * Build a single registry row from parsed DXF data (no cross-file checks yet).
  */
 export function buildRegistryItemFromParsed(
   input: BuildRegistryItemInput
 ): DxfPartRegistryItem {
-  const identity: ResolvedDxfIdentity = resolveDxfIdentity(
+  const resolved: ResolvedDxfIdentity = resolveDxfIdentity(
     input.filename,
     input.layers
   );
 
+  validateDxfIdentityPair({
+    fileName: input.filename,
+    identity: resolved.identity,
+    layerMetadata: resolved.layerMetadata,
+  });
+
   const metrics = geometryMetricsFromProcessed(input.processedGeometry);
-  const warnings = [...input.parseWarnings];
-  const identityIssues = [...identity.identityIssues];
+  const warnings = [
+    ...input.parseWarnings,
+    ...resolved.layerMetadata.warnings,
+  ];
+  const identityIssues = [...resolved.identityIssues];
 
   if (input.fatalIssue) {
     pushUnique(identityIssues, input.fatalIssue);
@@ -107,32 +129,31 @@ export function buildRegistryItemFromParsed(
     }
   }
 
-  /** Geometry issues stay visible but do not clear identityOk. */
-  const identityBlocking = new Set<string>([
-    DXF_ISSUE.NO_PART_ID,
-    DXF_ISSUE.IDENTITY_CONFLICT,
-    DXF_ISSUE.MULTIPLE_LAYER_IDENTITIES,
-    DXF_ISSUE.READ_FAILED,
-    DXF_ISSUE.PARSE_FAILED,
-  ]);
-
-  let identityOk =
-    identity.identityOk &&
-    !identityIssues.some((c) => identityBlocking.has(c));
+  let identity: DxfIdentity = { ...resolved.identity };
+  let identityOk = identity.status === "VALID";
 
   if (input.fatalIssue) {
+    identity = {
+      ...identity,
+      status: "INVALID",
+      source: "NONE",
+      reason: "INVALID_FILENAME_ID",
+      canonicalPartId: null,
+    };
     identityOk = false;
   }
 
   return {
     id: input.id,
-    canonicalPartId: identity.canonicalPartId,
+    canonicalPartId: identity.canonicalPartId ?? "",
     revision: identity.revision,
-    rawPartId: identity.rawPartId,
-    normalizedRawPartId: identity.normalizedRawPartId,
-    identitySource: identity.identitySource,
+    rawPartId: identity.rawPartId ?? "",
+    normalizedRawPartId: identity.normalizedRawPartId ?? "",
+    identitySource: identity.source === "NONE" ? null : identity.source,
     identityOk,
     identityIssues,
+    identity,
+    layerMetadata: resolved.layerMetadata,
     revisionIssue: false,
     duplicateIssue: false,
     filename: input.filename,
@@ -149,23 +170,29 @@ export function buildRegistryItemFromParsed(
 
 /**
  * Second pass: mark exact duplicates and revision conflicts across the registry.
+ * Collisions are based on authoritative canonical IDs only — never layer values.
  */
 export function applyCrossFileIdentityValidation(
   items: DxfPartRegistryItem[]
 ): DxfPartRegistryItem[] {
-  const withCanonical = items.filter((i) => i.canonicalPartId.length > 0);
+  const withCanonical = items.filter(
+    (i) =>
+      (i.identity.status === "VALID" || i.identity.status === "COLLISION") &&
+      (i.identity.canonicalPartId?.length ?? 0) > 0
+  );
   const byCanonical = new Map<string, DxfPartRegistryItem[]>();
 
   for (const item of withCanonical) {
-    const list = byCanonical.get(item.canonicalPartId) ?? [];
+    const canon = item.identity.canonicalPartId!;
+    const list = byCanonical.get(canon) ?? [];
     list.push(item);
-    byCanonical.set(item.canonicalPartId, list);
+    byCanonical.set(canon, list);
   }
 
   const flagged = new Map<string, DxfPartRegistryItem>();
 
   for (const item of items) {
-    flagged.set(item.id, { ...item });
+    flagged.set(item.id, { ...item, identity: { ...item.identity } });
   }
 
   for (const group of byCanonical.values()) {
@@ -187,12 +214,11 @@ export function applyCrossFileIdentityValidation(
       const nextIssues = [...current.identityIssues];
       let revisionIssue = current.revisionIssue;
       let duplicateIssue = current.duplicateIssue;
-      let identityOk = current.identityOk;
+      let identity: DxfIdentity = { ...current.identity };
 
       if (hasRevisionConflict) {
         revisionIssue = true;
         pushUnique(nextIssues, DXF_ISSUE.REVISION_CONFLICT);
-        identityOk = false;
       }
 
       const exactKey = partIdentityKey(g.canonicalPartId, g.revision);
@@ -200,15 +226,25 @@ export function applyCrossFileIdentityValidation(
       if (exactPeers.length > 1) {
         duplicateIssue = true;
         pushUnique(nextIssues, DXF_ISSUE.DUPLICATE_ID);
-        identityOk = false;
+        identity = {
+          ...identity,
+          status: "COLLISION",
+          reason: "CANONICAL_FILENAME_COLLISION",
+        };
       }
+
+      const identityOk = identity.status === "VALID";
 
       flagged.set(g.id, {
         ...current,
+        identity,
         identityIssues: nextIssues,
         revisionIssue,
         duplicateIssue,
         identityOk,
+        canonicalPartId: identity.canonicalPartId ?? "",
+        identitySource:
+          identity.source === "NONE" ? null : identity.source,
       });
     }
   }
@@ -221,18 +257,26 @@ export function summarizeDxfRegistry(
 ): DxfRegistrySummary {
   return {
     uploadedDxfCount: items.length,
-    validIdentityCount: items.filter((i) => i.identityOk).length,
+    validIdentityCount: items.filter((i) => i.identity.status === "VALID")
+      .length,
     identityConflictCount: items.filter(
-      (i) =>
-        i.identityIssues.includes(DXF_ISSUE.IDENTITY_CONFLICT) ||
-        i.identityIssues.includes(DXF_ISSUE.MULTIPLE_LAYER_IDENTITIES) ||
-        i.identityIssues.includes(DXF_ISSUE.NO_PART_ID)
+      (i) => i.identity.status === "INVALID"
     ).length,
     revisionOrDuplicateCount: items.filter(
-      (i) => i.revisionIssue || i.duplicateIssue
+      (i) =>
+        i.revisionIssue ||
+        i.duplicateIssue ||
+        i.identity.status === "COLLISION"
     ).length,
     invalidGeometryCount: items.filter((i) => i.geometryStatus === "INVALID")
       .length,
+    layerMetadataWarningCount: items.filter(
+      (i) =>
+        i.layerMetadata.status === "DIFFERS_FROM_FILENAME" ||
+        i.identityIssues.includes(DXF_ISSUE.LAYER_FALLBACK_USED) ||
+        (i.identity.source === "FILENAME" &&
+          i.layerMetadata.status === "MULTIPLE_IDENTIFIER_LIKE_LAYERS")
+    ).length,
   };
 }
 
@@ -243,22 +287,23 @@ export function filterRegistryItems(
   switch (filter) {
     case "valid":
       return items.filter(
-        (i) => i.identityOk && i.geometryStatus !== "INVALID"
+        (i) =>
+          i.identity.status === "VALID" && i.geometryStatus !== "INVALID"
       );
     case "identityProblems":
       return items.filter(
         (i) =>
-          !i.identityOk &&
+          i.identity.status === "INVALID" &&
           !i.revisionIssue &&
-          !i.duplicateIssue &&
-          (i.identityIssues.includes(DXF_ISSUE.IDENTITY_CONFLICT) ||
-            i.identityIssues.includes(DXF_ISSUE.MULTIPLE_LAYER_IDENTITIES) ||
-            i.identityIssues.includes(DXF_ISSUE.NO_PART_ID) ||
-            i.identityIssues.includes(DXF_ISSUE.READ_FAILED) ||
-            i.identityIssues.includes(DXF_ISSUE.PARSE_FAILED))
+          !i.duplicateIssue
       );
     case "revisionDuplicate":
-      return items.filter((i) => i.revisionIssue || i.duplicateIssue);
+      return items.filter(
+        (i) =>
+          i.revisionIssue ||
+          i.duplicateIssue ||
+          i.identity.status === "COLLISION"
+      );
     case "geometryIssues":
       return items.filter(
         (i) =>
@@ -269,3 +314,43 @@ export function filterRegistryItems(
       return items;
   }
 }
+
+export function validateDxfRegistryEntry(entry: DxfPartRegistryItem): void {
+  validateDxfIdentityPair({
+    fileName: entry.filename,
+    identity: entry.identity,
+    layerMetadata: entry.layerMetadata,
+  });
+
+  if (entry.identityOk !== (entry.identity.status === "VALID")) {
+    throw new Error("identityOk must equal identity.status === VALID");
+  }
+
+  if (
+    entry.identity.status === "COLLISION" &&
+    entry.identity.reason !== "CANONICAL_FILENAME_COLLISION"
+  ) {
+    throw new Error("COLLISION requires CANONICAL_FILENAME_COLLISION reason");
+  }
+
+  if (
+    entry.layerMetadata.status === "DIFFERS_FROM_FILENAME" &&
+    entry.identity.status === "INVALID" &&
+    entry.identity.source === "FILENAME"
+  ) {
+    throw new Error("Layer disagreement must not invalidate filename identity");
+  }
+}
+
+export function registryEntryIdentityDiagnostics(
+  entry: DxfPartRegistryItem
+): DxfIdentityDiagnostics {
+  return buildDxfIdentityDiagnostics({
+    fileName: entry.filename,
+    identity: entry.identity,
+    layerMetadata: entry.layerMetadata,
+    geometryStatus: entry.geometryStatus,
+  });
+}
+
+export type { DxfIdentityDiagnostics, DxfLayerMetadata };

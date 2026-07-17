@@ -28,7 +28,21 @@ export function parseStatedUnit(
   text: string | null | undefined
 ): LengthOrAreaOrMassUnit | null {
   if (!text) return null;
-  const t = text.trim().toUpperCase().replace(/\s+/g, "");
+  const original = text.trim();
+  // Multi-word headers: never treat bare trailing T as tonne.
+  if (/\s/.test(original) || /[א-ת]/.test(original)) {
+    // Defer to annotation / explicit unit tokens only.
+    const paren = original.match(/[\(\[]\s*([^)\]]+)\s*[\)\]]\s*$/);
+    if (paren?.[1]) return parseStatedUnit(paren[1]);
+    const slash = original.match(/\/\s*([A-Za-zא-ת²0-9]+)\s*$/);
+    if (slash?.[1]) return parseStatedUnit(slash[1]);
+    const spaced = original.match(
+      /\s+(mm2|cm2|m2|mm|cm|m|kg|kgs|g|ton|tons|tonne|tonnes)\s*$/i
+    );
+    if (spaced?.[1]) return parseStatedUnit(spaced[1]);
+    return null;
+  }
+  const t = original.toUpperCase().replace(/\s+/g, "");
   const map: Record<string, LengthOrAreaOrMassUnit> = {
     MM: "MM",
     CM: "CM",
@@ -42,8 +56,11 @@ export function parseStatedUnit(
     KG: "KG",
     KGS: "KG",
     TON: "TON",
+    // Bare T/t is tonne only as a standalone annotation token (from "(t)" / "[t]").
     T: "TON",
     TONNE: "TON",
+    TONNES: "TON",
+    TONS: "TON",
   };
   if (map[t]) return map[t];
   if (/\bMM2\b|MM²/.test(t)) return "MM2";

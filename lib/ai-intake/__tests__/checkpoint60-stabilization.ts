@@ -20,6 +20,8 @@ import type {
   FinalIntakeMappingRow,
 } from "../schemas";
 import type { DxfPartRegistryItem } from "../types";
+import { filenameAuthoritativeFields } from "../dxfRegistryDefaults";
+
 import type { TableUnitInferenceLike } from "../review/safeOptionalMeasurements";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -41,9 +43,7 @@ function dxfItem(partId: string, w: number, h: number): DxfPartRegistryItem {
     revision: null,
     rawPartId: partId,
     normalizedRawPartId: partId,
-    identitySource: "FILENAME",
-    identityOk: true,
-    identityIssues: [],
+    ...filenameAuthoritativeFields(partId),
     revisionIssue: false,
     duplicateIssue: false,
     filename: `${partId}.dxf`,

@@ -1,4 +1,5 @@
 import { parseNumericWithOptionalUnit, parseUnitText } from "./parseUnitText";
+import { parseMeasurementHeader } from "./parseMeasurementHeader";
 import { candidateUnitsForKind, fieldKind } from "./unitConvert";
 import type {
   AiWorkbookMappingResult,
@@ -9,6 +10,23 @@ import type {
   StructuredNormalizationIssue,
   UnitResolutionStatus,
 } from "./types";
+
+/**
+ * Resolve header unit without treating bare trailing T as tonne.
+ * Annotation-extracted tokens (e.g. "t" from "Weight (t)") remain valid.
+ */
+function statedUnitFromHeader(
+  statedUnitText: string | null,
+  rawHeaderText: string | null
+): MeasurementUnit | null {
+  if (statedUnitText) {
+    const annotated = parseUnitText(`(${statedUnitText})`);
+    if (annotated) return annotated;
+    return parseUnitText(statedUnitText);
+  }
+  if (!rawHeaderText) return null;
+  return parseMeasurementHeader(rawHeaderText).explicitUnit;
+}
 
 export const FIELD_TO_COLUMN: Record<
   SemanticMeasurementField,
@@ -76,8 +94,10 @@ export function buildProvisionalColumnUnitProfiles(args: {
         const statedUnitText =
           header?.statedUnitText ??
           (rawHeaderText ? extractParenUnitText(rawHeaderText) : null);
-        const statedHeaderUnit =
-          parseUnitText(statedUnitText) ?? parseUnitText(rawHeaderText);
+        const statedHeaderUnit = statedUnitFromHeader(
+          statedUnitText,
+          rawHeaderText
+        );
 
         const affected: number[] = [];
         const explicitUnits = new Set<MeasurementUnit>();

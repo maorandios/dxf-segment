@@ -285,6 +285,11 @@ export type WorkbookEvidenceDebug = {
   precisionComparisons?: unknown;
   /** Checkpoint 5.2 table-level joint unit inference (per table). */
   tableUnitInference?: unknown;
+  /** Generic source-mass interpretation (unit + geometry basis). */
+  massInterpretation?: unknown;
+  massInterpretationDebug?: unknown;
+  /** Optional array form for multi-table / post-DXF diagnostics. */
+  massInterpretations?: unknown[];
 };
 
 export type SourceDocumentResult = {
@@ -328,6 +333,8 @@ export const slimRegistryItemSchema = z.object({
   widthMm: z.number().nullable().optional(),
   heightMm: z.number().nullable().optional(),
   plateAreaMm2: z.number().nullable().optional(),
+  /** Optional net contour for source-mass basis checks (never sent to OpenAI). */
+  netContourAreaMm2: z.number().nullable().optional(),
 });
 
 export type SlimRegistryItem = z.infer<typeof slimRegistryItemSchema>;

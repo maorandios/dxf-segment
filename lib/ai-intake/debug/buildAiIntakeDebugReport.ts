@@ -147,6 +147,13 @@ function buildDocumentReport(
     precisionComparisons: precision,
     extractedRows: doc.rows.map((r) => ({ ...r })),
     tableUnitInference,
+    massInterpretation: ev?.massInterpretation ?? null,
+    massInterpretationDebug: ev?.massInterpretationDebug ?? null,
+    massInterpretations: Array.isArray(ev?.massInterpretations)
+      ? ev!.massInterpretations
+      : ev?.massInterpretation
+        ? [ev.massInterpretation]
+        : [],
     pageEvidence: isPdf ? pageEvidence : null,
     originHint,
   };
@@ -745,6 +752,17 @@ export function buildAiIntakeDebugReport(
     reconciliation: buildReconciliation(finalRows),
     output: buildOutput(finalRows),
     diagnostics: collectDiagnostics(result, documents),
+    massInterpretations:
+      context.massInterpretations ??
+      documents.flatMap((d) =>
+        Array.isArray(d.massInterpretations) && d.massInterpretations.length > 0
+          ? d.massInterpretations
+          : d.massInterpretation
+            ? [d.massInterpretation]
+            : d.massInterpretationDebug
+              ? [d.massInterpretationDebug]
+              : []
+      ),
   };
 
   return report;

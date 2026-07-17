@@ -670,6 +670,8 @@ async function extractSpreadsheetDocument(args: {
       })),
       precisionComparisons: normalized.precisionComparisons,
       tableUnitInference: normalized.tableUnitInferences,
+      massInterpretation: normalized.massInterpretation ?? null,
+      massInterpretationDebug: normalized.massInterpretationDebug ?? null,
     };
 
     const status: SourceDocumentResult["status"] =

@@ -71,6 +71,7 @@ export function makeIssue(args: {
 
 export function buildIssuesForRows(args: {
   rows: ReviewPartRow[];
+  massInterpretations?: unknown[] | null;
 }): { issues: ReviewIssue[]; actions: ReviewResolutionAction[] } {
   const issues: ReviewIssue[] = [];
   const actions: ReviewResolutionAction[] = [];
@@ -174,44 +175,10 @@ export function buildIssuesForRows(args: {
     const label = partLabel(row);
     if (!row.includeInQuote) continue;
 
-    // DXF match
-    if (row.dxfMatchStatus === "UNMATCHED" || row.matchedDxfPartId == null) {
+    // DXF identity match (canonical contract)
+    if (row.dxfMatchStatus === "AMBIGUOUS") {
       const issue = makeIssue({
-        code: "MISSING_DXF_MATCH",
-        rowIds: [row.rowId],
-        severity: "BLOCKING",
-        partLabelOverride: label,
-      });
-      issues.push(issue);
-      for (const cand of row.dxfCandidates.slice(0, 8)) {
-        const act = makeAction({
-          issueId: issue.issueId,
-          type: "SELECT_DXF_MATCH",
-          label: `בחר ${cand.partId}`,
-          recommended: row.dxfCandidates.length === 1,
-          appliesToRowIds: [row.rowId],
-          payload: {
-            rowId: row.rowId,
-            partId: cand.partId,
-            fileName: cand.fileName,
-          },
-        });
-        actions.push(act);
-        issue.suggestedActionIds.push(act.actionId);
-      }
-      const excl = makeAction({
-        issueId: issue.issueId,
-        type: "EXCLUDE_ROW",
-        label: "אל תכלול בהצעה",
-        recommended: false,
-        appliesToRowIds: [row.rowId],
-        payload: { rowId: row.rowId },
-      });
-      actions.push(excl);
-      issue.suggestedActionIds.push(excl.actionId);
-    } else if (row.dxfMatchStatus === "AMBIGUOUS") {
-      const issue = makeIssue({
-        code: "AMBIGUOUS_DXF_MATCH",
+        code: "AMBIGUOUS_DXF_IDENTITY",
         rowIds: [row.rowId],
         severity: "BLOCKING",
         partLabelOverride: label,
@@ -228,11 +195,81 @@ export function buildIssuesForRows(args: {
             rowId: row.rowId,
             partId: cand.partId,
             fileName: cand.fileName,
+            registryEntryId: cand.registryEntryId ?? null,
           },
         });
         actions.push(act);
         issue.suggestedActionIds.push(act.actionId);
       }
+    } else if (
+      row.dxfMatchStatus === "UNMATCHED" ||
+      row.matchedDxfPartId == null
+    ) {
+      const issue = makeIssue({
+        code: "MISSING_DXF_MATCH",
+        rowIds: [row.rowId],
+        severity: "BLOCKING",
+        partLabelOverride: label,
+      });
+      issues.push(issue);
+      const suggestions = row.dxfSuggestions ?? [];
+      for (const sug of suggestions.slice(0, 8)) {
+        const act = makeAction({
+          issueId: issue.issueId,
+          type: "SELECT_DXF_MATCH",
+          label: `קבצים דומים · ${sug.partId}`,
+          recommended: suggestions.length === 1,
+          appliesToRowIds: [row.rowId],
+          payload: {
+            rowId: row.rowId,
+            partId: sug.partId,
+            fileName: sug.fileName,
+            registryEntryId: sug.registryEntryId ?? null,
+          },
+        });
+        actions.push(act);
+        issue.suggestedActionIds.push(act.actionId);
+      }
+      const excl = makeAction({
+        issueId: issue.issueId,
+        type: "EXCLUDE_ROW",
+        label: "אל תכלול בהצעה",
+        recommended: false,
+        appliesToRowIds: [row.rowId],
+        payload: { rowId: row.rowId },
+      });
+      actions.push(excl);
+      issue.suggestedActionIds.push(excl.actionId);
+    } else if (
+      row.dxfMatchStatus === "MATCHED" &&
+      (row.dxfMatch?.geometryStatus === "INVALID" ||
+        row.dxfMatch?.geometryStatus === "EMPTY" ||
+        row.dxfGeometry == null ||
+        row.dxfGeometry.widthMm == null ||
+        row.dxfGeometry.heightMm == null)
+    ) {
+      const issue = makeIssue({
+        code: "DXF_GEOMETRY_INVALID",
+        rowIds: [row.rowId],
+        severity: "BLOCKING",
+        partLabelOverride: label,
+      });
+      issues.push(issue);
+      pushExclude(actions, issue, row.rowId);
+    }
+
+    // Optional measurement unit ambiguity (non-blocking for Approved BOM).
+    // Mass columns are grouped later — avoid per-row spam.
+    if (row.documentEvidence?.area?.status === "AMBIGUOUS") {
+      const issue = makeIssue({
+        code: "OPTIONAL_MEASUREMENT_UNIT_AMBIGUOUS",
+        rowIds: [row.rowId],
+        field: "area",
+        severity: "WARNING",
+        partLabelOverride: label,
+        fieldLabel: "area",
+      });
+      issues.push(issue);
     }
 
     // Quantity
@@ -464,6 +501,98 @@ export function buildIssuesForRows(args: {
       pushExclude(actions, issue, row.rowId);
     }
   }
+
+  // Grouped mass-column unit ambiguity (one COLUMN issue, not per-row spam).
+  // Skip when unit is resolved (including RESOLVED_UNIT_BASIS_AMBIGUOUS).
+  const massAmbiguousRows = active.filter((row) => {
+    if (!row.includeInQuote) return false;
+    const unitResolved =
+      row.sourceMassEvidence?.unit != null &&
+      (row.sourceMassEvidence.status === "RESOLVED_BY_MASS_BASIS_CONSISTENCY" ||
+        row.sourceMassEvidence.status === "RESOLVED_UNIT_BASIS_AMBIGUOUS" ||
+        row.sourceMassEvidence.status === "RESOLVED_BY_EXPLICIT_HEADER_UNIT" ||
+        row.sourceMassEvidence.status === "RESOLVED_BY_RELATED_COLUMN" ||
+        row.sourceMassEvidence.status === "RESOLVED_BY_EXPLICIT_CELL_UNIT");
+    if (unitResolved) return false;
+    const uw = row.documentEvidence?.unitWeight;
+    const tw = row.documentEvidence?.totalWeight;
+    return uw?.status === "AMBIGUOUS" || tw?.status === "AMBIGUOUS";
+  });
+  if (massAmbiguousRows.length > 0) {
+    const rowIds = massAmbiguousRows.map((r) => r.rowId);
+    const issue = makeIssue({
+      code: "MASS_COLUMNS_UNIT_AMBIGUOUS",
+      rowIds,
+      field: "unitWeight,totalWeight",
+      severity: "WARNING",
+      scope: "COLUMN",
+      partLabelOverride: "עמודות משקל",
+    });
+    issues.push(issue);
+
+    const confirmKg = makeAction({
+      issueId: issue.issueId,
+      type: "CONFIRM_RELATED_MASS_COLUMNS_UNIT",
+      label: "אשר ק״ג לשתי העמודות",
+      recommended: true,
+      appliesToRowIds: rowIds,
+      payload: {
+        unit: "KG",
+        unitWeightColumnId: "unitWeight",
+        totalWeightColumnId: "totalWeight",
+        affectedRowIds: rowIds,
+      },
+    });
+    actions.push(confirmKg);
+    issue.suggestedActionIds.push(confirmKg.actionId);
+
+    const confirmG = makeAction({
+      issueId: issue.issueId,
+      type: "CONFIRM_RELATED_MASS_COLUMNS_UNIT",
+      label: "בחר יחידה אחרת (גרם)",
+      recommended: false,
+      appliesToRowIds: rowIds,
+      payload: {
+        unit: "G",
+        unitWeightColumnId: "unitWeight",
+        totalWeightColumnId: "totalWeight",
+        affectedRowIds: rowIds,
+      },
+    });
+    actions.push(confirmG);
+    issue.suggestedActionIds.push(confirmG.actionId);
+
+    const leave = makeAction({
+      issueId: issue.issueId,
+      type: "ACKNOWLEDGE_WARNING",
+      label: "השאר ללא יחידה",
+      recommended: false,
+      appliesToRowIds: rowIds,
+      payload: { issueId: issue.issueId },
+    });
+    actions.push(leave);
+    issue.suggestedActionIds.push(leave.actionId);
+  }
+
+  // Unit resolved, basis ambiguous — informational only, non-blocking, no confirm required.
+  const basisAmbiguousRows = active.filter(
+    (row) =>
+      row.includeInQuote &&
+      row.sourceMassEvidence?.status === "RESOLVED_UNIT_BASIS_AMBIGUOUS"
+  );
+  if (basisAmbiguousRows.length > 0) {
+    const issue = makeIssue({
+      code: "MASS_SOURCE_BASIS_AMBIGUOUS",
+      rowIds: basisAmbiguousRows.map((r) => r.rowId),
+      field: "sourceMassBasis",
+      severity: "INFO",
+      scope: "COLUMN",
+      partLabelOverride: "עמודות משקל",
+    });
+    issues.push(issue);
+  }
+
+  void args.massInterpretations;
 
   // Attach issue ids onto rows
   const byRow = new Map<string, string[]>();

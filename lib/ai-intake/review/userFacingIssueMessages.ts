@@ -1,3 +1,8 @@
+/**
+ * Hebrew user-facing copy for Review issues.
+ * Suggestions must never be described as automatic matches.
+ */
+
 import type { ReviewIssueCode } from "./types";
 
 export type UserFacingIssueCopy = {
@@ -16,14 +21,25 @@ export const USER_FACING_ISSUE_MESSAGES: Record<
   UserFacingIssueCopy
 > = {
   MISSING_DXF_MATCH: {
-    title: "לא נמצא קובץ DXF מתאים",
-    message: ({ partLabel }) =>
-      `לא נמצא DXF שמתאים לחלק ${PART(partLabel)}.`,
+    title: "לא נמצא DXF מתאים",
+    message: () => "לא נמצא קובץ עם מזהה זהה לחלק.",
   },
+  AMBIGUOUS_DXF_IDENTITY: {
+    title: "נמצאו כמה קובצי DXF עם אותו מזהה",
+    message: () => "יש לבחור איזה קובץ להשתמש עבור החלק.",
+  },
+  /** @deprecated use AMBIGUOUS_DXF_IDENTITY */
   AMBIGUOUS_DXF_MATCH: {
-    title: "יש כמה אפשרויות התאמה ל־DXF",
-    message: ({ partLabel }) =>
-      `יש לבחור קובץ DXF עבור ${PART(partLabel)}.`,
+    title: "נמצאו כמה קובצי DXF עם אותו מזהה",
+    message: () => "יש לבחור איזה קובץ להשתמש עבור החלק.",
+  },
+  DXF_CANONICAL_COLLISION: {
+    title: "נמצאו כמה קובצי DXF עם אותו מזהה",
+    message: () => "יש לבחור איזה קובץ להשתמש עבור החלק.",
+  },
+  DXF_GEOMETRY_INVALID: {
+    title: "לא ניתן לקרוא את גאומטריית ה־DXF",
+    message: () => "המזהה נמצא, אך הקובץ אינו מכיל גאומטריה תקינה.",
   },
   MISSING_QUANTITY: {
     title: "חסרה כמות",
@@ -99,6 +115,23 @@ export const USER_FACING_ISSUE_MESSAGES: Record<
       fieldLabel
         ? `לא נמצא ${fieldLabel} במסמך עבור ${PART(partLabel)}.`
         : `חסר ערך אופציונלי במסמך עבור ${PART(partLabel)}.`,
+  },
+  OPTIONAL_MEASUREMENT_UNIT_AMBIGUOUS: {
+    title: "יחידת מדידה אופציונלית לא ברורה",
+    message: ({ partLabel, fieldLabel }) =>
+      fieldLabel
+        ? `לא ניתן לקבוע את יחידת ${fieldLabel} עבור ${PART(partLabel)}.`
+        : `יחידת מדידה אופציונלית לא ברורה עבור ${PART(partLabel)}.`,
+  },
+  MASS_COLUMNS_UNIT_AMBIGUOUS: {
+    title: "יחידות עמודות המשקל לא הוכרעו",
+    message: () =>
+      "הערכים נשמרו כפי שהם ולא ישמשו לתמחור.",
+  },
+  MASS_SOURCE_BASIS_AMBIGUOUS: {
+    title: "יחידת המשקל זוהתה, בסיס החישוב לא הוכרע",
+    message: () =>
+      "יחידת המשקל זוהתה כק״ג, אך בסיס חישוב המשקל במסמך לא הוכרע.",
   },
   DXF_GEOMETRY_ACK_REQUIRED: {
     title: "יש לאשר שימוש במידות ה־DXF",

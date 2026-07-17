@@ -7,6 +7,7 @@ import type {
   IntakeReviewSession,
   ReviewDecisionEvent,
   ReviewDecisionReason,
+  ReviewOptionalMeasurement,
   ReviewPartRow,
   ReviewResolutionAction,
 } from "./types";
@@ -16,6 +17,7 @@ import {
   parseNumericInput,
   stringValuesEqual,
 } from "./valueEquality";
+import { confirmRelatedMassColumnsUnit } from "../mass/applySourceMassToReviewEvidence";
 
 let decisionSeq = 0;
 
@@ -385,39 +387,96 @@ export function applyReviewDecision(
     case "SELECT_DXF_MATCH": {
       const rowId = String(action.payload.rowId);
       const partId = String(action.payload.partId);
+      const registryEntryId =
+        action.payload.registryEntryId != null
+          ? String(action.payload.registryEntryId)
+          : null;
       const row = findRow(next.rows, rowId);
       if (!row) throw new Error(`Unknown row ${rowId}`);
       const prev = row.matchedDxfPartId;
+      const prevMatch = row.dxfMatch;
+
+      const geometryStatus =
+        typeof action.payload.widthMm === "number" &&
+        typeof action.payload.heightMm === "number"
+          ? ("VALID" as const)
+          : ("EMPTY" as const);
+
+      const selectedCandidate = {
+        registryEntryId: registryEntryId ?? `user:${partId}`,
+        partId,
+        fileName: String(action.payload.fileName ?? `${partId}.dxf`),
+        canonicalPartId: partId,
+        rawPartId: partId,
+        geometryStatus,
+        identityOk: true,
+      };
+
+      row.dxfMatch = {
+        status: "MATCHED",
+        sourceRawId: prevMatch.sourceRawId,
+        sourceCanonicalId:
+          prevMatch.status === "INVALID_SOURCE_ID" ||
+          prevMatch.sourceCanonicalId == null
+            ? partId
+            : prevMatch.sourceCanonicalId,
+        matchedCanonicalId: partId,
+        matchedRegistryEntryId: selectedCandidate.registryEntryId,
+        matchedPartId: partId,
+        candidates: [selectedCandidate],
+        suggestions: [],
+        reason: "USER_SELECTED_DXF",
+        geometryStatus,
+      };
       row.matchedDxfPartId = partId;
       row.dxfMatchStatus = "MATCHED";
+      row.dxfCandidates = [
+        {
+          partId,
+          fileName: selectedCandidate.fileName,
+          reason: "USER_SELECTED_DXF",
+          score: 1,
+          registryEntryId: selectedCandidate.registryEntryId,
+        },
+      ];
+      row.dxfSuggestions = [];
+      row.dxfMatchDiagnostics = {
+        sourceRawId: row.dxfMatch.sourceRawId,
+        sourceCanonicalId: row.dxfMatch.sourceCanonicalId,
+        exactRegistryMatchCount: 1,
+        exactRegistryEntryIds: [selectedCandidate.registryEntryId],
+        finalStatus: "MATCHED",
+        finalReason: "USER_SELECTED_DXF",
+        matchedRegistryEntryId: selectedCandidate.registryEntryId,
+        suggestionCount: 0,
+        suggestions: [],
+        geometryStatus,
+      };
       row.displayPartReference = row.displayPartReference ?? partId;
-      if (!row.dxfGeometry) {
+
+      if (geometryStatus === "VALID") {
         row.dxfGeometry = {
-          widthMm: null,
-          heightMm: null,
-          plateAreaMm2: null,
-          netContourAreaMm2: null,
+          widthMm: action.payload.widthMm as number,
+          heightMm: action.payload.heightMm as number,
+          plateAreaMm2:
+            typeof action.payload.plateAreaMm2 === "number"
+              ? (action.payload.plateAreaMm2 as number)
+              : null,
+          netContourAreaMm2:
+            typeof action.payload.netContourAreaMm2 === "number"
+              ? (action.payload.netContourAreaMm2 as number)
+              : null,
         };
+      } else {
+        row.dxfGeometry = null;
       }
-      if (typeof action.payload.widthMm === "number") {
-        row.dxfGeometry.widthMm = action.payload.widthMm as number;
-      }
-      if (typeof action.payload.heightMm === "number") {
-        row.dxfGeometry.heightMm = action.payload.heightMm as number;
-      }
-      if (typeof action.payload.plateAreaMm2 === "number") {
-        row.dxfGeometry.plateAreaMm2 = action.payload.plateAreaMm2 as number;
-      }
-      if (typeof action.payload.netContourAreaMm2 === "number") {
-        row.dxfGeometry.netContourAreaMm2 = action.payload
-          .netContourAreaMm2 as number;
-      }
+
       pushDecision(next, {
         actionType: action.type,
         actionId: action.actionId,
         affectedRowIds: [rowId],
-        previousValue: prev,
-        newValue: partId,
+        previousValue: { matchedDxfPartId: prev, dxfMatch: prevMatch },
+        newValue: { matchedDxfPartId: partId, dxfMatch: row.dxfMatch },
         reason: "USER_SELECTED_DXF",
         sourceIssueId: action.issueId,
         createdAt: input.createdAt,
@@ -607,6 +666,73 @@ export function applyReviewDecision(
         affectedRowIds: rowIds,
         affectedField: field,
         newValue: action.payload,
+        reason: "USER_BULK_ACTION",
+        sourceIssueId: action.issueId,
+        createdAt: input.createdAt,
+      });
+      break;
+    }
+    case "CONFIRM_RELATED_MASS_COLUMNS_UNIT": {
+      const unitRaw = String(action.payload.unit ?? "KG").toUpperCase();
+      const unit =
+        unitRaw === "G" || unitRaw === "KG" || unitRaw === "TON"
+          ? unitRaw
+          : "KG";
+      const rowIds =
+        (action.payload.affectedRowIds as string[]) ??
+        action.appliesToRowIds;
+      const previous: Record<string, unknown> = {};
+      for (const id of rowIds) {
+        const row = findRow(next.rows, id);
+        if (!row) continue;
+        previous[id] = {
+          unitWeight: row.documentEvidence.unitWeight
+            ? { ...row.documentEvidence.unitWeight }
+            : null,
+          totalWeight: row.documentEvidence.totalWeight
+            ? { ...row.documentEvidence.totalWeight }
+            : null,
+          sourceMassEvidence: row.sourceMassEvidence ?? null,
+        };
+        const applied = confirmRelatedMassColumnsUnit({
+          unit,
+          unitWeight: row.documentEvidence.unitWeight,
+          totalWeight: row.documentEvidence.totalWeight,
+        });
+        row.documentEvidence = {
+          ...row.documentEvidence,
+          unitWeight:
+            (applied.unitWeight as ReviewOptionalMeasurement | null) ??
+            row.documentEvidence.unitWeight,
+          totalWeight:
+            (applied.totalWeight as ReviewOptionalMeasurement | null) ??
+            row.documentEvidence.totalWeight,
+        };
+        row.sourceMassEvidence = applied.sourceMassEvidence;
+        row.documentComparison = {
+          ...row.documentComparison,
+          unitWeightKg:
+            applied.unitWeight?.status === "RESOLVED"
+              ? applied.unitWeight.normalizedValue
+              : null,
+          totalWeightKg:
+            applied.totalWeight?.status === "RESOLVED"
+              ? applied.totalWeight.normalizedValue
+              : null,
+        };
+      }
+      // Mark the source issue resolved (non-blocking; optional mass)
+      const issue = next.issues.find((i) => i.issueId === action.issueId);
+      if (issue) {
+        issue.resolved = true;
+      }
+      pushDecision(next, {
+        actionType: action.type,
+        actionId: action.actionId,
+        affectedRowIds: rowIds,
+        affectedField: "unitWeight,totalWeight",
+        previousValue: previous,
+        newValue: { unit, affectedRowIds: rowIds },
         reason: "USER_BULK_ACTION",
         sourceIssueId: action.issueId,
         createdAt: input.createdAt,

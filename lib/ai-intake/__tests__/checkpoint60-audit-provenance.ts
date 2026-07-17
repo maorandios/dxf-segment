@@ -21,6 +21,8 @@ import type {
   RequestPartOccurrence,
 } from "../schemas";
 import type { DxfPartRegistryItem } from "../types";
+import { filenameAuthoritativeFields } from "../dxfRegistryDefaults";
+
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`);
@@ -41,9 +43,7 @@ function dxfItem(partId: string, w: number, h: number): DxfPartRegistryItem {
     revision: null,
     rawPartId: partId,
     normalizedRawPartId: partId,
-    identitySource: "FILENAME",
-    identityOk: true,
-    identityIssues: [],
+    ...filenameAuthoritativeFields(partId),
     revisionIssue: false,
     duplicateIssue: false,
     filename: `${partId}.dxf`,

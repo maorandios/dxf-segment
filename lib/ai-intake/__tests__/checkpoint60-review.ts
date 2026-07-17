@@ -21,6 +21,8 @@ import type {
   FinalIntakeMappingRow,
 } from "../schemas";
 import type { DxfPartRegistryItem } from "../types";
+import { filenameAuthoritativeFields } from "../dxfRegistryDefaults";
+
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`);
@@ -45,9 +47,7 @@ function dxfItem(
     revision: null,
     rawPartId: partId,
     normalizedRawPartId: partId,
-    identitySource: "FILENAME",
-    identityOk: true,
-    identityIssues: [],
+    ...filenameAuthoritativeFields(partId),
     revisionIssue: false,
     duplicateIssue: false,
     filename: `${partId}.dxf`,
@@ -475,11 +475,33 @@ function main() {
         matchedDxfPartId: null,
         dxfMatchStatus: "UNMATCHED" as const,
         dxfGeometry: null,
-        dxfCandidates: [
+        dxfMatch: {
+          status: "UNMATCHED" as const,
+          sourceRawId: r.displayPartReference,
+          sourceCanonicalId: r.displayPartReference ?? "PL-104",
+          matchedCanonicalId: null,
+          matchedRegistryEntryId: null,
+          matchedPartId: null,
+          candidates: [] as [],
+          suggestions: [
+            {
+              registryEntryId: "other",
+              partId: "OTHER",
+              fileName: "OTHER.dxf",
+              canonicalPartId: "OTHER",
+              reason: "PREFIX" as const,
+              score: 0.5,
+            },
+          ],
+          reason: "NO_EXACT_CANONICAL_MATCH" as const,
+          geometryStatus: null,
+        },
+        dxfCandidates: [],
+        dxfSuggestions: [
           {
             partId: "OTHER",
             fileName: "OTHER.dxf",
-            reason: null,
+            reason: "PREFIX",
             score: 0.5,
           },
         ],
@@ -529,12 +551,35 @@ function main() {
         matchedDxfPartId: null,
         dxfMatchStatus: "UNMATCHED" as const,
         dxfGeometry: null,
-        dxfCandidates: [
+        dxfMatch: {
+          status: "UNMATCHED" as const,
+          sourceRawId: "P200",
+          sourceCanonicalId: "P200",
+          matchedCanonicalId: null,
+          matchedRegistryEntryId: null,
+          matchedPartId: null,
+          candidates: [] as [],
+          suggestions: [
+            {
+              registryEntryId: registry[0]!.id,
+              partId: "P200",
+              fileName: "P200.dxf",
+              canonicalPartId: "P200",
+              reason: "PREFIX" as const,
+              score: 1,
+            },
+          ],
+          reason: "NO_EXACT_CANONICAL_MATCH" as const,
+          geometryStatus: null,
+        },
+        dxfCandidates: [],
+        dxfSuggestions: [
           {
             partId: "P200",
             fileName: "P200.dxf",
-            reason: null,
+            reason: "PREFIX",
             score: 1,
+            registryEntryId: registry[0]!.id,
           },
         ],
       })),

@@ -747,11 +747,12 @@ export function reconcileFinalMapping(args: {
 
     if (reg?.revisionIssue) {
       status = "DXF_REVISION_CONFLICT";
+    } else if (reg?.duplicateIssue || reg?.identity.status === "COLLISION") {
+      status = "DXF_IDENTITY_CONFLICT";
     } else if (
       reg &&
-      !reg.identityOk &&
-      (reg.identityIssues.includes(DXF_ISSUE.IDENTITY_CONFLICT) ||
-        reg.identityIssues.includes(DXF_ISSUE.MULTIPLE_LAYER_IDENTITIES))
+      reg.identity.status === "INVALID" &&
+      reg.identityIssues.includes(DXF_ISSUE.MULTIPLE_LAYER_IDENTITIES)
     ) {
       status = "DXF_IDENTITY_CONFLICT";
     } else if (!inRegistry && requested) {

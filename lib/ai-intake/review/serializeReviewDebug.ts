@@ -4,6 +4,8 @@ export type AiIntakeReviewDebugReportV1 = {
   schemaVersion: typeof REVIEW_DEBUG_SCHEMA_VERSION;
   generatedAt: string;
   session: IntakeReviewSession;
+  /** Table-level mass interpretations (always present when session has them). */
+  massInterpretations: unknown[];
 };
 
 export function buildReviewDebugReport(
@@ -14,6 +16,7 @@ export function buildReviewDebugReport(
     schemaVersion: REVIEW_DEBUG_SCHEMA_VERSION,
     generatedAt: opts?.generatedAt ?? new Date().toISOString(),
     session: structuredClone(session),
+    massInterpretations: structuredClone(session.massInterpretations ?? []),
   };
 }
 

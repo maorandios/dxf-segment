@@ -1,7 +1,8 @@
-import { normalizePartId } from "../normalizePartId";
+import { matchPartToDxf } from "../matching/matchPartToDxf";
 import type { SlimRegistryItem } from "../schemas";
 import { getCell } from "./buildWorkbookSnapshot";
 import { measurementFromCell, parseStatedUnit } from "./measurementFromCell";
+import { parseMeasurementHeader } from "./parseMeasurementHeader";
 import { resolveRowRoles } from "./resolveRowRoles";
 import type {
   AiWorkbookMappingResult,
@@ -29,10 +30,14 @@ function headerMeta(
   const h = table.columnHeaders.find(
     (c) => c.columnLetter.toUpperCase() === columnLetter.toUpperCase()
   );
-  return {
-    rawHeader: h?.rawHeaderText ?? null,
-    statedUnit: parseStatedUnit(h?.statedUnitText ?? h?.rawHeaderText),
-  };
+  const rawHeader = h?.rawHeaderText ?? null;
+  const statedUnit =
+    (h?.statedUnitText
+      ? parseStatedUnit(h.statedUnitText)
+      : null) ??
+    parseMeasurementHeader(rawHeader).explicitUnit ??
+    null;
+  return { rawHeader, statedUnit };
 }
 
 function cellAddress(columnLetter: string | null, rowNumber: number): string | null {
@@ -50,10 +55,23 @@ function matchDxf(
   registry: SlimRegistryItem[]
 ): string | null {
   if (!rawPartReference) return null;
-  const cand = normalizePartId(rawPartReference);
-  if (!cand) return null;
-  const hit = registry.find((r) => r.canonicalPartId === cand.canonicalPartId);
-  return hit?.canonicalPartId ?? null;
+  // Exact canonical match only; collisions stay unmatched at extract time.
+  const entries = registry.map((r, i) => ({
+    id: `slim:${i}:${r.canonicalPartId}`,
+    canonicalPartId: r.canonicalPartId,
+    rawPartId: r.canonicalPartId,
+    filename: r.filename,
+    identityOk: true,
+    geometryStatus: "VALID" as const,
+    widthMm: r.widthMm ?? null,
+    heightMm: r.heightMm ?? null,
+    plateAreaMm2: r.plateAreaMm2 ?? null,
+  }));
+  const result = matchPartToDxf({
+    sourceRawId: rawPartReference,
+    registry: entries,
+  });
+  return result.status === "MATCHED" ? result.matchedPartId : null;
 }
 
 function buildRow(args: {

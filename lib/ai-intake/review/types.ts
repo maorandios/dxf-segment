@@ -3,6 +3,8 @@
  * schemaVersion: ai-intake-review/v1
  */
 
+import type { DxfIdentityMatchResult } from "../matching/types";
+
 export const INTAKE_REVIEW_SCHEMA_VERSION = "ai-intake-review/v1" as const;
 export const APPROVED_BOM_SCHEMA_VERSION = "approved-bom/v1" as const;
 export const REVIEW_DEBUG_SCHEMA_VERSION = "ai-intake-review-debug/v1" as const;
@@ -31,7 +33,10 @@ export type ReviewIssueScope = "ROW" | "FIELD" | "COLUMN" | "REQUEST";
 
 export type ReviewIssueCode =
   | "MISSING_DXF_MATCH"
+  | "AMBIGUOUS_DXF_IDENTITY"
   | "AMBIGUOUS_DXF_MATCH"
+  | "DXF_GEOMETRY_INVALID"
+  | "DXF_CANONICAL_COLLISION"
   | "MISSING_QUANTITY"
   | "INVALID_QUANTITY"
   | "MISSING_THICKNESS"
@@ -46,6 +51,9 @@ export type ReviewIssueCode =
   | "DOCUMENT_SOURCE_CONFLICT"
   | "EMAIL_OVERRIDE_APPLIED"
   | "OPTIONAL_DOCUMENT_VALUE_MISSING"
+  | "OPTIONAL_MEASUREMENT_UNIT_AMBIGUOUS"
+  | "MASS_COLUMNS_UNIT_AMBIGUOUS"
+  | "MASS_SOURCE_BASIS_AMBIGUOUS"
   | "DXF_GEOMETRY_ACK_REQUIRED";
 
 export type ReviewSourceType =
@@ -82,6 +90,10 @@ export type ReviewOptionalMeasurement = {
   status: ReviewOptionalMeasurementStatus;
   sourceRefs: ReviewSourceReference[];
   reason?: string | null;
+  /** Source-mass geometry basis when mass interpretation resolved it. */
+  sourceBasis?: string | null;
+  /** Mass-domain resolution status (source evidence only). */
+  massResolutionStatus?: string | null;
 };
 
 export type ReviewDocumentEvidence = {
@@ -115,6 +127,28 @@ export type ReviewDxfCandidate = {
   fileName: string;
   reason?: string | null;
   score?: number | null;
+  registryEntryId?: string | null;
+};
+
+export type ReviewDxfSuggestion = {
+  partId: string;
+  fileName: string;
+  reason?: string | null;
+  score?: number | null;
+  registryEntryId?: string | null;
+};
+
+export type ReviewDxfMatchDiagnostics = {
+  sourceRawId: string | null;
+  sourceCanonicalId: string | null;
+  exactRegistryMatchCount: number;
+  exactRegistryEntryIds: string[];
+  finalStatus: string;
+  finalReason: string;
+  matchedRegistryEntryId: string | null;
+  suggestionCount: number;
+  suggestions: ReviewDxfSuggestion[];
+  geometryStatus: string | null;
 };
 
 export type ReviewPartRow = {
@@ -127,9 +161,20 @@ export type ReviewPartRow = {
   replacedByRowId?: string | null;
   rawPartReferences: string[];
   displayPartReference: string | null;
+  /**
+   * Canonical DXF identity match — single source of truth.
+   * Backward-compatible fields below are derived from this object.
+   */
+  dxfMatch: DxfIdentityMatchResult;
+  dxfMatchDiagnostics: ReviewDxfMatchDiagnostics;
+  /** Derived from dxfMatch — never set independently. */
   matchedDxfPartId: string | null;
+  /** Derived from dxfMatch.status */
   dxfMatchStatus: ReviewDxfMatchStatus;
+  /** Exact collision candidates only (from dxfMatch.candidates). */
   dxfCandidates: ReviewDxfCandidate[];
+  /** Non-binding prefix/fuzzy suggestions (never automatic matches). */
+  dxfSuggestions: ReviewDxfSuggestion[];
   quantity: ReviewField<number>;
   thicknessMm: ReviewField<number>;
   material: ReviewField<string>;
@@ -152,6 +197,27 @@ export type ReviewPartRow = {
   };
   /** Safe optional document measurements with raw evidence preserved. */
   documentEvidence: ReviewDocumentEvidence;
+  /**
+   * Source-document mass evidence (interpretation only).
+   * Never drives commercial pricing mass.
+   */
+  sourceMassEvidence?: {
+    unitWeightKg: number | null;
+    totalWeightKg: number | null;
+    basis: string | null;
+    unit: string | null;
+    status: string;
+  } | null;
+  /**
+   * Inputs for later commercial mass calculation (bbox policy).
+   * Pricing is not computed here.
+   */
+  commercialMassInput?: {
+    areaBasis: "DXF_BBOX_AREA";
+    plateAreaMm2: number | null;
+    thicknessMm: number | null;
+    material: string | null;
+  } | null;
   /** True after user acknowledged DXF geometry for mismatch. */
   dxfGeometryAcknowledged: boolean;
   issueIds: string[];
@@ -162,6 +228,7 @@ export type ReviewResolutionActionType =
   | "SELECT_DXF_MATCH"
   | "CONFIRM_SUGGESTED_UNIT"
   | "SET_COLUMN_UNIT"
+  | "CONFIRM_RELATED_MASS_COLUMNS_UNIT"
   | "USE_DXF_GEOMETRY"
   | "KEEP_SEPARATE_ROWS"
   | "MERGE_DUPLICATE_ROWS"
@@ -276,6 +343,11 @@ export type IntakeReviewSession = {
   decisions: ReviewDecisionEvent[];
   summary: ReviewSummary;
   approvedBom?: ApprovedBomV1 | null;
+  /**
+   * Table-level mass interpretations computed after DXF geometry attachment.
+   * One entry per workbook table with mass columns — not per row.
+   */
+  massInterpretations?: unknown[] | null;
 };
 
 export type ReviewValidationResult = {

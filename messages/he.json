@@ -1605,8 +1605,10 @@
         "actions": "פעולות"
       },
       "source": {
-        "FILENAME": "שם קובץ",
-        "DXF_LAYER": "שכבת DXF"
+        "FILENAME": "שם הקובץ",
+        "LAYER_FALLBACK": "שכבת DXF",
+        "DXF_LAYER": "שכבת DXF",
+        "NONE": "—"
       },
       "geometry": {
         "VALID": "תקין",
@@ -1615,10 +1617,15 @@
       },
       "rowStatus": {
         "valid": "תקין",
+        "validWithWarning": "תקין עם אזהרה",
         "identityProblem": "בעיית זהות",
         "revisionDuplicate": "גרסה / כפילות",
         "geometryWarning": "אזהרת גאומטריה",
         "geometryInvalid": "גאומטריה שגויה"
+      },
+      "detail": {
+        "layerDiffers": "שכבה פנימית מכילה מזהה שונה משם הקובץ. שם הקובץ שימש כמקור הזהות.",
+        "layerFallback": "לא נמצא מזהה שמיש בשם הקובץ. הזהות נלקחה משכבה פנימית."
       },
       "issue": {
         "DXF_READ_FAILED": "קריאת הקובץ נכשלה",
@@ -1629,7 +1636,9 @@
         "DXF_DUPLICATE_ID": "מזהה כפול בין קבצים",
         "DXF_REVISION_CONFLICT": "התנגשות גרסאות לאותו מזהה",
         "INVALID_GEOMETRY": "גאומטריה לא תקינה",
-        "LAYER_CONFIRMED": "אושר גם משכבת DXF"
+        "LAYER_CONFIRMED": "אושר גם משכבת DXF",
+        "LAYER_DIFFERS_FROM_FILENAME": "שכבה פנימית שונה משם הקובץ (לא חוסם)",
+        "LAYER_FALLBACK_USED": "זהות מגיבוי שכבה"
       }
     }
   }

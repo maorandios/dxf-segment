@@ -1,4 +1,10 @@
 import type { DxfPartRegistryItem } from "../types";
+import {
+  diagnosticsFromMatchResult,
+  matchPartToDxf,
+  toDxfMatchRegistryEntries,
+} from "../matching";
+import type { DxfIdentityMatchResult } from "../matching/types";
 import { buildRequestOccurrences } from "../requestOccurrences";
 import { formatDocumentSourceLabel } from "../visibleRowNumber";
 import type {
@@ -12,12 +18,19 @@ import type {
 import { buildIssuesForRows } from "./buildReviewIssues";
 import { buildSafeDocumentEvidence } from "./safeOptionalMeasurements";
 import {
+  enrichReviewRowsWithMassInterpretation,
+  serializeMassInterpretationsForDebug,
+} from "../mass/applyMassInterpretationAfterDxfMatch";
+import { buildCommercialMassInput } from "../mass/applySourceMassToReviewEvidence";
+import {
   buildReviewSummary,
   computeRowStatus,
 } from "./validateReviewSession";
 import type {
   IntakeReviewSession,
-  ReviewDxfMatchStatus,
+  ReviewDxfCandidate,
+  ReviewDxfMatchDiagnostics,
+  ReviewDxfSuggestion,
   ReviewField,
   ReviewFieldState,
   ReviewPartRow,
@@ -204,49 +217,115 @@ function findFinalRow(
   return null;
 }
 
-function dxfMatchStatus(
-  final: FinalIntakeMappingRow | null,
-  occ: RequestPartOccurrence
-): ReviewDxfMatchStatus {
-  if (final?.status === "REQUEST_WITHOUT_DXF") return "UNMATCHED";
-  if (final?.status === "DXF_IDENTITY_CONFLICT") return "AMBIGUOUS";
-  if (occ.matchedDxfPartId || final?.partId) return "MATCHED";
-  return "UNMATCHED";
+function resolveDxfIdentityMatch(args: {
+  occ: RequestPartOccurrence;
+  registry: DxfPartRegistryItem[];
+}): DxfIdentityMatchResult {
+  const sourceRawId =
+    args.occ.rawPartReference ?? args.occ.matchedDxfPartId ?? null;
+  return matchPartToDxf({
+    sourceRawId,
+    registry: toDxfMatchRegistryEntries(args.registry),
+  });
 }
 
-function registryCandidates(
-  registry: DxfPartRegistryItem[],
-  raw: string | null
-): ReviewPartRow["dxfCandidates"] {
-  if (!raw) {
-    return registry
-      .filter((r) => r.identityOk)
-      .slice(0, 12)
-      .map((r) => ({
-        partId: r.canonicalPartId,
-        fileName: r.filename,
-        reason: null,
-        score: null,
-      }));
+function deriveReviewMatchFields(match: DxfIdentityMatchResult): {
+  matchedDxfPartId: string | null;
+  dxfMatchStatus: ReviewPartRow["dxfMatchStatus"];
+  dxfCandidates: ReviewDxfCandidate[];
+  dxfSuggestions: ReviewDxfSuggestion[];
+  dxfMatchDiagnostics: ReviewDxfMatchDiagnostics;
+} {
+  const diagnostics = diagnosticsFromMatchResult(match);
+  const dxfMatchDiagnostics: ReviewDxfMatchDiagnostics = {
+    sourceRawId: diagnostics.sourceRawId,
+    sourceCanonicalId: diagnostics.sourceCanonicalId,
+    exactRegistryMatchCount: diagnostics.exactRegistryMatchCount,
+    exactRegistryEntryIds: diagnostics.exactRegistryEntryIds,
+    finalStatus: diagnostics.finalStatus,
+    finalReason: diagnostics.finalReason,
+    matchedRegistryEntryId: diagnostics.matchedRegistryEntryId,
+    suggestionCount: diagnostics.suggestionCount,
+    suggestions: diagnostics.suggestions.map((s) => ({
+      partId: s.partId,
+      fileName: s.fileName,
+      reason: s.reason,
+      score: s.score,
+      registryEntryId: s.registryEntryId,
+    })),
+    geometryStatus: diagnostics.geometryStatus,
+  };
+
+  if (match.status === "MATCHED") {
+    return {
+      matchedDxfPartId: match.matchedPartId,
+      dxfMatchStatus: "MATCHED",
+      dxfCandidates: match.candidates.map((c) => ({
+        partId: c.partId,
+        fileName: c.fileName,
+        reason: match.reason,
+        score: 1,
+        registryEntryId: c.registryEntryId,
+      })),
+      dxfSuggestions: [],
+      dxfMatchDiagnostics,
+    };
   }
-  const upper = raw.toUpperCase();
-  const scored = registry
-    .filter((r) => r.identityOk)
-    .map((r) => {
-      let score = 0;
-      if (r.canonicalPartId === raw) score = 1;
-      else if (r.canonicalPartId.toUpperCase().includes(upper)) score = 0.7;
-      else if (r.filename.toUpperCase().includes(upper)) score = 0.5;
-      return {
-        partId: r.canonicalPartId,
-        fileName: r.filename,
-        reason: null as string | null,
-        score,
-      };
-    })
-    .filter((c) => (c.score ?? 0) > 0)
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  return scored.slice(0, 8);
+
+  if (match.status === "AMBIGUOUS") {
+    return {
+      matchedDxfPartId: null,
+      dxfMatchStatus: "AMBIGUOUS",
+      dxfCandidates: match.candidates.map((c) => ({
+        partId: c.partId,
+        fileName: c.fileName,
+        reason: "CANONICAL_ID_COLLISION",
+        score: 1,
+        registryEntryId: c.registryEntryId,
+      })),
+      dxfSuggestions: [],
+      dxfMatchDiagnostics,
+    };
+  }
+
+  // UNMATCHED | INVALID_SOURCE_ID
+  return {
+    matchedDxfPartId: null,
+    dxfMatchStatus: "UNMATCHED",
+    dxfCandidates: [],
+    dxfSuggestions: match.suggestions.map((s) => ({
+      partId: s.partId,
+      fileName: s.fileName,
+      reason: s.reason,
+      score: s.score,
+      registryEntryId: s.registryEntryId,
+    })),
+    dxfMatchDiagnostics,
+  };
+}
+
+function attachMatchedGeometry(args: {
+  match: DxfIdentityMatchResult;
+  registry: DxfPartRegistryItem[];
+}): ReviewPartRow["dxfGeometry"] {
+  if (args.match.status !== "MATCHED") return null;
+  const entry =
+    args.registry.find((r) => r.id === args.match.matchedRegistryEntryId) ??
+    args.registry.find(
+      (r) => r.canonicalPartId === args.match.matchedPartId
+    ) ??
+    null;
+  if (!entry) return null;
+  if (entry.geometryStatus !== "VALID" && entry.geometryStatus !== "WARNING") {
+    return null;
+  }
+  if (entry.widthMm == null || entry.heightMm == null) return null;
+  return {
+    widthMm: entry.widthMm,
+    heightMm: entry.heightMm,
+    plateAreaMm2: entry.plateAreaMm2,
+    netContourAreaMm2: entry.netContourAreaMm2,
+  };
 }
 
 function buildRowFromOccurrence(args: {
@@ -258,10 +337,9 @@ function buildRowFromOccurrence(args: {
   result: AiIntakeAnalyzeSuccess;
 }): ReviewPartRow {
   const { occ, final, displayOrder, registry, result } = args;
-  const partId = occ.matchedDxfPartId ?? final?.partId ?? null;
-  const reg = partId
-    ? registry.find((r) => r.canonicalPartId === partId) ?? null
-    : null;
+  const dxfMatch = resolveDxfIdentityMatch({ occ, registry });
+  const derived = deriveReviewMatchFields(dxfMatch);
+  const partId = derived.matchedDxfPartId;
 
   const qtyFromOcc = occ.quantity;
   const thkFromOcc = occ.thicknessMm;
@@ -388,16 +466,22 @@ function buildRowFromOccurrence(args: {
     }),
   });
 
-  // Do not copy final.fieldCandidates for valued occurrences — those share
-  // provenance across duplicates.
-
-  const matchStatus = dxfMatchStatus(final, occ);
   const includeInQuote = final?.status !== "EXCLUDED" && occ.action !== "EXCLUDE";
 
-  const { documentEvidence, documentComparison } = buildSafeDocumentEvidence({
-    result,
-    occ,
-    final,
+  // Provisional document evidence only — table-level mass interpretation runs
+  // after all rows have matched DXF geometry (enrichReviewRowsWithMassInterpretation).
+  const { documentEvidence: baseEvidence, documentComparison: baseComparison } =
+    buildSafeDocumentEvidence({
+      result,
+      occ,
+      final,
+    });
+
+  const matchedGeo = attachMatchedGeometry({ match: dxfMatch, registry });
+  const commercialMassInput = buildCommercialMassInput({
+    plateAreaMm2: matchedGeo?.plateAreaMm2 ?? null,
+    thicknessMm: thkValue,
+    material: matValue,
   });
 
   const row: ReviewPartRow = {
@@ -409,33 +493,27 @@ function buildRowFromOccurrence(args: {
     replacedByRowId: null,
     rawPartReferences: occ.rawPartReference ? [occ.rawPartReference] : [],
     displayPartReference:
-      occ.rawPartReference ?? occ.matchedDxfPartId ?? final?.partId ?? null,
+      occ.rawPartReference ?? partId ?? final?.partId ?? null,
+    dxfMatch,
+    dxfMatchDiagnostics: derived.dxfMatchDiagnostics,
     matchedDxfPartId: partId,
-    dxfMatchStatus: matchStatus,
-    dxfCandidates: registryCandidates(
-      registry,
-      occ.rawPartReference ?? partId
-    ),
+    dxfMatchStatus: derived.dxfMatchStatus,
+    dxfCandidates: derived.dxfCandidates,
+    dxfSuggestions: derived.dxfSuggestions,
     quantity,
     thicknessMm,
     material,
-    dxfGeometry: reg
-      ? {
-          widthMm: reg.widthMm,
-          heightMm: reg.heightMm,
-          plateAreaMm2: reg.plateAreaMm2,
-          netContourAreaMm2: reg.netContourAreaMm2,
-        }
-      : final
-        ? {
-            widthMm: final.widthMm,
-            heightMm: final.heightMm,
-            plateAreaMm2: final.plateAreaMm2,
-            netContourAreaMm2: final.netContourAreaMm2,
-          }
-        : null,
-    documentComparison,
-    documentEvidence,
+    dxfGeometry: matchedGeo,
+    documentComparison: baseComparison,
+    documentEvidence: baseEvidence,
+    sourceMassEvidence: {
+      unitWeightKg: null,
+      totalWeightKg: null,
+      basis: null,
+      unit: null,
+      status: "MISSING",
+    },
+    commercialMassInput,
     dxfGeometryAcknowledged: false,
     issueIds: [],
   };
@@ -560,7 +638,21 @@ export function buildReviewSession(
     }
   }
 
-  const { issues, actions } = buildIssuesForRows({ rows });
+  // Post-DXF table-level mass interpretation (once per table, full geometry).
+  const massEnrichment = enrichReviewRowsWithMassInterpretation({
+    rows,
+    registry,
+    analyzeResult: result,
+    requireDxfGeometry: true,
+  });
+  const massInterpretations = serializeMassInterpretationsForDebug(
+    massEnrichment.massInterpretations
+  );
+
+  const { issues, actions } = buildIssuesForRows({
+    rows,
+    massInterpretations: massEnrichment.massInterpretations,
+  });
 
   // Recompute statuses after issues (mismatch ack etc. affect readiness via issues)
   for (const row of rows) {
@@ -595,6 +687,7 @@ export function buildReviewSession(
     decisions: [],
     summary,
     approvedBom: null,
+    massInterpretations,
   };
 }
 
@@ -604,7 +697,10 @@ export function refreshReviewSessionDerived(
   updatedAt?: string
 ): IntakeReviewSession {
   const rows = session.rows.map((r) => ({ ...r }));
-  const { issues, actions } = buildIssuesForRows({ rows });
+  const { issues, actions } = buildIssuesForRows({
+    rows,
+    massInterpretations: session.massInterpretations ?? null,
+  });
   for (const row of rows) {
     const hasBlocking = issues.some(
       (i) =>

@@ -39,7 +39,7 @@ export function DxfRegistrySummaryCards({
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t(labelKey)}</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
-              {formatInteger(summary[key])}
+              {formatInteger(summary[key] ?? 0)}
             </p>
           </CardContent>
         </Card>

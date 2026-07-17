@@ -12,6 +12,8 @@ import type {
 } from "../schemas";
 import { emptyDocumentGeometry } from "../schemas";
 import type { DxfPartRegistryItem } from "../types";
+import { filenameAuthoritativeFields } from "../dxfRegistryDefaults";
+
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`);
@@ -76,9 +78,7 @@ const registry: DxfPartRegistryItem[] = [
     revision: null,
     rawPartId: "P1095",
     normalizedRawPartId: "P1095",
-    identitySource: "FILENAME",
-    identityOk: true,
-    identityIssues: [],
+    ...filenameAuthoritativeFields("P1095"),
     revisionIssue: false,
     duplicateIssue: false,
     filename: "P1095.dxf",

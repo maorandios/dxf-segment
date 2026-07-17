@@ -16,6 +16,7 @@ import { t } from "@/lib/i18n";
 import {
   filterRegistryItems,
   summarizeDxfRegistry,
+  registryEntryIdentityDiagnostics,
 } from "@/lib/ai-intake/buildDxfRegistry";
 import { buildSlimRegistryForAi } from "@/lib/ai-intake/slimRegistry";
 import { reconcileFinalMapping } from "@/lib/ai-intake/reconcileFinalMapping";
@@ -221,6 +222,7 @@ export function SimulatedEmailForm() {
       plateAreaMm2: item.plateAreaMm2,
       netContourAreaMm2: item.netContourAreaMm2,
       geometryStatus: item.geometryStatus,
+      identityDiagnostics: registryEntryIdentityDiagnostics(item),
     }));
 
     const emails =

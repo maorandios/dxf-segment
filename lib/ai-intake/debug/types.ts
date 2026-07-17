@@ -38,6 +38,23 @@ export type DebugDxfPartSummary = {
   plateAreaMm2: number | null;
   netContourAreaMm2: number | null;
   geometryStatus: string | null;
+  /** Filename-authoritative identity diagnostics (optional). */
+  identityDiagnostics?: {
+    fileName: string;
+    filenameRawId: string | null;
+    filenameCanonicalId: string | null;
+    filenameValid: boolean;
+    identitySource: string;
+    identityStatus: string;
+    identityReason: string;
+    authoritativeCanonicalId: string | null;
+    layerNames: string[];
+    identifierLikeLayerNames: string[];
+    layerMetadataStatus: string;
+    layerWarnings: string[];
+    geometryStatus: string | null;
+    eligibleForExactMatching: boolean;
+  };
 };
 
 export type DebugInputDocument = {
@@ -84,6 +101,11 @@ export type DebugDocumentReport = {
   extractedRows: unknown[];
   /** Per-table joint unit inference (Checkpoint 5.2 unitless columns). */
   tableUnitInference: unknown[];
+  /** Generic source-mass interpretation diagnostics. */
+  massInterpretation: unknown | null;
+  massInterpretationDebug: unknown | null;
+  /** Post-DXF / table-level mass interpretations (may be filled by Review). */
+  massInterpretations?: unknown[];
   /** PDF / page-oriented evidence when no workbook snapshot exists. */
   pageEvidence: unknown | null;
   originHint: string | null;
@@ -244,6 +266,8 @@ export type AiIntakeDebugReportV1 = {
   reconciliation: DebugReconciliationReport;
   output: DebugOutputReport;
   diagnostics: DebugDiagnosticsReport;
+  /** Aggregate mass interpretation diagnostics (ambiguous outcomes included). */
+  massInterpretations: unknown[];
 };
 
 /** Optional lab-side context not present on the API success payload. */
@@ -252,4 +276,6 @@ export type AiIntakeDebugReportContext = {
   dxfParts?: DebugDxfPartSummary[];
   inputDocuments?: DebugInputDocument[];
   emails?: DebugInputEmail[];
+  /** Post-DXF Review mass interpretations when available. */
+  massInterpretations?: unknown[];
 };

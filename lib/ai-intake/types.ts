@@ -1,6 +1,45 @@
 import type { ProcessedGeometry } from "@/types";
 
-export type DxfIdentitySource = "FILENAME" | "DXF_LAYER";
+export type DxfIdentitySource =
+  | "FILENAME"
+  | "LAYER_FALLBACK"
+  /** @deprecated use LAYER_FALLBACK */
+  | "DXF_LAYER"
+  | "NONE";
+
+export type DxfIdentityStatus = "VALID" | "INVALID" | "COLLISION";
+
+export type DxfIdentityReason =
+  | "VALID_FILENAME_ID"
+  | "VALID_LAYER_FALLBACK_ID"
+  | "EMPTY_FILENAME_STEM"
+  | "INVALID_FILENAME_ID"
+  | "AMBIGUOUS_LAYER_FALLBACK"
+  | "CANONICAL_FILENAME_COLLISION";
+
+export type DxfIdentity = {
+  rawPartId: string | null;
+  canonicalPartId: string | null;
+  revision: string | null;
+  normalizedRawPartId: string | null;
+  source: "FILENAME" | "LAYER_FALLBACK" | "NONE";
+  status: DxfIdentityStatus;
+  reason: DxfIdentityReason;
+};
+
+export type DxfLayerMetadataStatus =
+  | "NOT_INSPECTED"
+  | "NO_IDENTIFIER_LIKE_LAYERS"
+  | "AGREES_WITH_FILENAME"
+  | "DIFFERS_FROM_FILENAME"
+  | "MULTIPLE_IDENTIFIER_LIKE_LAYERS";
+
+export type DxfLayerMetadata = {
+  layerNames: string[];
+  identifierLikeLayerNames: string[];
+  status: DxfLayerMetadataStatus;
+  warnings: string[];
+};
 
 export type DxfGeometryStatus = "VALID" | "WARNING" | "INVALID";
 
@@ -9,12 +48,15 @@ export const DXF_ISSUE = {
   READ_FAILED: "DXF_READ_FAILED",
   PARSE_FAILED: "DXF_PARSE_FAILED",
   NO_PART_ID: "DXF_NO_PART_ID",
+  /** @deprecated Layer disagreement is metadata-only; kept for legacy filters. */
   IDENTITY_CONFLICT: "DXF_IDENTITY_CONFLICT",
   MULTIPLE_LAYER_IDENTITIES: "MULTIPLE_LAYER_IDENTITIES",
   DUPLICATE_ID: "DXF_DUPLICATE_ID",
   REVISION_CONFLICT: "DXF_REVISION_CONFLICT",
   INVALID_GEOMETRY: "INVALID_GEOMETRY",
   LAYER_CONFIRMED: "LAYER_CONFIRMED",
+  LAYER_DIFFERS_FROM_FILENAME: "LAYER_DIFFERS_FROM_FILENAME",
+  LAYER_FALLBACK_USED: "LAYER_FALLBACK_USED",
 } as const;
 
 export type DxfIssueCode = (typeof DXF_ISSUE)[keyof typeof DXF_ISSUE];
@@ -38,8 +80,14 @@ export type DxfPartRegistryItem = {
   normalizedRawPartId: string;
 
   identitySource: DxfIdentitySource | null;
+  /** Derived: identity.status === "VALID" */
   identityOk: boolean;
   identityIssues: string[];
+
+  /** Canonical structured identity (source of truth). */
+  identity: DxfIdentity;
+  /** Layer inspection — independent of identity validity. */
+  layerMetadata: DxfLayerMetadata;
 
   revisionIssue: boolean;
   duplicateIssue: boolean;
@@ -79,4 +127,6 @@ export type DxfRegistrySummary = {
   identityConflictCount: number;
   revisionOrDuplicateCount: number;
   invalidGeometryCount: number;
+  /** Non-primary: layer disagreements / fallback notices. */
+  layerMetadataWarningCount?: number;
 };

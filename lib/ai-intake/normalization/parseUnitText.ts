@@ -74,8 +74,10 @@ const ALIASES: UnitAlias[] = [
     patterns: [
       /\btonnes?\b/i,
       /\btons?\b/i,
-      /\bt\b/i,
+      // Bare \bt\b is intentionally omitted — it matches "Weight T" as tonne.
+      // Use annotation context (Weight (t)) or explicit words only.
       /\bטון\b/,
+      /\bטונות\b/,
     ],
   },
 ];
@@ -83,6 +85,9 @@ const ALIASES: UnitAlias[] = [
 /**
  * Parse a standalone unit token or a phrase that ends with a unit.
  * Case-insensitive and whitespace-tolerant.
+ *
+ * Bare trailing "T" in multi-word headers is NOT tonne — use
+ * parseMeasurementHeader / annotation context for that distinction.
  */
 export function parseUnitText(text: string | null | undefined): MeasurementUnit | null {
   if (!text) return null;
@@ -92,17 +97,27 @@ export function parseUnitText(text: string | null | undefined): MeasurementUnit 
     .replace(/\s+/g, " ");
   if (!cleaned) return null;
 
-  // Parenthetical / bracket unit: Length(m), Area [m2]
+  // Parenthetical / bracket unit: Length(m), Area [m2], Weight (t)
   const paren = cleaned.match(/[\(\[]\s*([^)\]]+)\s*[\)\]]\s*$/);
   if (paren?.[1]) {
-    const inner = parseUnitToken(paren[1]);
+    const inner = parseUnitToken(paren[1], { allowBareT: true });
     if (inner) return inner;
   }
 
-  return parseUnitToken(cleaned);
+  // Slash annotation: Weight / t
+  const slash = cleaned.match(/\/\s*([A-Za-zא-ת²0-9]+)\s*$/);
+  if (slash?.[1]) {
+    const inner = parseUnitToken(slash[1], { allowBareT: true });
+    if (inner) return inner;
+  }
+
+  return parseUnitToken(cleaned, { allowBareT: false });
 }
 
-function parseUnitToken(raw: string): MeasurementUnit | null {
+function parseUnitToken(
+  raw: string,
+  opts: { allowBareT: boolean }
+): MeasurementUnit | null {
   const t = raw.trim();
   if (!t) return null;
 
@@ -121,20 +136,26 @@ function parseUnitToken(raw: string): MeasurementUnit | null {
     g: "G",
     kg: "KG",
     kgs: "KG",
-    t: "TON",
     ton: "TON",
     tons: "TON",
     tonne: "TON",
     tonnes: "TON",
   };
+  if (opts.allowBareT) {
+    exact.t = "TON";
+  }
   const key = t.toLowerCase().replace(/\s+/g, "");
   if (exact[key]) return exact[key]!;
 
+  // Multi-word: never treat a lone trailing letter T as tonne
+  if (!opts.allowBareT && /\s+t$/i.test(t) && !/\bton(?:ne)?s?\b/i.test(t)) {
+    // Strip trailing T and continue (may still match kg etc. earlier in string —
+    // but typically there is no other unit). Fall through without TON.
+  }
+
   for (const alias of ALIASES) {
     for (const re of alias.patterns) {
-      // Prefer full-string match for short tokens; otherwise search
       if (re.test(t) && (t.length <= 24 || re.source.includes("square") || /[²2]/.test(t))) {
-        // Avoid matching bare "m" inside "mm" — check word boundaries via patterns
         if (alias.unit === "M" && /\bmm\b/i.test(t) && !/\bm\b(?!m)/i.test(t.replace(/mm/gi, " "))) {
           continue;
         }

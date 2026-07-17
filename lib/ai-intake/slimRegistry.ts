@@ -22,6 +22,7 @@ export function buildSlimRegistryForAi(
       widthMm: item.widthMm ?? null,
       heightMm: item.heightMm ?? null,
       plateAreaMm2: item.plateAreaMm2 ?? null,
+      netContourAreaMm2: item.netContourAreaMm2 ?? null,
     });
   }
 

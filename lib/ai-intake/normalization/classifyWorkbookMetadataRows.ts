@@ -31,8 +31,14 @@ function rowTexts(cells: WorkbookCellEvidence[]): string[] {
 }
 
 function looksLikePartValue(text: string): boolean {
-  if (PART_LIKE.test(text)) return true;
-  return normalizePartId(text) != null;
+  const trimmed = text.trim();
+  if (PART_LIKE.test(trimmed)) return true;
+  // Dates / pure numbers must not classify metadata rows as part-bearing.
+  if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(trimmed)) return false;
+  const normalized = normalizePartId(trimmed);
+  if (!normalized) return false;
+  if (/^\d+$/.test(normalized.canonicalPartId)) return false;
+  return true;
 }
 
 function isMergedTitleRow(

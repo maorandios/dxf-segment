@@ -46,6 +46,12 @@ export {
 } from "./unitConvert";
 export { parseUnitText, parseNumericWithOptionalUnit } from "./parseUnitText";
 export {
+  parseMeasurementHeader,
+  explicitUnitFromMeasurementHeader,
+  type ParsedMeasurementHeader,
+} from "./parseMeasurementHeader";
+export { applyRelatedColumnUnitInheritance } from "./applyRelatedColumnUnitInheritance";
+export {
   compareWithPrecision,
   resolveDisplayedDecimalPlaces,
 } from "./precisionCompare";

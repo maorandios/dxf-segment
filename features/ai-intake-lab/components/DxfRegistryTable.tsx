@@ -13,7 +13,11 @@ import {
 import { t } from "@/lib/i18n";
 import { formatDecimal, formatInteger } from "@/lib/formatNumbers";
 import { cn } from "@/lib/utils";
-import { DXF_ISSUE, type DxfPartRegistryItem } from "@/lib/ai-intake/types";
+import {
+  DXF_ISSUE,
+  type DxfPartRegistryItem,
+} from "@/lib/ai-intake/types";
+import { NON_BLOCKING_IDENTITY_ISSUE_CODES } from "@/lib/ai-intake/buildDxfRegistry";
 
 function issueLabel(code: string): string {
   const key = `aiIntake.registry.issue.${code}`;
@@ -25,13 +29,17 @@ function rowStatus(item: DxfPartRegistryItem): {
   label: string;
   variant: "default" | "secondary" | "destructive" | "outline";
 } {
-  if (item.revisionIssue || item.duplicateIssue) {
+  if (
+    item.revisionIssue ||
+    item.duplicateIssue ||
+    item.identity.status === "COLLISION"
+  ) {
     return {
       label: t("aiIntake.registry.rowStatus.revisionDuplicate"),
       variant: "destructive",
     };
   }
-  if (!item.identityOk) {
+  if (item.identity.status === "INVALID" || !item.identityOk) {
     return {
       label: t("aiIntake.registry.rowStatus.identityProblem"),
       variant: "destructive",
@@ -41,6 +49,12 @@ function rowStatus(item: DxfPartRegistryItem): {
     return {
       label: t("aiIntake.registry.rowStatus.geometryInvalid"),
       variant: "destructive",
+    };
+  }
+  if (item.identity.source === "LAYER_FALLBACK") {
+    return {
+      label: t("aiIntake.registry.rowStatus.validWithWarning"),
+      variant: "secondary",
     };
   }
   if (item.geometryStatus === "WARNING") {
@@ -55,8 +69,25 @@ function rowStatus(item: DxfPartRegistryItem): {
   };
 }
 
+/** Blocking issues only — layer disagreement is not shown as a primary failure. */
 function displayIssues(item: DxfPartRegistryItem): string[] {
-  return item.identityIssues.filter((c) => c !== DXF_ISSUE.LAYER_CONFIRMED);
+  return item.identityIssues.filter(
+    (c) => !NON_BLOCKING_IDENTITY_ISSUE_CODES.has(c)
+  );
+}
+
+function secondaryDetails(item: DxfPartRegistryItem): string[] {
+  const details: string[] = [];
+  if (
+    item.layerMetadata.status === "DIFFERS_FROM_FILENAME" ||
+    item.identityIssues.includes(DXF_ISSUE.LAYER_DIFFERS_FROM_FILENAME)
+  ) {
+    details.push(t("aiIntake.registry.detail.layerDiffers"));
+  }
+  if (item.identity.source === "LAYER_FALLBACK") {
+    details.push(t("aiIntake.registry.detail.layerFallback"));
+  }
+  return details;
 }
 
 interface DxfRegistryTableProps {
@@ -98,6 +129,7 @@ export function DxfRegistryTable({ items, onPreview }: DxfRegistryTableProps) {
           {items.map((item) => {
             const status = rowStatus(item);
             const issues = displayIssues(item);
+            const details = secondaryDetails(item);
             const canPreview =
               item.processedGeometry != null &&
               item.processedGeometry.outer.length > 0 &&
@@ -107,7 +139,7 @@ export function DxfRegistryTable({ items, onPreview }: DxfRegistryTableProps) {
               <TableRow
                 key={item.id}
                 className={cn(
-                  !item.identityOk && "bg-destructive/[0.03]",
+                  item.identity.status === "INVALID" && "bg-destructive/[0.03]",
                   canPreview && "cursor-pointer"
                 )}
                 onClick={() => {
@@ -162,12 +194,17 @@ export function DxfRegistryTable({ items, onPreview }: DxfRegistryTableProps) {
                   </Badge>
                 </TableCell>
                 <TableCell className="max-w-[220px]">
-                  {issues.length === 0 ? (
+                  {issues.length === 0 && details.length === 0 ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : (
                     <ul className="space-y-0.5 text-xs text-muted-foreground">
                       {issues.map((code) => (
                         <li key={code}>{issueLabel(code)}</li>
+                      ))}
+                      {details.map((text) => (
+                        <li key={text} className="opacity-80">
+                          {text}
+                        </li>
                       ))}
                     </ul>
                   )}
