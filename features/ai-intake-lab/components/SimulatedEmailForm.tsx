@@ -21,6 +21,8 @@ import { buildSlimRegistryForAi } from "@/lib/ai-intake/slimRegistry";
 import { reconcileFinalMapping } from "@/lib/ai-intake/reconcileFinalMapping";
 import { applyDuplicateUserResolution } from "@/lib/ai-intake/requestOccurrences";
 import { applyEmailQuantityUserResolution } from "@/lib/ai-intake/emailConflictResolve";
+import { buildReviewSession } from "@/lib/ai-intake/review";
+import type { IntakeReviewSession } from "@/lib/ai-intake/review";
 import type {
   AiIntakeAnalyzeResponse,
   AiIntakeAnalyzeSuccess,
@@ -46,6 +48,7 @@ import { DxfRegistrySummaryCards } from "./DxfRegistrySummary";
 import { DxfRegistryTable } from "./DxfRegistryTable";
 import { FinalMappingTable } from "./FinalMappingTable";
 import { IntakeDebugPanel } from "./IntakeDebugPanel";
+import { IntakeReviewPanel } from "./IntakeReviewPanel";
 
 const emptyForm = {
   sender: "",
@@ -77,6 +80,8 @@ export function SimulatedEmailForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [analyzeResult, setAnalyzeResult] =
     useState<AiIntakeAnalyzeSuccess | null>(null);
+  const [reviewSession, setReviewSession] =
+    useState<IntakeReviewSession | null>(null);
   const [previewItem, setPreviewItem] = useState<DxfPartRegistryItem | null>(
     null
   );
@@ -182,6 +187,31 @@ export function SimulatedEmailForm() {
     return { ...analyzeResult, finalRows };
   }, [analyzeResult, finalRows]);
 
+  useEffect(() => {
+    if (!analyzeResult) {
+      setReviewSession(null);
+      return;
+    }
+    const { rows } = reconcileFinalMapping({
+      registry: registryItems,
+      acceptedFacts: analyzeResult.acceptedFacts,
+      unresolvedItems: analyzeResult.extraction.unresolvedItems,
+      documentRows: analyzeResult.extraction.documentRows,
+    });
+    setReviewSession(
+      buildReviewSession(
+        { ...analyzeResult, finalRows: rows },
+        {
+          registry: registryItems,
+          analysisRunId: null,
+        }
+      )
+    );
+    // Rebuild only on new analysis result — do not wipe user review decisions
+    // when advanced FinalMappingTable resolutions change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyzeResult]);
+
   const debugReportContext = useMemo(() => {
     const dxfParts = registryItems.map((item) => ({
       partId: item.canonicalPartId,
@@ -277,6 +307,7 @@ export function SimulatedEmailForm() {
     setIsBusy(false);
     setErrorMessage(null);
     setAnalyzeResult(null);
+    setReviewSession(null);
     setPreviewItem(null);
     setPreviewOpen(false);
     setDuplicateResolutions({});
@@ -287,12 +318,14 @@ export function SimulatedEmailForm() {
       setErrorMessage(t("aiIntake.registry.noDxf"));
       setRegistryItems([]);
       setAnalyzeResult(null);
+      setReviewSession(null);
       return;
     }
 
     setIsBusy(true);
     setErrorMessage(null);
     setAnalyzeResult(null);
+    setReviewSession(null);
     setUiPhase("reading_dxf");
     setProgress({
       phase: "reading",
@@ -477,63 +510,76 @@ export function SimulatedEmailForm() {
         </section>
       )}
 
-      {analyzeResultWithFinal && (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">
-              {t("aiIntake.final.title")}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("aiIntake.final.subtitle")}
-            </p>
-          </div>
-          {analyzeResultWithFinal.partial && (
-            <div
-              className="rounded-[12px] border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
-              role="status"
-            >
-              {t("aiIntake.partialBanner")}
-            </div>
-          )}
-          <FinalMappingTable
-            rows={finalRows}
-            onDuplicateResolve={handleDuplicateResolve}
-            onEmailQuantityResolve={handleEmailQuantityResolve}
-            canPreview={(row) => {
-              if (!row.dxfFileId) return false;
-              const item = registryItems.find((r) => r.id === row.dxfFileId);
-              return Boolean(
-                item?.processedGeometry &&
-                  item.processedGeometry.outer.length > 0 &&
-                  item.geometryStatus !== "INVALID"
-              );
-            }}
-            onPreview={(row) => {
-              const item = registryItems.find((r) => r.id === row.dxfFileId);
-              if (item) {
-                setPreviewItem(item);
-                setPreviewOpen(true);
-              }
-            }}
-          />
-        </section>
+      {reviewSession && (
+        <IntakeReviewPanel
+          session={reviewSession}
+          onSessionChange={setReviewSession}
+          registry={registryItems}
+        />
       )}
 
       {analyzeResultWithFinal && (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">
-              {t("aiIntake.audit.title")}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("aiIntake.audit.subtitle")}
-            </p>
+        <details className="rounded-xl border border-white/10 p-4">
+          <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+            {t("aiIntake.review.advancedDetails")}
+          </summary>
+          <div className="mt-4 space-y-6">
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">
+                  {t("aiIntake.final.title")}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t("aiIntake.final.subtitle")}
+                </p>
+              </div>
+              {analyzeResultWithFinal.partial && (
+                <div
+                  className="rounded-[12px] border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+                  role="status"
+                >
+                  {t("aiIntake.partialBanner")}
+                </div>
+              )}
+              <FinalMappingTable
+                rows={finalRows}
+                onDuplicateResolve={handleDuplicateResolve}
+                onEmailQuantityResolve={handleEmailQuantityResolve}
+                canPreview={(row) => {
+                  if (!row.dxfFileId) return false;
+                  const item = registryItems.find((r) => r.id === row.dxfFileId);
+                  return Boolean(
+                    item?.processedGeometry &&
+                      item.processedGeometry.outer.length > 0 &&
+                      item.geometryStatus !== "INVALID"
+                  );
+                }}
+                onPreview={(row) => {
+                  const item = registryItems.find((r) => r.id === row.dxfFileId);
+                  if (item) {
+                    setPreviewItem(item);
+                    setPreviewOpen(true);
+                  }
+                }}
+              />
+            </section>
+
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">
+                  {t("aiIntake.audit.title")}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t("aiIntake.audit.subtitle")}
+                </p>
+              </div>
+              <DocumentDxfAuditSummaryCards
+                summary={analyzeResultWithFinal.auditSummary}
+              />
+              <DocumentDxfAuditTable rows={analyzeResultWithFinal.auditRows} />
+            </section>
           </div>
-          <DocumentDxfAuditSummaryCards
-            summary={analyzeResultWithFinal.auditSummary}
-          />
-          <DocumentDxfAuditTable rows={analyzeResultWithFinal.auditRows} />
-        </section>
+        </details>
       )}
 
       <section className="space-y-4">
