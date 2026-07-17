@@ -20,6 +20,7 @@ import {
 } from "@/lib/ai-intake/buildDxfRegistry";
 import { buildSlimRegistryForAi } from "@/lib/ai-intake/slimRegistry";
 import { reconcileFinalMapping } from "@/lib/ai-intake/reconcileFinalMapping";
+import { applyGeometryCorrelation } from "@/lib/ai-intake/dxf/geometry-correlation";
 import { applyDuplicateUserResolution } from "@/lib/ai-intake/requestOccurrences";
 import { applyEmailQuantityUserResolution } from "@/lib/ai-intake/emailConflictResolve";
 import { buildReviewSession } from "@/lib/ai-intake/review";
@@ -133,11 +134,15 @@ export function SimulatedEmailForm() {
 
   const finalRows = useMemo(() => {
     if (!analyzeResult) return [];
+    const correlated = applyGeometryCorrelation({
+      documentRows: analyzeResult.extraction.documentRows,
+      registry: registryItems,
+    });
     const { rows } = reconcileFinalMapping({
       registry: registryItems,
       acceptedFacts: analyzeResult.acceptedFacts,
       unresolvedItems: analyzeResult.extraction.unresolvedItems,
-      documentRows: analyzeResult.extraction.documentRows,
+      documentRows: correlated.documentRows,
     });
     const out: FinalIntakeMappingRow[] = [];
     for (const row of rows) {
@@ -193,15 +198,26 @@ export function SimulatedEmailForm() {
       setReviewSession(null);
       return;
     }
+    const correlated = applyGeometryCorrelation({
+      documentRows: analyzeResult.extraction.documentRows,
+      registry: registryItems,
+    });
     const { rows } = reconcileFinalMapping({
       registry: registryItems,
       acceptedFacts: analyzeResult.acceptedFacts,
       unresolvedItems: analyzeResult.extraction.unresolvedItems,
-      documentRows: analyzeResult.extraction.documentRows,
+      documentRows: correlated.documentRows,
     });
     setReviewSession(
       buildReviewSession(
-        { ...analyzeResult, finalRows: rows },
+        {
+          ...analyzeResult,
+          extraction: {
+            ...analyzeResult.extraction,
+            documentRows: correlated.documentRows,
+          },
+          finalRows: rows,
+        },
         {
           registry: registryItems,
           analysisRunId: null,

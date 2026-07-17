@@ -15,6 +15,7 @@ export {
   type ReviewIssueCode,
   type ReviewOptionalMeasurement,
   type ReviewDocumentEvidence,
+  type ReviewSourceReference,
 } from "./types";
 
 export { formatIssueCopy, USER_FACING_ISSUE_MESSAGES } from "./userFacingIssueMessages";

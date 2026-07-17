@@ -491,9 +491,15 @@ function buildRowFromOccurrence(args: {
     status: "NEEDS_DECISION",
     includeInQuote,
     replacedByRowId: null,
-    rawPartReferences: occ.rawPartReference ? [occ.rawPartReference] : [],
+    rawPartReferences: [
+      ...(occ.rawPartReference ? [occ.rawPartReference] : []),
+      ...(occ.description &&
+      occ.description !== occ.rawPartReference
+        ? [occ.description]
+        : []),
+    ],
     displayPartReference:
-      occ.rawPartReference ?? partId ?? final?.partId ?? null,
+      partId ?? occ.rawPartReference ?? final?.partId ?? null,
     dxfMatch,
     dxfMatchDiagnostics: derived.dxfMatchDiagnostics,
     matchedDxfPartId: partId,

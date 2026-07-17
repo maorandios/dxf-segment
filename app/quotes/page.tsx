@@ -76,7 +76,7 @@ export default function QuotesPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button asChild>
-              <Link href="/quick-quote" className="gap-2">
+              <Link href="/quotes/new" className="gap-2">
                 <PlusCircle className="h-4 w-4 me-2" />
                 {t("quotes.newQuote")}
               </Link>
@@ -95,7 +95,7 @@ export default function QuotesPage() {
           description={t("quotes.emptyDescription")}
           action={
             <Button asChild>
-              <Link href="/quick-quote" className="gap-2">
+              <Link href="/quotes/new" className="gap-2">
                 <PlusCircle className="h-4 w-4 me-2" />
                 {t("quotes.newQuote")}
               </Link>
@@ -132,7 +132,7 @@ export default function QuotesPage() {
                   <TableCell className="text-end">
                     <div className="flex items-center justify-end gap-2">
                       <Button variant="outline" size="sm" asChild>
-                        <Link href="/quick-quote">{t("quotes.openBuilder")}</Link>
+                        <Link href="/quotes/new">{t("quotes.openBuilder")}</Link>
                       </Button>
                       <Button
                         type="button"

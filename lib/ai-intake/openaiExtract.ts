@@ -23,6 +23,7 @@ import {
   compactWorkbookForModel,
   reconstructRawRows,
   normalizedPartRowToExtractedDocumentRow,
+  rawDocumentPartRowToExtractedDocumentRow,
   validateMappingCoverage,
   enrichColumnHeadersFromSnapshot,
   classifyWorkbookMetadataRows,
@@ -30,6 +31,7 @@ import {
   normalizeWorkbookPartRows,
   type AiWorkbookMappingResult,
 } from "./normalization";
+import { tryFixedWidthWorkbookReconstruction } from "./workbook/fixed-width";
 
 export type DocumentFileInput = {
   documentId: string;
@@ -508,6 +510,122 @@ async function extractSpreadsheetDocument(args: {
     ...compact.warnings,
     `WORKBOOK_PARSER_KIND:${snapshot.parserKind}`,
   ];
+
+  // Fixed-width one-cell tables: deterministic reconstruction (no OpenAI mapping).
+  const fixedWidth = tryFixedWidthWorkbookReconstruction({
+    snapshot,
+    documentId: descriptor.documentId,
+    registry: args.registry,
+  });
+  if (fixedWidth.activated && fixedWidth.result) {
+    warnings.push(...fixedWidth.result.warnings);
+    const adaptedRows = fixedWidth.result.partRows.map((r) =>
+      rawDocumentPartRowToExtractedDocumentRow(r)
+    );
+    const validated = validateSingleDocumentExtraction(
+      {
+        ...descriptor,
+        rows: dedupeExactSameDocumentRows(adaptedRows),
+        unresolvedItems: [],
+        warnings,
+      },
+      args.registry
+    );
+    const workbookEvidence: WorkbookEvidenceDebug = {
+      parserKind: snapshot.parserKind,
+      snapshot: {
+        documentId: snapshot.documentId,
+        fileName: snapshot.fileName,
+        parserKind: snapshot.parserKind,
+        sheets: snapshot.sheets.map((s) => ({
+          sheetName: s.sheetName,
+          usedRange: s.usedRange,
+          mergedRanges: s.mergedRanges,
+          hidden: s.hidden,
+          cellCount: s.cells.length,
+          cells: s.cells,
+        })),
+        warnings: snapshot.warnings,
+      },
+      mapping: {
+        sheets: fixedWidth.tables.map((t) => ({
+          sheetName: t.detection.sheetName,
+          tables: [
+            {
+              tableId: `fw:${t.detection.sheetName}:${t.detection.headerRowNumber}`,
+              tableRange: null,
+              headerRowNumbers: t.detection.headerRowNumber
+                ? [t.detection.headerRowNumber]
+                : [],
+              firstDataRow: t.reconstructedRows[0]?.rowNumber ?? null,
+              lastDataRow:
+                t.reconstructedRows[t.reconstructedRows.length - 1]
+                  ?.rowNumber ?? null,
+              columns: {
+                partReference: null,
+                quantity: null,
+                thickness: null,
+                material: null,
+                width: null,
+                height: null,
+                area: null,
+                totalArea: null,
+                unitWeight: null,
+                totalWeight: null,
+              },
+              columnHeaders: t.detection.headerFields.map((h) => ({
+                columnLetter: t.detection.sourceColumnLetter ?? "A",
+                rawHeaderText: h.rawHeader,
+                detectedMeaning: h.semantic,
+                statedUnitText: null,
+              })),
+              rowRoles: [],
+              warnings: ["FIXED_WIDTH_RECONSTRUCTION"],
+            },
+          ],
+          unmappedNonEmptyRows: [],
+        })),
+      },
+      coverage: {
+        sourceNonEmptyRowCount: adaptedRows.length,
+        accountedNonEmptyRowCount: adaptedRows.length,
+        mappedPartRowCount: adaptedRows.length,
+        mappedHeaderRowCount: fixedWidth.tables.length,
+        mappedSubtotalRowCount: 0,
+        mappedTotalRowCount: 0,
+        mappedNoteRowCount: 0,
+        mappedEmptyRowCount: 0,
+        unknownNonEmptyRowCount: 0,
+        unaccountedNonEmptyRowCount: 0,
+        coverageComplete: true,
+        issues: [],
+        missingRowKeys: [],
+        nonEmptyRowCount: adaptedRows.length,
+        mappedRowCount: adaptedRows.length,
+        unknownRowCount: 0,
+      },
+      rawPartRows: fixedWidth.result.partRows,
+      excludedTotalSubtotalRows: fixedWidth.result.excludedTotalSubtotalRows,
+      unknownRows: fixedWidth.result.unknownRows,
+      hiddenPartRowsRequiringReview:
+        fixedWidth.result.hiddenPartRowsRequiringReview,
+      workbookReconstructionDiagnostics: fixedWidth.diagnostics,
+    };
+
+    return {
+      documentId: descriptor.documentId,
+      sourceType: descriptor.sourceType,
+      fileName: descriptor.fileName,
+      rows: validated.rows,
+      unresolvedItems: validated.unresolvedItems,
+      warnings: validated.warnings,
+      status: "SUCCESS" as const,
+      errorCode: null,
+      usage: emptyUsage,
+      durationMs: Date.now() - started,
+      workbookEvidence,
+    };
+  }
 
   try {
     const registryJson = JSON.stringify(args.registry, null, 2);

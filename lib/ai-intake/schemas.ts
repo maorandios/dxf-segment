@@ -290,6 +290,10 @@ export type WorkbookEvidenceDebug = {
   massInterpretationDebug?: unknown;
   /** Optional array form for multi-table / post-DXF diagnostics. */
   massInterpretations?: unknown[];
+  /** Fixed-width one-cell table reconstruction diagnostics. */
+  workbookReconstructionDiagnostics?: unknown;
+  /** Geometry correlation diagnostics (often attached client-side). */
+  geometryCorrelationDiagnostics?: unknown;
 };
 
 export type SourceDocumentResult = {
