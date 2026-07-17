@@ -22,10 +22,12 @@ import {
   buildWorkbookSnapshot,
   compactWorkbookForModel,
   reconstructRawRows,
-  rawDocumentPartRowToExtractedDocumentRow,
+  normalizedPartRowToExtractedDocumentRow,
   validateMappingCoverage,
   enrichColumnHeadersFromSnapshot,
   classifyWorkbookMetadataRows,
+  applyDeterministicRowRolesToMapping,
+  normalizeWorkbookPartRows,
   type AiWorkbookMappingResult,
 } from "./normalization";
 
@@ -554,6 +556,7 @@ async function extractSpreadsheetDocument(args: {
     const classified = classifyWorkbookMetadataRows(snapshot, mapping);
     mapping = classified.mapping;
     warnings.push(...classified.info);
+    mapping = applyDeterministicRowRolesToMapping(snapshot, mapping);
 
     const coverage = validateMappingCoverage(snapshot, mapping);
     if (!coverage.coverageComplete) {
@@ -578,8 +581,27 @@ async function extractSpreadsheetDocument(args: {
       warnings.push(w);
     }
 
-    const adaptedRows = reconstructed.partRows.map((r) =>
-      rawDocumentPartRowToExtractedDocumentRow(r)
+    // Checkpoint 5.2 — unit normalization before adapter / geometry comparison
+    const normalized = normalizeWorkbookPartRows({
+      documentId: descriptor.documentId,
+      mapping,
+      partRows: reconstructed.partRows,
+      registry: args.registry,
+    });
+    for (const nr of normalized.normalizedRows) {
+      for (const issue of nr.issues) {
+        if (
+          issue.severity === "WARNING" ||
+          issue.severity === "BLOCKING"
+        ) {
+          const tag = `${issue.code}:${nr.raw.occurrenceId}`;
+          if (!warnings.includes(tag)) warnings.push(tag);
+        }
+      }
+    }
+
+    const adaptedRows = normalized.normalizedRows.map((r) =>
+      normalizedPartRowToExtractedDocumentRow(r)
     );
 
     const unresolvedItems: UnresolvedRequestItem[] =
@@ -632,6 +654,22 @@ async function extractSpreadsheetDocument(args: {
       unknownRows: reconstructed.unknownRows,
       hiddenPartRowsRequiringReview:
         reconstructed.hiddenPartRowsRequiringReview,
+      columnUnitProfiles: normalized.profiles,
+      normalizedMeasurements: normalized.normalizedRows.map((nr) => ({
+        occurrenceId: nr.raw.occurrenceId,
+        partId: nr.raw.matchedDxfPartId,
+        rowNumber: nr.raw.source.rowNumber,
+        thickness: nr.thickness,
+        width: nr.width,
+        height: nr.height,
+        area: nr.area,
+        totalArea: nr.totalArea,
+        unitWeight: nr.unitWeight,
+        totalWeight: nr.totalWeight,
+        issues: nr.issues,
+      })),
+      precisionComparisons: normalized.precisionComparisons,
+      tableUnitInference: normalized.tableUnitInferences,
     };
 
     const status: SourceDocumentResult["status"] =

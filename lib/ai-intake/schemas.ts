@@ -270,7 +270,7 @@ export type SourceDocumentDescriptor = {
   fileName: string;
 };
 
-/** Checkpoint 5.1 workbook evidence attached to spreadsheet source results (debug). */
+/** Checkpoint 5.1/5.2 workbook evidence attached to spreadsheet source results (debug). */
 export type WorkbookEvidenceDebug = {
   parserKind: "EXCELJS_XLSX" | "SHEETJS_XLS";
   snapshot: unknown;
@@ -280,6 +280,11 @@ export type WorkbookEvidenceDebug = {
   excludedTotalSubtotalRows: unknown;
   unknownRows: unknown;
   hiddenPartRowsRequiringReview: unknown;
+  columnUnitProfiles?: unknown;
+  normalizedMeasurements?: unknown;
+  precisionComparisons?: unknown;
+  /** Checkpoint 5.2 table-level joint unit inference (per table). */
+  tableUnitInference?: unknown;
 };
 
 export type SourceDocumentResult = {
@@ -319,6 +324,10 @@ export const slimRegistryItemSchema = z.object({
   canonicalPartId: z.string().min(1),
   revision: z.string().nullable(),
   filename: z.string().min(1),
+  /** Optional bbox for Checkpoint 5.2 unit correlation (never sent to OpenAI as file). */
+  widthMm: z.number().nullable().optional(),
+  heightMm: z.number().nullable().optional(),
+  plateAreaMm2: z.number().nullable().optional(),
 });
 
 export type SlimRegistryItem = z.infer<typeof slimRegistryItemSchema>;

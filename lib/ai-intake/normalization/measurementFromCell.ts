@@ -9,9 +9,11 @@ export function inferDisplayedDecimalPlaces(
   numberFormat: string | null
 ): number | null {
   if (numberFormat) {
-    const m = numberFormat.match(/0\.(0+)/);
+    // Excel escapes: 0.00\  or 0.00\\ 
+    const cleanedFmt = numberFormat.replace(/\\+/g, "");
+    const m = cleanedFmt.match(/0\.(0+)/);
     if (m?.[1]) return m[1].length;
-    const m2 = numberFormat.match(/#\.(0+)/);
+    const m2 = cleanedFmt.match(/#\.(0+)/);
     if (m2?.[1]) return m2[1].length;
   }
   if (formattedText) {

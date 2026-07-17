@@ -19,6 +19,9 @@ export function buildSlimRegistryForAi(
       canonicalPartId: item.canonicalPartId,
       revision: item.revision,
       filename: item.filename,
+      widthMm: item.widthMm ?? null,
+      heightMm: item.heightMm ?? null,
+      plateAreaMm2: item.plateAreaMm2 ?? null,
     });
   }
 

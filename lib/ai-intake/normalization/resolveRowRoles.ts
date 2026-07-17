@@ -1,3 +1,4 @@
+import { refineSummaryRowClassification } from "./refineSummaryRowRoles";
 import type {
   AiWorkbookTableMapping,
   DocumentRowRole,
@@ -7,6 +8,8 @@ import type {
 
 const TOTAL_TEXT =
   /^(total|totals|grand\s*total|סה["״]?כ|סיכום|סך\s*הכל|סך הכל)\b/i;
+const GRAND_TOTAL_TEXT =
+  /grand\s*total|סה["״]?כ\s*כללי|סך\s*הכל\s*כללי|total\s*general|סיכום\s*כללי/i;
 const SUBTOTAL_TEXT = /^(sub\s*-?\s*total|subtotal|סיכום\s*ביניים)\b/i;
 const SUM_FORMULA = /\bSUM\s*\(/i;
 
@@ -109,7 +112,10 @@ export function resolveRowRoles(args: {
     }
 
     const joined = cells.map(cellText).filter(Boolean).join(" | ");
-    if (looksLikeTotalText(joined)) {
+    if (GRAND_TOTAL_TEXT.test(joined)) {
+      signals.push("TOTAL");
+      reasons.push("exactText:GRAND_TOTAL");
+    } else if (looksLikeTotalText(joined)) {
       signals.push("TOTAL");
       reasons.push("exactText:TOTAL");
     }
@@ -210,5 +216,5 @@ export function resolveRowRoles(args: {
     });
   }
 
-  return resolved;
+  return refineSummaryRowClassification(resolved);
 }

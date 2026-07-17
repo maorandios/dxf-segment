@@ -196,3 +196,114 @@ export type CompactWorkbookResult = {
   includedSheetNames: string[];
   excludedSheetNames: string[];
 };
+
+/* ─── Checkpoint 5.2 — unit profiles & normalized measurements ─── */
+
+export type MeasurementUnit = LengthOrAreaOrMassUnit;
+
+export type NormalizedUnit = "MM" | "MM2" | "KG";
+
+export type UnitResolutionStatus =
+  | "AS_STATED"
+  | "RESOLVED_BY_EXPLICIT_CELL_UNIT"
+  | "RESOLVED_BY_COLUMN_CONSISTENCY"
+  | "RESOLVED_BY_ROW_CONSISTENCY"
+  | "RESOLVED_BY_DXF_CORRELATION"
+  | "MIXED_UNITS"
+  | "AMBIGUOUS"
+  | "INVALID"
+  | "NOT_PRESENT";
+
+export type IssueSeverity = "INFO" | "WARNING" | "BLOCKING";
+
+export type StructuredNormalizationIssue = {
+  code: string;
+  severity: IssueSeverity;
+  message: string;
+  field?: string | null;
+};
+
+export type UnitResolutionCandidate = {
+  sourceUnit: MeasurementUnit;
+  normalizedValue: number;
+  score: number;
+  evidence: string[];
+};
+
+export type NormalizedMeasurement = {
+  raw: RawMeasurement;
+  normalizedValue: number | null;
+  normalizedUnit: NormalizedUnit | null;
+  statedUnit: MeasurementUnit | null;
+  resolvedSourceUnit: MeasurementUnit | null;
+  resolutionStatus: UnitResolutionStatus;
+  resolutionReason: string | null;
+  candidateInterpretations: UnitResolutionCandidate[];
+  issues: StructuredNormalizationIssue[];
+};
+
+export type SemanticMeasurementField =
+  | "THICKNESS"
+  | "WIDTH"
+  | "HEIGHT"
+  | "AREA"
+  | "TOTAL_AREA"
+  | "UNIT_WEIGHT"
+  | "TOTAL_WEIGHT";
+
+export type ColumnUnitProfile = {
+  documentId: string;
+  sheetName: string | null;
+  tableId: string;
+  semanticField: SemanticMeasurementField;
+  columnLetter: string | null;
+  rawHeaderText: string | null;
+  headerCellReferences: string[];
+  statedUnitText: string | null;
+  statedHeaderUnit: MeasurementUnit | null;
+  candidateUnits: MeasurementUnit[];
+  resolvedUnit: MeasurementUnit | null;
+  resolutionStatus: UnitResolutionStatus;
+  evidence: string[];
+  confidence: number;
+  affectedRowNumbers: number[];
+  issues: StructuredNormalizationIssue[];
+};
+
+export type PrecisionComparisonStatus =
+  | "EXACT_MATCH"
+  | "MATCH_WITHIN_TOLERANCE"
+  | "MATCH_AFTER_ROUNDING"
+  | "MISMATCH"
+  | "NOT_COMPARABLE";
+
+export type PrecisionComparisonResult = {
+  status: PrecisionComparisonStatus;
+  expectedValue: number | null;
+  sourceValue: number | null;
+  difference: number | null;
+  absoluteTolerance: number | null;
+  relativeTolerance: number | null;
+  precisionTolerance: number | null;
+  effectiveTolerance: number | null;
+  reason: string | null;
+};
+
+export type DxfUnitCorrelationRef = {
+  canonicalPartId: string;
+  widthMm: number | null;
+  heightMm: number | null;
+  plateAreaMm2: number | null;
+};
+
+export type NormalizedPartRow = {
+  raw: RawDocumentPartRow;
+  thickness: NormalizedMeasurement | null;
+  width: NormalizedMeasurement | null;
+  height: NormalizedMeasurement | null;
+  area: NormalizedMeasurement | null;
+  totalArea: NormalizedMeasurement | null;
+  unitWeight: NormalizedMeasurement | null;
+  totalWeight: NormalizedMeasurement | null;
+  issues: StructuredNormalizationIssue[];
+};

@@ -221,7 +221,13 @@ export function compareOneDocumentGeometry(args: {
   const dxfW = dxf.widthMm;
   const dxfH = dxf.heightMm;
 
+  const unitAmbiguous =
+    rowIssues.includes("DOCUMENT_GEOMETRY_UNIT_AMBIGUOUS") ||
+    normalized.ambiguousFields.includes("width") ||
+    normalized.ambiguousFields.includes("height");
+
   if (
+    !unitAmbiguous &&
     docW != null &&
     docH != null &&
     dxfW != null &&
@@ -236,10 +242,25 @@ export function compareOneDocumentGeometry(args: {
       mismatched += 1;
       issues.push("DOCUMENT_DXF_DIMENSION_MISMATCH");
     }
+  } else if (
+    unitAmbiguous &&
+    (normalized.ambiguousFields.includes("width") ||
+      normalized.ambiguousFields.includes("height") ||
+      rowIssues.includes("DOCUMENT_GEOMETRY_UNIT_AMBIGUOUS"))
+  ) {
+    // Unresolved units → not comparable; do not emit false dimension mismatch
+    if (!issues.includes("DOCUMENT_GEOMETRY_UNIT_AMBIGUOUS")) {
+      issues.push("DOCUMENT_GEOMETRY_UNIT_AMBIGUOUS");
+    }
   }
 
   // Document internal: width × height vs stated area
-  if (docW != null && docH != null && normalized.areaMm2 != null) {
+  if (
+    !unitAmbiguous &&
+    docW != null &&
+    docH != null &&
+    normalized.areaMm2 != null
+  ) {
     if (
       !documentDimensionsAreaConsistent({
         widthMm: docW,
@@ -257,6 +278,7 @@ export function compareOneDocumentGeometry(args: {
 
   const dxfPlate = dxf.plateAreaMm2;
   if (
+    !normalized.ambiguousFields.includes("area") &&
     normalized.areaMm2 != null &&
     dxfPlate != null &&
     Number.isFinite(dxfPlate) &&

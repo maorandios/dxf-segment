@@ -1487,7 +1487,28 @@
       "factsJson": "עובדות מאומתות (JSON)",
       "unresolvedJson": "פריטים לא מזוהים (JSON)",
       "auditJson": "שורות ביקורת (JSON)",
-      "workbookEvidence": "ראיות חוברת Excel — snapshot / mapping / coverage (JSON)"
+      "workbookEvidence": "ראיות חוברת Excel — snapshot / mapping / coverage (JSON)",
+      "columnUnitProfiles": "פרופילי יחידות לפי עמודה (JSON)",
+      "normalizedMeasurements": "מדידות מנורמלות (JSON)",
+      "precisionComparisons": "השוואות דיוק (JSON)",
+      "fullReport": {
+        "title": "דוח דיבאג מלא",
+        "copy": "העתק JSON מלא",
+        "copied": "הועתק ✓",
+        "needAnalysis": "יש להריץ ניתוח לפני העתקת הדוח",
+        "copySuccess": "הדוח הועתק ללוח",
+        "copyError": "ההעתקה נכשלה — ה־JSON המלא מוצג למטה להעתקה ידנית",
+        "size": "גודל הדוח",
+        "schemaVersion": "גרסת סכמה",
+        "documents": "מסמכים",
+        "dxfParts": "חלקי DXF",
+        "sourceRows": "שורות מקור",
+        "finalParts": "חלקים סופיים",
+        "issues": "בעיות",
+        "showJson": "הצג JSON",
+        "hideJson": "הסתר JSON",
+        "detailedView": "תצוגת דיבאג מפורטת"
+      }
     },
     "registry": {
       "title": "רישום חלקי DXF",

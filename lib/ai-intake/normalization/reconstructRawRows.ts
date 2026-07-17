@@ -259,11 +259,7 @@ export function reconstructRawRows(args: {
         `UNMAPPED_NONEMPTY_ROW:${sheetMap.sheetName}:${rowNumber}`
       );
     }
-    for (const rowNumber of sheetMap.metadataRowNumbers ?? []) {
-      warnings.push(
-        `INFO_METADATA_ROW:${sheetMap.sheetName}:${rowNumber}`
-      );
-    }
+    // metadataRowNumbers already reported once by classifyWorkbookMetadataRows
   }
 
   return {

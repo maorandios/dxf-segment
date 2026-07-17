@@ -182,6 +182,58 @@ export function SimulatedEmailForm() {
     return { ...analyzeResult, finalRows };
   }, [analyzeResult, finalRows]);
 
+  const debugReportContext = useMemo(() => {
+    const dxfParts = registryItems.map((item) => ({
+      partId: item.canonicalPartId,
+      fileName: item.filename,
+      bboxWidthMm: item.widthMm,
+      bboxHeightMm: item.heightMm,
+      plateAreaMm2: item.plateAreaMm2,
+      netContourAreaMm2: item.netContourAreaMm2,
+      geometryStatus: item.geometryStatus,
+    }));
+
+    const emails =
+      body.trim().length > 0
+        ? [
+            {
+              emailId: null as string | null,
+              subject: subject.trim() || null,
+              bodyText: body,
+              sourceLabel: "simulated-email" as string | null,
+            },
+          ]
+        : [];
+
+    const inputDocuments = analyzeResultWithFinal
+      ? analyzeResultWithFinal.aggregated.documents.map((d) => {
+          const att = docAttachments.find((a) => a.file.name === d.fileName);
+          return {
+            documentId: d.documentId,
+            sourceType: d.sourceType,
+            fileName: d.fileName,
+            mimeType: att?.file.type || null,
+            sizeBytes: att?.file.size ?? null,
+          };
+        })
+      : docAttachments.map((a, i) => ({
+          documentId: `pending:${i}:${a.file.name}`,
+          sourceType:
+            a.kind === "pdf" ? "PDF" : ("XLSX" as const),
+          fileName: a.file.name,
+          mimeType: a.file.type || null,
+          sizeBytes: a.file.size,
+        }));
+
+    return { dxfParts, emails, inputDocuments };
+  }, [
+    registryItems,
+    body,
+    subject,
+    analyzeResultWithFinal,
+    docAttachments,
+  ]);
+
   const phaseLabel = useMemo(() => {
     switch (uiPhase) {
       case "reading_dxf":
@@ -481,9 +533,15 @@ export function SimulatedEmailForm() {
             summary={analyzeResultWithFinal.auditSummary}
           />
           <DocumentDxfAuditTable rows={analyzeResultWithFinal.auditRows} />
-          <IntakeDebugPanel result={analyzeResultWithFinal} />
         </section>
       )}
+
+      <section className="space-y-4">
+        <IntakeDebugPanel
+          result={analyzeResultWithFinal}
+          reportContext={debugReportContext}
+        />
+      </section>
 
       <DxfRegistryPreview
         item={previewItem}
