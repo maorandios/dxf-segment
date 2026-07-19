@@ -1,0 +1,429 @@
+"use client";
+
+import { useCallback, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { simpleIntakeActions } from "../sessionStore";
+import { MANUAL_CONFLICT_CONFIRM_HE } from "../types";
+import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
+import { deriveFinalRows, summarizeFinalRows } from "./deriveFinalRows";
+import { prepareVisibleRows } from "./filterFinalRows";
+import { DxfCandidatePicker } from "./DxfCandidatePicker";
+import {
+  SimpleFinalItemCards,
+  SimpleFinalItemsTable,
+} from "./SimpleFinalItemsTable";
+import { SimpleItemDetailsDrawer } from "./SimpleItemDetailsDrawer";
+import { SimpleResultsSummary } from "./SimpleResultsSummary";
+import type {
+  FinalDxfCandidate,
+  FinalFilterId,
+  FinalIntakeRow,
+  FinalSortId,
+} from "./types";
+
+function downloadDebug(debug: Record<string, unknown> | null): void {
+  if (!debug) return;
+  const blob = new Blob([JSON.stringify(debug, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `omega-simple-intake-debug-${debug.runId ?? "run"}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const FILTER_CHIPS: Array<{ id: FinalFilterId; label: string }> = [
+  { id: "ALL", label: "הכול" },
+  { id: "NEEDS_ATTENTION", label: "דורש טיפול" },
+  { id: "READY", label: "מוכן" },
+  { id: "NEEDS_REVIEW", label: "לבדיקה" },
+  { id: "BLOCKED", label: "חסום" },
+  { id: "EXCLUDED", label: "מוחרג" },
+];
+
+export function ResultsReviewScreen() {
+  const session = useSimpleIntakeSession();
+  const [filter, setFilter] = useState<FinalFilterId>("ALL");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<FinalSortId>("DEFAULT");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [pickerId, setPickerId] = useState<string | null>(null);
+  const [pickerSelected, setPickerSelected] = useState<string | null>(null);
+  const [confirmedManual, setConfirmedManual] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [hasLocalEdits, setHasLocalEdits] = useState(false);
+
+  const finalRows = useMemo(
+    () =>
+      deriveFinalRows({
+        resultRows: session.resultRows,
+        dxfParts: session.dxfParts,
+        workbookFilename: session.workbookFile?.name ?? null,
+        snapshot: session.workbookSnapshot,
+        diagnostics: session.matchingDiagnostics,
+        confirmedManualMatchIds: confirmedManual,
+      }),
+    [
+      session.resultRows,
+      session.dxfParts,
+      session.workbookFile?.name,
+      session.workbookSnapshot,
+      session.matchingDiagnostics,
+      confirmedManual,
+    ]
+  );
+
+  const summary = useMemo(() => summarizeFinalRows(finalRows), [finalRows]);
+
+  const visible = useMemo(
+    () =>
+      prepareVisibleRows({
+        rows: finalRows,
+        filter,
+        search,
+        sort,
+      }),
+    [finalRows, filter, search, sort]
+  );
+
+  const detailsRow = useMemo(
+    () => finalRows.find((r) => r.id === detailsId) ?? null,
+    [finalRows, detailsId]
+  );
+  const pickerRow = useMemo(
+    () => finalRows.find((r) => r.id === pickerId) ?? null,
+    [finalRows, pickerId]
+  );
+
+  const allCandidates: FinalDxfCandidate[] = useMemo(
+    () =>
+      session.dxfParts
+        .filter((d) => d.geometryStatus === "VALID")
+        .map((d) => ({
+          dxfId: d.id,
+          partId: d.partId,
+          filename: d.filename,
+          widthMm: d.widthMm,
+          lengthMm: d.lengthMm,
+          widthDifferenceMm: null,
+          lengthDifferenceMm: null,
+        })),
+    [session.dxfParts]
+  );
+
+  const noDxfFilesUploaded = session.dxfParts.length === 0;
+
+  const markEdited = useCallback(() => setHasLocalEdits(true), []);
+
+  function trySelectDxf(resultRowId: string, dxfId: string | null): boolean {
+    if (dxfId == null) {
+      simpleIntakeActions.selectDxf(resultRowId, null);
+      setConfirmedManual((prev) => {
+        const next = new Set(prev);
+        next.delete(resultRowId);
+        return next;
+      });
+      markEdited();
+      return true;
+    }
+    const first = simpleIntakeActions.selectDxf(resultRowId, dxfId);
+    if (first.conflict) {
+      const ok = window.confirm(
+        `${MANUAL_CONFLICT_CONFIRM_HE}\n(שורה ${first.occupyingSourceRow})`
+      );
+      if (!ok) return false;
+      simpleIntakeActions.selectDxf(resultRowId, dxfId, {
+        forceReassign: true,
+      });
+    }
+    setConfirmedManual((prev) => {
+      const next = new Set(prev);
+      next.delete(resultRowId);
+      return next;
+    });
+    markEdited();
+    return true;
+  }
+
+  function handleEditField(
+    id: string,
+    field: "material" | "thicknessMm" | "quantity",
+    value: string | number | null
+  ): void {
+    simpleIntakeActions.updateRowEdits(id, { [field]: value });
+    markEdited();
+  }
+
+  function handleExclude(id: string): void {
+    const row = session.resultRows.find((r) => r.resultRowId === id);
+    if (row?.match.matchedDxfId) {
+      simpleIntakeActions.selectDxf(id, null);
+    }
+    simpleIntakeActions.excludeRow(id, true);
+    setConfirmedManual((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    markEdited();
+  }
+
+  function handleRestore(id: string): void {
+    simpleIntakeActions.excludeRow(id, false);
+    markEdited();
+  }
+
+  function handleRowAction(id: string, action: string): void {
+    if (action === "בחר DXF" || action === "שנה DXF") {
+      const row = finalRows.find((r) => r.id === id);
+      setPickerId(id);
+      setPickerSelected(row?.part.matchedDxfId ?? null);
+      return;
+    }
+    if (action === "אשר התאמה") {
+      setConfirmedManual((prev) => new Set(prev).add(id));
+      markEdited();
+      return;
+    }
+    if (action === "הזן חומר" || action === "הזן עובי" || action === "הזן כמות") {
+      setDetailsId(id);
+      return;
+    }
+    if (action === "צפה בפרטים") {
+      setDetailsId(id);
+      return;
+    }
+    if (action === "החרג מהצעה") {
+      handleExclude(id);
+      return;
+    }
+    if (action === "החזר להצעה") {
+      handleRestore(id);
+    }
+  }
+
+  function confirmPicker(): void {
+    if (!pickerId || !pickerSelected) return;
+    if (trySelectDxf(pickerId, pickerSelected)) {
+      setPickerId(null);
+      setPickerSelected(null);
+    }
+  }
+
+  if (session.resultRows.length === 0) {
+    return (
+      <Card dir="rtl">
+        <CardHeader>
+          <CardTitle>תוצאות</CardTitle>
+          <CardDescription>לא נמצאו שורות חומר בקובץ.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => simpleIntakeActions.analyze()}>
+            נסה שוב
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => simpleIntakeActions.backToFiles()}
+          >
+            החלף קבצים
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4" dir="rtl">
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle>טבלת תוצאות סופית</CardTitle>
+            <CardDescription>
+              {session.workbookFile?.name ?? "קובץ חומרים"}
+              {hasLocalEdits && (
+                <span className="ms-2 text-amber-700 dark:text-amber-300">
+                  · השינויים נשמרים זמנית במסך זה.
+                </span>
+              )}
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => simpleIntakeActions.backToFiles()}
+            >
+              חזרה לקבצים
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => downloadDebug(session.lastDebug)}
+            >
+              הורד JSON לדיבאג
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <SimpleResultsSummary
+            summary={summary}
+            activeFilter={filter}
+            onFilterChange={setFilter}
+            allReady={
+              summary.total > 0 &&
+              summary.ready === summary.total &&
+              summary.needsAttention === 0
+            }
+            needsAttentionCount={summary.needsAttention}
+          />
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              {FILTER_CHIPS.map((chip) => (
+                <Button
+                  key={chip.id}
+                  type="button"
+                  size="sm"
+                  variant={filter === chip.id ? "default" : "outline"}
+                  className={
+                    chip.id === "NEEDS_ATTENTION" && summary.needsAttention > 0
+                      ? "border-amber-500/60"
+                      : undefined
+                  }
+                  onClick={() => setFilter(chip.id)}
+                  aria-pressed={filter === chip.id}
+                >
+                  {chip.label}
+                  {chip.id === "NEEDS_ATTENTION" && (
+                    <span className="ms-1 tabular-nums">
+                      ({summary.needsAttention})
+                    </span>
+                  )}
+                </Button>
+              ))}
+            </div>
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="חיפוש: חלק, DXF, חומר, פרופיל, גיליון…"
+              aria-label="חיפוש פריטים"
+              className="sm:max-w-xs"
+            />
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              מיון
+              <select
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as FinalSortId)}
+                aria-label="מיון שורות"
+              >
+                <option value="DEFAULT">ברירת מחדל</option>
+                <option value="SOURCE">סדר מקור</option>
+                <option value="PART">שם חלק</option>
+                <option value="MATERIAL">חומר</option>
+                <option value="THICKNESS">עובי</option>
+                <option value="QUANTITY">כמות</option>
+                <option value="TOTAL_WEIGHT">משקל כולל</option>
+                <option value="STATUS">סטטוס</option>
+              </select>
+            </label>
+          </div>
+
+          {visible.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              אין פריטים התואמים לסינון הנוכחי.
+            </p>
+          ) : (
+            <>
+              <SimpleFinalItemsTable
+                rows={visible}
+                selectedIds={selectedIds}
+                onToggleSelect={(id) => {
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  });
+                }}
+                onToggleSelectAll={(ids) => {
+                  setSelectedIds((prev) => {
+                    const allOn = ids.every((id) => prev.has(id));
+                    if (allOn) return new Set();
+                    return new Set(ids);
+                  });
+                }}
+                onOpenDetails={setDetailsId}
+                onEditField={handleEditField}
+                onRowAction={handleRowAction}
+                noDxfFilesUploaded={noDxfFilesUploaded}
+              />
+              <SimpleFinalItemCards
+                rows={visible}
+                onOpenDetails={setDetailsId}
+                onEditField={handleEditField}
+                onRowAction={handleRowAction}
+                noDxfFilesUploaded={noDxfFilesUploaded}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <SimpleItemDetailsDrawer
+        row={detailsRow}
+        open={detailsId != null}
+        onClose={() => setDetailsId(null)}
+        onPickDxf={() => {
+          if (!detailsId) return;
+          const row = finalRows.find((r) => r.id === detailsId);
+          setPickerId(detailsId);
+          setPickerSelected(row?.part.matchedDxfId ?? null);
+        }}
+        onConfirmManual={() => {
+          if (!detailsId) return;
+          setConfirmedManual((prev) => new Set(prev).add(detailsId));
+          markEdited();
+        }}
+        onExclude={() => {
+          if (detailsId) handleExclude(detailsId);
+        }}
+        onRestore={() => {
+          if (detailsId) handleRestore(detailsId);
+        }}
+        noDxfFilesUploaded={noDxfFilesUploaded}
+      />
+
+      <DxfCandidatePicker
+        open={pickerId != null}
+        row={pickerRow}
+        selectedId={pickerSelected}
+        onSelect={setPickerSelected}
+        onConfirm={confirmPicker}
+        onCancel={() => {
+          setPickerId(null);
+          setPickerSelected(null);
+        }}
+        allCandidates={allCandidates}
+      />
+    </div>
+  );
+}
+
+/** Exported for tests — re-export helpers. */
+export type { FinalIntakeRow };

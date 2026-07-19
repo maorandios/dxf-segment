@@ -19,15 +19,18 @@ export {
   cellHasExactNormalizedPartId,
 } from "./findExactDxfIdsInWorkbookSnapshot";
 export { checkExactIdExtractionCoverage } from "./checkExactIdExtractionCoverage";
-export {
-  validateSimpleAiResult,
-  buildSourceFieldSummary,
-  buildMissingExplicitFieldDiagnostics,
-} from "./validateAiResult";
+export { validateSimpleAiResult, buildSourceFieldSummary, buildMissingExplicitFieldDiagnostics } from "./validateAiResult";
 export {
   buildSimpleAnalyzeRequestBody,
   buildSimpleAnalyzeUserText,
   analyzeTextContainsDxfData,
 } from "./buildAnalyzeRequest";
 export { normalizePartIdForMatch } from "./normalizePartId";
+export {
+  deriveFinalRows,
+  summarizeFinalRows,
+  ResultsReviewScreen,
+  FIXED_TABLE_COLUMN_HEADERS,
+  resolvePartDisplayName,
+} from "./results";
 export type * from "./types";
