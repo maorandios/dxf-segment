@@ -70,10 +70,16 @@ export type GeometryCorrelationDiagnostics = {
     dimensionRelative: number;
   };
   assignments: GeometryCorrelationAssignment[];
+  /** Explicit reservation states for orphan / ambiguity policy. */
+  reservations?: import("./dxfReservations").DxfReservationRecord[];
+  /** Immutable ambiguity groups for Review / debug. */
+  ambiguityGroups?: import("./canonicalDxfMatch").DxfAmbiguityGroup[];
   candidateMatrixSummary: Array<{
     sourceOccurrenceId: string;
     topCandidates: Array<{ partId: string; score: number; eligible: boolean }>;
   }>;
+  /** Set when DXF matching was skipped due to failed workbook extraction. */
+  skippedReason?: string;
 };
 
 export const GEOMETRY_CORRELATION_THRESHOLDS = {

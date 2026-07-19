@@ -87,6 +87,8 @@ export type QuoteReviewUiState = {
 };
 
 export type QuoteAnalysisState = {
+  /** Unique per analysis attempt — new ID on every retry. */
+  analysisRunId: string | null;
   startedAt: string | null;
   completedAt: string | null;
   /** Immutable once attached — existing AiIntakeAnalyzeSuccess payload. */
@@ -99,6 +101,11 @@ export type QuoteAnalysisState = {
   progressLabel: string | null;
   /** True when sources changed after the attached Review Session was built. */
   isStale: boolean;
+  /**
+   * Developer debug bundle (omega-intake-developer-debug/v1).
+   * Session memory only — never persisted; download on explicit user click.
+   */
+  developerDebug: unknown | null;
 };
 
 export type QuoteSession = {

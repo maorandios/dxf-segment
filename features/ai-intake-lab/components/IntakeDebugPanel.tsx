@@ -15,6 +15,9 @@ import {
   copyTextToClipboard,
   serializeAiIntakeDebugReport,
   summarizeDebugReportStats,
+  downloadOmegaIntakeDeveloperDebug,
+  buildOmegaIntakeDeveloperDebug,
+  DebugRunCollector,
   type AiIntakeDebugReportContext,
 } from "@/lib/ai-intake/debug";
 import type { AiIntakeAnalyzeSuccess } from "@/lib/ai-intake/schemas";
@@ -22,11 +25,13 @@ import type { AiIntakeAnalyzeSuccess } from "@/lib/ai-intake/schemas";
 interface IntakeDebugPanelProps {
   result: AiIntakeAnalyzeSuccess | null;
   reportContext?: AiIntakeDebugReportContext;
+  projectName?: string;
 }
 
 export function IntakeDebugPanel({
   result,
   reportContext,
+  projectName,
 }: IntakeDebugPanelProps) {
   const [detailedOpen, setDetailedOpen] = useState(false);
   const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
@@ -83,6 +88,60 @@ export function IntakeDebugPanel({
       setJsonPreviewOpen(true);
     }
   }, [serializedJson]);
+
+  const handleDownloadDeveloperBundle = useCallback(() => {
+    if (!result) return;
+    try {
+      const collector = new DebugRunCollector();
+      collector.begin("ANALYZE_API");
+      collector.end("ANALYZE_API", "SUCCEEDED", {
+        outputSummary: {
+          openaiCallCount: result.debug?.openaiCallCount ?? null,
+        },
+      });
+      const bundle = buildOmegaIntakeDeveloperDebug({
+        entryPoint: "AI_INTAKE_LAB",
+        quoteId: "ai-intake-lab",
+        projectName: projectName ?? "ai-intake-lab",
+        customerName: "lab",
+        currentStep: null,
+        startedAt: null,
+        completedAt: new Date().toISOString(),
+        sources: (result.aggregated?.documents ?? []).map((d, i) => ({
+          sourceId: d.documentId || `doc:${i}`,
+          fileName: d.fileName,
+          extension: d.fileName.includes(".")
+            ? d.fileName.slice(d.fileName.lastIndexOf("."))
+            : "",
+          mimeType: "",
+          sizeBytes: 0,
+          fingerprint: null,
+          kind: d.sourceType,
+          status: d.status,
+          blockingReason: null,
+        })),
+        collector,
+        analyze: result,
+        reviewSession: null,
+        dxfRegistry: null,
+        analysisErrorHe: null,
+        exception: null,
+      });
+      downloadOmegaIntakeDeveloperDebug({
+        bundle,
+        projectName: projectName ?? "ai-intake-lab",
+      });
+      setToast({
+        kind: "success",
+        message: "קובץ JSON מפתחים הורד",
+      });
+    } catch {
+      setToast({
+        kind: "error",
+        message: "הורדת קובץ המפתחים נכשלה",
+      });
+    }
+  }, [result, projectName]);
 
   const hasResult = Boolean(result && report && serializedJson);
 
@@ -157,6 +216,19 @@ export function IntakeDebugPanel({
                 ? t("aiIntake.debug.fullReport.copied")
                 : t("aiIntake.debug.fullReport.copy")}
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!result}
+              onClick={handleDownloadDeveloperBundle}
+            >
+              הורד JSON מפתחים
+            </Button>
+            <p className="max-w-[16rem] text-[11px] text-muted-foreground">
+              קובץ המפתחים כולל מבנה קבצים, דוגמאות נתונים ותוצאות ניתוח לצורך
+              אבחון תקלה.
+            </p>
             {!hasResult && (
               <p className="max-w-[16rem] text-xs text-muted-foreground">
                 {t("aiIntake.debug.fullReport.needAnalysis")}

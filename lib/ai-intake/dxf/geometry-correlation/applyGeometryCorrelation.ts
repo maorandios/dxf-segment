@@ -19,6 +19,13 @@ import {
   type GeometryCorrelationDiagnostics,
   type GeometryCorrelationMatchStatus,
 } from "./types";
+import { applyDxfAssignmentToOccurrence } from "./applyDxfAssignmentToOccurrence";
+import { buildDxfReservations } from "./dxfReservations";
+import {
+  buildAmbiguityGroupId,
+  geometryCandidateToCanonical,
+  type DxfAmbiguityGroup,
+} from "./canonicalDxfMatch";
 
 function occurrenceIdOf(row: ExtractedDocumentRow, index: number): string {
   return `doc:${row.documentId}:${row.source.sheetName ?? "?"}:${row.source.rowNumber ?? index}`;
@@ -84,10 +91,45 @@ export function applyGeometryCorrelation(args: {
   documentRows: ExtractedDocumentRow[];
   registry: DxfPartRegistryItem[];
   tableId?: string;
+  /**
+   * When workbook extraction failed with candidate part data, skip matching
+   * and mark DXFs PENDING_SOURCE_EXTRACTION (not orphans).
+   */
+  pendingSourceExtraction?: boolean;
 }): {
   documentRows: ExtractedDocumentRow[];
   diagnostics: GeometryCorrelationDiagnostics;
 } {
+  if (args.pendingSourceExtraction) {
+    const reservations = buildDxfReservations({
+      registry: args.registry.map((r) => ({
+        id: r.id,
+        canonicalPartId: r.canonicalPartId,
+        geometryStatus: r.geometryStatus,
+      })),
+      assignments: [],
+      pendingSourceExtraction: true,
+    });
+    return {
+      documentRows: args.documentRows,
+      diagnostics: {
+        tableId: args.tableId ?? "default",
+        resolverInvocationCount: 0,
+        sourceOccurrenceCount: args.documentRows.length,
+        exactMatchCount: 0,
+        geometryFallbackCount: 0,
+        ambiguousCount: 0,
+        unmatchedCount: args.documentRows.length,
+        invalidDxfCount: 0,
+        reservedExactMatches: [],
+        thresholds: { ...GEOMETRY_CORRELATION_THRESHOLDS },
+        assignments: [],
+        reservations,
+        candidateMatrixSummary: [],
+        skippedReason: "PENDING_SOURCE_EXTRACTION",
+      },
+    };
+  }
   const registryEntries = toDxfMatchRegistryEntries(args.registry);
   const reservedExact = new Set<string>();
   const exactMatchedSources = new Set<string>();
@@ -178,6 +220,8 @@ export function applyGeometryCorrelation(args: {
   let ambiguousCount = 0;
   let unmatchedCount = 0;
   let invalidDxfCount = 0;
+
+  const ambiguityGroups: DxfAmbiguityGroup[] = [];
 
   const nextRows = sources.map((s) => {
     if (s.status === "MATCHED_BY_EXACT_IDENTIFIER") {
@@ -282,6 +326,29 @@ export function applyGeometryCorrelation(args: {
       gap < GEOMETRY_CORRELATION_THRESHOLDS.minScoreGap
     ) {
       ambiguousCount += 1;
+      const eligible = cands.filter((c) => c.eligible).slice(0, 8);
+      const canonicalCands = eligible.map((c, i) =>
+        geometryCandidateToCanonical(c, i + 1)
+      );
+      const ambId = buildAmbiguityGroupId(s.evidence.occurrenceId);
+      ambiguityGroups.push({
+        ambiguityGroupId: ambId,
+        sourceOccurrenceIds: [s.evidence.occurrenceId],
+        candidateRegistryEntryIds: canonicalCands.map((c) => c.registryEntryId),
+        reason: "WINNER_MARGIN_TOO_SMALL",
+        sourceEvidence: {
+          widthMm: s.evidence.widthMm,
+          lengthMm: s.evidence.lengthMm,
+          thicknessMm: s.row.thicknessMm,
+          material: s.row.material,
+          profile: s.row.description,
+          unitWeightKg: s.row.documentGeometry?.unitWeightKg ?? null,
+        },
+        candidates: canonicalCands,
+        status: "UNRESOLVED",
+        selectedRegistryEntryId: null,
+        resolutionDecisionId: null,
+      });
       assignments.push({
         sourceOccurrenceId: s.evidence.occurrenceId,
         status: "AMBIGUOUS_GEOMETRY_MATCH",
@@ -290,10 +357,19 @@ export function applyGeometryCorrelation(args: {
         score: winner?.score ?? pair.score,
         runnerUpScore: runnerUp.score,
         scoreGap: gap,
-        candidates: cands.slice(0, 5),
+        candidates: cands.slice(0, 8),
         reason: "score gap below uniqueness threshold",
       });
-      return s.row;
+      return applyDxfAssignmentToOccurrence({
+        occurrence: s.row,
+        assignment: {
+          matchedDxfPartId: null,
+          matchStatus: "AMBIGUOUS_GEOMETRY_MATCH",
+          matchReason: "AMBIGUOUS_GEOMETRY_MATCH",
+          candidates: canonicalCands,
+          ambiguityGroupId: ambId,
+        },
+      });
     }
 
     // Also ambiguous if two DXFs have identical eligible scores for this source
@@ -301,6 +377,10 @@ export function applyGeometryCorrelation(args: {
 
     geometryFallbackCount += 1;
     const dxf = args.registry.find((r) => r.id === pair.registryEntryId);
+    const geomCands = cands
+      .filter((c) => c.eligible)
+      .slice(0, 5)
+      .map((c, i) => geometryCandidateToCanonical(c, i + 1));
     assignments.push({
       sourceOccurrenceId: s.evidence.occurrenceId,
       status: "MATCHED_BY_GEOMETRY",
@@ -313,13 +393,17 @@ export function applyGeometryCorrelation(args: {
       reason: "UNIQUE_GEOMETRY_MATCH",
     });
 
-    return {
-      ...s.row,
-      matchedDxfPartId: dxf?.canonicalPartId ?? s.row.matchedDxfPartId,
-      // Keep profile descriptor in description; do not overwrite with DXF id as rawPartReference
-      description: s.row.description,
-      notes: [s.row.notes, "matchMethod:GEOMETRY"].filter(Boolean).join("|"),
-    };
+    return applyDxfAssignmentToOccurrence({
+      occurrence: s.row,
+      assignment: {
+        matchedDxfPartId: dxf?.canonicalPartId ?? null,
+        matchedRegistryEntryId: pair.registryEntryId,
+        matchStatus: "MATCHED_BY_GEOMETRY",
+        matchReason: "MATCHED_BY_GEOMETRY",
+        candidates: geomCands,
+        geometryConfidence: pair.score,
+      },
+    });
   });
 
   // Assertion: one DXF → one source
@@ -336,6 +420,16 @@ export function applyGeometryCorrelation(args: {
     }
   }
 
+  const reservations = buildDxfReservations({
+    registry: args.registry.map((r) => ({
+      id: r.id,
+      canonicalPartId: r.canonicalPartId,
+      geometryStatus: r.geometryStatus,
+    })),
+    assignments,
+    reservedExactRegistryIds: [...reservedExact],
+  });
+
   const diagnostics: GeometryCorrelationDiagnostics = {
     tableId: args.tableId ?? "default",
     resolverInvocationCount: 1,
@@ -348,6 +442,8 @@ export function applyGeometryCorrelation(args: {
     reservedExactMatches: [...reservedExact],
     thresholds: { ...GEOMETRY_CORRELATION_THRESHOLDS },
     assignments,
+    reservations,
+    ambiguityGroups,
     candidateMatrixSummary: pending.map((p) => ({
       sourceOccurrenceId: p.evidence.occurrenceId,
       topCandidates: allCandidates

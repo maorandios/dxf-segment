@@ -17,6 +17,7 @@ import { QuoteTable } from "./QuoteTable";
 import { QuoteTableMobileCard } from "./QuoteTableMobileCard";
 import { QuoteEvidencePanel } from "./QuoteEvidencePanel";
 import { QuoteTableEmptyState } from "./QuoteTableEmptyState";
+import { DownloadDeveloperDebugButton } from "../../components/DownloadDeveloperDebugButton";
 
 export function WorkingQuoteTableScreen() {
   const { session } = useQuoteSession();
@@ -115,9 +116,16 @@ export function WorkingQuoteTableScreen() {
             טבלת הצעת מחיר
           </h1>
         </div>
-        <p className="max-w-xs text-xs text-muted-foreground sm:text-end">
-          אישור הטבלה יופעל בשלב הבא
-        </p>
+        <div className="flex max-w-xs flex-col items-stretch gap-2 sm:items-end">
+          <p className="text-xs text-muted-foreground sm:text-end">
+            אישור הטבלה יופעל בשלב הבא
+          </p>
+          <DownloadDeveloperDebugButton
+            developerDebug={session.analysis.developerDebug}
+            projectName={session.details.projectName}
+            size="sm"
+          />
+        </div>
       </header>
 
       <QuoteTableToolbar

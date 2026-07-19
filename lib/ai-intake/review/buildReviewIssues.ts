@@ -77,15 +77,20 @@ export function buildIssuesForRows(args: {
   const actions: ReviewResolutionAction[] = [];
   const active = args.rows.filter((r) => !r.replacedByRowId);
 
-  // Duplicate groups by matched/display part
+  // Duplicate groups by genuine identity only — never profile/descriptor alone.
+  // Prefer: confirmed matched DXF → explicit raw part identifier → occurrence rowId.
   const byPart = new Map<string, ReviewPartRow[]>();
   for (const row of active) {
     if (!row.includeInQuote) continue;
-    const key =
-      row.matchedDxfPartId ??
-      row.displayPartReference ??
-      row.rawPartReferences[0] ??
-      row.rowId;
+    const explicitId =
+      row.dxfMatchDiagnostics?.sourceRawId?.trim() ||
+      ((row.rawPartReferences ?? []).find((r) => r.trim().length > 0) ?? "");
+    // Display labels / profiles are not unique part identities.
+    const key = row.matchedDxfPartId
+      ? `dxf:${row.matchedDxfPartId}`
+      : explicitId
+        ? `id:${explicitId}`
+        : `occ:${row.rowId}`;
     const list = byPart.get(key) ?? [];
     list.push(row);
     byPart.set(key, list);
@@ -175,10 +180,18 @@ export function buildIssuesForRows(args: {
     const label = partLabel(row);
     if (!row.includeInQuote) continue;
 
-    // DXF identity match (canonical contract)
+    // DXF identity / geometry match (canonical contract)
     if (row.dxfMatchStatus === "AMBIGUOUS") {
+      const isGeometryAmbiguity =
+        row.dxfMatch?.reason === "AMBIGUOUS_GEOMETRY_MATCH" ||
+        row.dxfMatchDiagnostics?.finalReason === "AMBIGUOUS_GEOMETRY_MATCH" ||
+        row.dxfCandidates.some(
+          (c) => c.reason === "AMBIGUOUS_GEOMETRY_MATCH"
+        );
       const issue = makeIssue({
-        code: "AMBIGUOUS_DXF_IDENTITY",
+        code: isGeometryAmbiguity
+          ? "AMBIGUOUS_DXF_MATCH"
+          : "AMBIGUOUS_DXF_IDENTITY",
         rowIds: [row.rowId],
         severity: "BLOCKING",
         partLabelOverride: label,
@@ -188,7 +201,7 @@ export function buildIssuesForRows(args: {
         const act = makeAction({
           issueId: issue.issueId,
           type: "SELECT_DXF_MATCH",
-          label: `בחר ${cand.partId}`,
+          label: `בחר DXF · ${cand.partId}`,
           recommended: false,
           appliesToRowIds: [row.rowId],
           payload: {
@@ -196,6 +209,11 @@ export function buildIssuesForRows(args: {
             partId: cand.partId,
             fileName: cand.fileName,
             registryEntryId: cand.registryEntryId ?? null,
+            ambiguityGroupId:
+              (row.dxfMatch as { ambiguityGroupId?: string | null })
+                ?.ambiguityGroupId ?? null,
+            decisionType: "SELECT_DXF_CANDIDATE",
+            score: cand.score,
           },
         });
         actions.push(act);
@@ -205,12 +223,35 @@ export function buildIssuesForRows(args: {
       row.dxfMatchStatus === "UNMATCHED" ||
       row.matchedDxfPartId == null
     ) {
+      const noId =
+        row.dxfMatchDiagnostics?.sourceRawId == null &&
+        (row.dxfMatchDiagnostics?.finalReason === "UNMATCHED_NO_IDENTIFIER" ||
+          row.dxfMatchDiagnostics?.finalReason ===
+            "UNMATCHED_INSUFFICIENT_GEOMETRY" ||
+          row.dxfMatchDiagnostics?.finalReason ===
+            "UNMATCHED_GEOMETRY_MISMATCH" ||
+          (row.rawPartReferences ?? []).every((r) => !r.trim()));
       const issue = makeIssue({
         code: "MISSING_DXF_MATCH",
         rowIds: [row.rowId],
         severity: "BLOCKING",
         partLabelOverride: label,
+        detail: noId
+          ? row.dxfMatchDiagnostics?.finalReason ?? "UNMATCHED_NO_IDENTIFIER"
+          : undefined,
       });
+      // Override Hebrew for no-ID cases so we don't say "identical identifier"
+      if (noId) {
+        issue.title = "לא נמצא DXF מתאים";
+        issue.message =
+          row.dxfMatchDiagnostics?.finalReason ===
+          "UNMATCHED_INSUFFICIENT_GEOMETRY"
+            ? "אין מספיק מידות מקור להתאמת DXF."
+            : row.dxfMatchDiagnostics?.finalReason ===
+                "UNMATCHED_GEOMETRY_MISMATCH"
+              ? "מידות המקור אינן תואמות לאף קובץ DXF זמין."
+              : "לא נמצא קובץ DXF תואם למידות החלק.";
+      }
       issues.push(issue);
       const suggestions = row.dxfSuggestions ?? [];
       for (const sug of suggestions.slice(0, 8)) {
@@ -272,9 +313,10 @@ export function buildIssuesForRows(args: {
       issues.push(issue);
     }
 
-    // Quantity
+    // Quantity — genuine missing only (proposedValue present means value was extracted)
     if (
-      row.quantity.state === "MISSING" ||
+      row.quantity.state === "MISSING" &&
+      row.quantity.proposedValue == null &&
       row.quantity.currentValue == null
     ) {
       const issue = makeIssue({
@@ -332,9 +374,10 @@ export function buildIssuesForRows(args: {
       }
     }
 
-    // Thickness
+    // Thickness — genuine missing only
     if (
-      row.thicknessMm.state === "MISSING" ||
+      row.thicknessMm.state === "MISSING" &&
+      row.thicknessMm.proposedValue == null &&
       row.thicknessMm.currentValue == null
     ) {
       const issue = makeIssue({
@@ -407,9 +450,11 @@ export function buildIssuesForRows(args: {
       }
     }
 
-    // Material
+    // Material — genuine missing only
     if (
-      row.material.state === "MISSING" ||
+      row.material.state === "MISSING" &&
+      (row.material.proposedValue == null ||
+        !String(row.material.proposedValue).trim()) &&
       !row.material.currentValue?.trim()
     ) {
       const issue = makeIssue({

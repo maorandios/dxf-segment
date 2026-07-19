@@ -151,7 +151,10 @@ export function QuoteTableRow(props: {
         {formatMassKg(row.totalWeightKg)}
       </td>
       <td className="px-2 py-2">
-        <QuoteRowStatusBadge status={row.presentationStatus} />
+        <QuoteRowStatusBadge
+          status={row.presentationStatus}
+          labelOverride={row.statusLabelOverrideHe}
+        />
       </td>
       <td
         className="px-2 py-2 text-center"

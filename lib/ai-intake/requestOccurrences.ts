@@ -1,5 +1,6 @@
 import { normalizePartId } from "./normalizePartId";
 import { hasBlockingGeometryIssue } from "./compareDocumentDxfGeometry";
+import { decodeGeometryCandidatesNote } from "./dxf/geometry-correlation/canonicalDxfMatch";
 import type {
   DuplicateOccurrenceStatus,
   DuplicateUserAction,
@@ -72,6 +73,23 @@ export function documentRowToOccurrence(
   row: ExtractedDocumentRow,
   pdfItemIndex?: number
 ): RequestPartOccurrence {
+  const notes = row.notes ?? "";
+  const matchMethod: RequestPartOccurrence["matchMethod"] =
+    notes.includes("matchMethod:AMBIGUOUS_GEOMETRY")
+      ? "AMBIGUOUS_GEOMETRY"
+      : notes.includes("matchMethod:GEOMETRY")
+        ? "GEOMETRY"
+        : row.matchedDxfPartId && row.rawPartReference
+          ? "EXACT"
+          : null;
+
+  const fromField = row.geometryCandidates as
+    | RequestPartOccurrence["geometryCandidates"]
+    | null
+    | undefined;
+  const fromNotes = decodeGeometryCandidatesNote(notes);
+  const ambMatch = notes.match(/ambiguityGroupId:([^|]+)/);
+
   return {
     occurrenceId: buildOccurrenceId(row, pdfItemIndex),
     matchedDxfPartId: row.matchedDxfPartId,
@@ -81,6 +99,15 @@ export function documentRowToOccurrence(
     material: row.material,
     description: row.description,
     action: row.action,
+    matchMethod,
+    geometryCandidates: (fromField && fromField.length > 0
+      ? fromField
+      : fromNotes.length > 0
+        ? fromNotes
+        : null) as RequestPartOccurrence["geometryCandidates"],
+    ambiguityGroupId:
+      row.ambiguityGroupId ?? (ambMatch?.[1] ?? null),
+    matchReason: row.matchReason ?? null,
     source: {
       documentId: row.documentId,
       type: row.source.type,

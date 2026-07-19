@@ -60,6 +60,7 @@ function touch(session: QuoteSession): QuoteSession {
 
 function emptyAnalysis(): QuoteAnalysisState {
   return {
+    analysisRunId: newId(),
     startedAt: null,
     completedAt: null,
     result: null,
@@ -68,6 +69,7 @@ function emptyAnalysis(): QuoteAnalysisState {
     error: null,
     progressLabel: null,
     isStale: false,
+    developerDebug: null,
   };
 }
 
@@ -405,6 +407,7 @@ export const quoteSessionActions = {
     result: unknown;
     reviewSession?: IntakeReviewSession | null;
     dxfRegistry?: unknown | null;
+    developerDebug?: unknown | null;
   }): void {
     const session = state.session;
     if (!session) return;
@@ -418,6 +421,14 @@ export const quoteSessionActions = {
       args.reviewSession && isValidReviewSession(args.reviewSession)
         ? args.reviewSession
         : null;
+    let frozenDebug: unknown = args.developerDebug ?? null;
+    if (frozenDebug != null) {
+      try {
+        frozenDebug = Object.freeze(structuredClone(frozenDebug));
+      } catch {
+        frozenDebug = Object.freeze(frozenDebug as object);
+      }
+    }
     setSession(
       touch({
         ...session,
@@ -429,6 +440,7 @@ export const quoteSessionActions = {
             : s
         ),
         analysis: {
+          analysisRunId: session.analysis.analysisRunId,
           startedAt: session.analysis.startedAt,
           completedAt: nowIso(),
           result: frozenResult,
@@ -437,15 +449,24 @@ export const quoteSessionActions = {
           error: null,
           progressLabel: null,
           isStale: false,
+          developerDebug: frozenDebug,
         },
         reviewUi: defaultQuoteReviewUi(),
       })
     );
   },
 
-  failAnalysis(error: string): void {
+  failAnalysis(error: string, developerDebug?: unknown | null): void {
     const session = state.session;
     if (!session) return;
+    let frozenDebug: unknown = developerDebug ?? session.analysis.developerDebug;
+    if (frozenDebug != null) {
+      try {
+        frozenDebug = Object.freeze(structuredClone(frozenDebug));
+      } catch {
+        frozenDebug = Object.freeze(frozenDebug as object);
+      }
+    }
     setSession(
       touch({
         ...session,
@@ -465,6 +486,7 @@ export const quoteSessionActions = {
           reviewSession: null,
           dxfRegistry: session.analysis.dxfRegistry,
           isStale: false,
+          developerDebug: frozenDebug,
         },
         reviewUi: defaultQuoteReviewUi(),
       })

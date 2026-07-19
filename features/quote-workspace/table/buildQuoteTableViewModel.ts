@@ -83,6 +83,14 @@ export function buildQuoteTableRowViewModel(
   const unitWeightKg = getSafeSourceMassKg(row, "unitWeightKg");
   const totalWeightKg = getSafeSourceMassKg(row, "totalWeightKg");
 
+  const requiresDxfChoice = issues.some(
+    (i) =>
+      i.code === "AMBIGUOUS_DXF_MATCH" || i.code === "AMBIGUOUS_DXF_IDENTITY"
+  );
+  const statusLabelOverrideHe = requiresDxfChoice
+    ? "נדרשת בחירת DXF"
+    : null;
+
   return {
     rowId: row.rowId,
     displayOrder: row.displayOrder,
@@ -97,8 +105,14 @@ export function buildQuoteTableRowViewModel(
     thicknessMm: row.thicknessMm.currentValue,
     thicknessProposed: row.thicknessMm.proposedValue,
     thicknessEdited: row.thicknessMm.editedByUser,
-    widthMm: row.dxfGeometry?.widthMm ?? null,
-    heightMm: row.dxfGeometry?.heightMm ?? null,
+    widthMm:
+      row.dxfGeometry?.widthMm ??
+      (row.documentEvidence as { widthMm?: number | null } | null)?.widthMm ??
+      null,
+    heightMm:
+      row.dxfGeometry?.heightMm ??
+      (row.documentEvidence as { heightMm?: number | null } | null)?.heightMm ??
+      null,
     plateAreaMm2: row.dxfGeometry?.plateAreaMm2 ?? null,
     plateAreaM2: getPlateAreaM2FromRow(row),
     unitWeightKg,
@@ -106,6 +120,13 @@ export function buildQuoteTableRowViewModel(
     massDisplaySafe: unitWeightKg != null || totalWeightKg != null,
     includeInQuote: row.includeInQuote,
     presentationStatus,
+    statusLabelOverrideHe,
+    dxfMatchStatus: row.dxfMatchStatus ?? null,
+    dxfMatchMethod:
+      (row.dxfMatch as { method?: string | null } | null)?.method ?? null,
+    dxfMatchReason: row.dxfMatch?.reason ?? row.dxfMatchDiagnostics?.finalReason ?? null,
+    dxfCandidateCount: row.dxfCandidates?.length ?? 0,
+    requiresDxfChoice,
     fieldIssueKeys,
     blockingIssueCount: issues.filter((i) => i.severity === "BLOCKING").length,
     warningIssueCount: issues.filter((i) => i.severity === "WARNING").length,

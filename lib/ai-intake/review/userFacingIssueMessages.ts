@@ -28,10 +28,11 @@ export const USER_FACING_ISSUE_MESSAGES: Record<
     title: "נמצאו כמה קובצי DXF עם אותו מזהה",
     message: () => "יש לבחור איזה קובץ להשתמש עבור החלק.",
   },
-  /** @deprecated use AMBIGUOUS_DXF_IDENTITY */
+  /** Geometry ambiguity — candidates share dimensions, not identity collision. */
   AMBIGUOUS_DXF_MATCH: {
-    title: "נמצאו כמה קובצי DXF עם אותו מזהה",
-    message: () => "יש לבחור איזה קובץ להשתמש עבור החלק.",
+    title: "נדרשת בחירת DXF",
+    message: () =>
+      "נמצאו מספר קובצי DXF שמתאימים למידות החלק. יש לבחור את הקובץ הנכון.",
   },
   DXF_CANONICAL_COLLISION: {
     title: "נמצאו כמה קובצי DXF עם אותו מזהה",

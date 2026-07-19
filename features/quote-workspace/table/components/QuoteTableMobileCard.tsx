@@ -33,7 +33,10 @@ export function QuoteTableMobileCard(props: {
       >
         <div className="mb-2 flex items-start justify-between gap-2">
           <p className="font-semibold">{row.displayPartReference}</p>
-          <QuoteRowStatusBadge status={row.presentationStatus} />
+          <QuoteRowStatusBadge
+            status={row.presentationStatus}
+            labelOverride={row.statusLabelOverrideHe}
+          />
         </div>
         <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
           <div>

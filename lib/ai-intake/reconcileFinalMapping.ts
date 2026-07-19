@@ -557,8 +557,11 @@ export function reconcileFinalMapping(args: {
   acceptedFacts: ExtractedRequestFact[];
   unresolvedItems: UnresolvedRequestItem[];
   documentRows?: ExtractedDocumentRow[];
+  /** Registry entry IDs that must not be emitted as orphan / DXF_NOT_REQUESTED rows. */
+  suppressOrphanRegistryEntryIds?: Iterable<string>;
 }): { rows: FinalIntakeMappingRow[]; warnings: string[] } {
   const { registry, acceptedFacts, unresolvedItems, documentRows } = args;
+  const suppressOrphans = new Set(args.suppressOrphanRegistryEntryIds ?? []);
   const byCanonical = registryByCanonical(registry);
   const factGroups = new Map<string, ExtractedRequestFact[]>();
   const ungroupedFacts: ExtractedRequestFact[] = [];
@@ -608,6 +611,14 @@ export function reconcileFinalMapping(args: {
     ...factGroups.keys(),
     ...occurrencesByPart.keys(),
   ]);
+
+  // Held / reserved DXFs must not become independent orphan quote rows.
+  for (const [canonical, items] of byCanonical) {
+    const allSuppressed = items.every((item) => suppressOrphans.has(item.id));
+    if (allSuppressed && !factGroups.has(canonical) && !occurrencesByPart.has(canonical)) {
+      allKeys.delete(canonical);
+    }
+  }
 
   for (const partId of allKeys) {
     handledCanonical.add(partId);

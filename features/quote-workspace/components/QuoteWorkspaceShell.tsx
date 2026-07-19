@@ -41,13 +41,17 @@ async function runAnalysisOnce(): Promise<void> {
       sources: current.sources,
     });
     if (!result.ok) {
-      quoteSessionActions.failAnalysis(result.errorHe);
+      quoteSessionActions.failAnalysis(
+        result.errorHe,
+        result.developerDebug
+      );
       return;
     }
     quoteSessionActions.completeAnalysis({
       result: result.analyze,
       reviewSession: result.reviewSession,
       dxfRegistry: result.dxfRegistry,
+      developerDebug: result.developerDebug,
     });
   } catch {
     quoteSessionActions.failAnalysis(

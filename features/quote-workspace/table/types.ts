@@ -79,6 +79,13 @@ export type QuoteTableRowViewModel = {
   massDisplaySafe: boolean;
   includeInQuote: boolean;
   presentationStatus: QuoteTablePresentationStatus;
+  /** Human-facing status override for DXF ambiguity. */
+  statusLabelOverrideHe: string | null;
+  dxfMatchStatus: string | null;
+  dxfMatchMethod: string | null;
+  dxfMatchReason: string | null;
+  dxfCandidateCount: number;
+  requiresDxfChoice: boolean;
   fieldIssueKeys: Partial<Record<QuoteTableColumnKey, true>>;
   blockingIssueCount: number;
   warningIssueCount: number;

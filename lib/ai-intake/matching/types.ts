@@ -24,10 +24,15 @@ export type DxfMatchSuggestion = {
 
 export type DxfIdentityMatchReason =
   | "EXACT_CANONICAL_MATCH"
+  | "MATCHED_BY_GEOMETRY"
+  | "AMBIGUOUS_GEOMETRY_MATCH"
   | "CANONICAL_ID_COLLISION"
   | "NO_EXACT_CANONICAL_MATCH"
   | "SOURCE_IDENTIFIER_INVALID"
-  | "USER_SELECTED_DXF";
+  | "USER_SELECTED_DXF"
+  | "UNMATCHED_NO_IDENTIFIER"
+  | "UNMATCHED_INSUFFICIENT_GEOMETRY"
+  | "UNMATCHED_GEOMETRY_MISMATCH";
 
 export type DxfIdentityMatchResult =
   | {
@@ -39,20 +44,25 @@ export type DxfIdentityMatchResult =
       matchedPartId: string;
       candidates: [DxfMatchCandidate];
       suggestions: DxfMatchSuggestion[];
-      reason: "EXACT_CANONICAL_MATCH" | "USER_SELECTED_DXF";
+      reason: "EXACT_CANONICAL_MATCH" | "USER_SELECTED_DXF" | "MATCHED_BY_GEOMETRY";
       geometryStatus: DxfMatchCandidate["geometryStatus"];
+      method?: "EXACT_IDENTIFIER" | "GEOMETRY" | "SAFE_IDENTIFIER_RULE";
+      ambiguityGroupId?: string | null;
     }
   | {
       status: "AMBIGUOUS";
       sourceRawId: string | null;
-      sourceCanonicalId: string;
+      sourceCanonicalId: string | null;
       matchedCanonicalId: null;
       matchedRegistryEntryId: null;
       matchedPartId: null;
       candidates: DxfMatchCandidate[];
       suggestions: DxfMatchSuggestion[];
-      reason: "CANONICAL_ID_COLLISION";
+      reason: "CANONICAL_ID_COLLISION" | "AMBIGUOUS_GEOMETRY_MATCH";
       geometryStatus: null;
+      method?: "GEOMETRY" | "EXACT_IDENTIFIER" | null;
+      ambiguityGroupId?: string | null;
+      candidateScores?: Array<{ registryEntryId: string; score: number }>;
     }
   | {
       status: "UNMATCHED";
@@ -63,8 +73,14 @@ export type DxfIdentityMatchResult =
       matchedPartId: null;
       candidates: [];
       suggestions: DxfMatchSuggestion[];
-      reason: "NO_EXACT_CANONICAL_MATCH";
+      reason:
+        | "NO_EXACT_CANONICAL_MATCH"
+        | "UNMATCHED_NO_IDENTIFIER"
+        | "UNMATCHED_INSUFFICIENT_GEOMETRY"
+        | "UNMATCHED_GEOMETRY_MISMATCH";
       geometryStatus: null;
+      method?: null;
+      ambiguityGroupId?: string | null;
     }
   | {
       status: "INVALID_SOURCE_ID";
@@ -77,6 +93,8 @@ export type DxfIdentityMatchResult =
       suggestions: [];
       reason: "SOURCE_IDENTIFIER_INVALID";
       geometryStatus: null;
+      method?: null;
+      ambiguityGroupId?: string | null;
     };
 
 export type DxfMatchDiagnostics = {

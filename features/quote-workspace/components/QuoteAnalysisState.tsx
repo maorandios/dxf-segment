@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import type { QuoteSession } from "../types";
 import { selectAnalysisSummary } from "../quoteSessionSelectors";
+import { DownloadDeveloperDebugButton } from "./DownloadDeveloperDebugButton";
 
 const FALLBACK_LABELS = [
   "קורא את הקבצים",
@@ -128,6 +129,11 @@ export function QuoteAnalysisComplete(props: {
             עבור לטבלה
           </Button>
         </div>
+        <DownloadDeveloperDebugButton
+          developerDebug={props.session.analysis.developerDebug}
+          projectName={props.session.details.projectName}
+          className="pt-1"
+        />
         <p className="text-center text-xs text-muted-foreground">
           התוצאה נשמרת בסשן הנוכחי בלבד ומוכנה לבדיקה בטבלה.
         </p>
@@ -141,18 +147,40 @@ export function QuoteAnalysisFailed(props: {
   onRetry: () => void;
   onBackToFiles: () => void;
 }) {
+  const rawError = props.session.analysis.error ?? "";
+  const isUnsafe = rawError.startsWith("UNSAFE_RESULT");
+  const isWorkbookFail =
+    rawError.includes("WORKBOOK_DIRECT") ||
+    rawError.includes("WORKBOOK_PARSE") ||
+    rawError.includes("FAILURE_STAGE") ||
+    rawError.includes("כשל בניתוח קובץ");
+
+  const unsafeBody =
+    "זוהתה אי־עקביות פנימית במהלך עיבוד הנתונים. הקבצים נשמרו בסשן הנוכחי וניתן לנסות שוב או להוריד JSON מפתחים לצורך אבחון.";
+  const workbookBody =
+    "לא ניתן היה להשלים את קריאת הקובץ. הקבצים נשמרו בסשן הנוכחי וניתן לנסות שוב או להוריד JSON מפתחים לצורך אבחון.";
+
+  const title = isUnsafe
+    ? "לא ניתן להציג את הטבלה בבטחה"
+    : isWorkbookFail
+      ? "כשל בניתוח קובץ ה-Excel"
+      : "לא הצלחנו להשלים את ניתוח החומר";
+
+  const description = isUnsafe
+    ? rawError.includes(":")
+      ? rawError.slice(rawError.indexOf(":") + 1)
+      : unsafeBody
+    : isWorkbookFail
+      ? workbookBody
+      : rawError || "אירעה שגיאה במהלך הניתוח. ניתן לנסות שוב.";
+
   return (
     <Card className="mx-auto w-full max-w-lg border-0 shadow-sm">
       <CardHeader className="text-center space-y-2">
-        <CardTitle className="text-xl">
-          לא הצלחנו להשלים את ניתוח החומר
-        </CardTitle>
-        <CardDescription>
-          {props.session.analysis.error ??
-            "אירעה שגיאה במהלך הניתוח. ניתן לנסות שוב."}
-        </CardDescription>
+        <CardTitle className="text-xl">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           <Button type="button" variant="outline" onClick={props.onBackToFiles}>
             חזור לקבצים
@@ -161,6 +189,10 @@ export function QuoteAnalysisFailed(props: {
             נסה שוב
           </Button>
         </div>
+        <DownloadDeveloperDebugButton
+          developerDebug={props.session.analysis.developerDebug}
+          projectName={props.session.details.projectName}
+        />
       </CardContent>
     </Card>
   );

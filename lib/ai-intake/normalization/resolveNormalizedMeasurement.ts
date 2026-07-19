@@ -200,6 +200,35 @@ export function resolveNormalizedMeasurement(args: {
     }
   }
 
+  // 1b. Compatible AS_STATED / field-level stated unit — do not reopen inference
+  const stated =
+    raw.statedUnit ??
+    (profile?.resolutionStatus === "AS_STATED"
+      ? profile.statedHeaderUnit
+      : null);
+  if (
+    stated &&
+    (raw.statedUnit != null || profile?.resolutionStatus === "AS_STATED")
+  ) {
+    const conv = convertToNormalized(value, stated, kind);
+    if (conv.ok) {
+      const c: UnitResolutionCandidate = {
+        sourceUnit: stated,
+        normalizedValue: conv.value,
+        score: 0.95,
+        evidence: [`asStatedExplicitUnit:${stated}`],
+      };
+      return makeResolved(
+        raw,
+        c,
+        "AS_STATED",
+        "Validated field-level explicit unit",
+        issues,
+        [c]
+      );
+    }
+  }
+
   const unitSet = new Set<MeasurementUnit>(candidateUnitsForKind(kind));
   if (raw.statedUnit) unitSet.add(raw.statedUnit);
   if (profile?.statedHeaderUnit) unitSet.add(profile.statedHeaderUnit);

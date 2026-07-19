@@ -183,6 +183,41 @@ export function QuoteEvidencePanel(props: {
               <dt className="text-muted-foreground">סטטוס</dt>
               <dd>{dxfMatchStatusLabelHe(match.status)}</dd>
             </div>
+            {row.dxfMatchReason && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">סיבת התאמה</dt>
+                <dd className="text-end text-xs">{row.dxfMatchReason}</dd>
+              </div>
+            )}
+            {row.dxfMatchMethod && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">שיטה</dt>
+                <dd>{row.dxfMatchMethod}</dd>
+              </div>
+            )}
+            {match.status === "AMBIGUOUS" && row.dxfCandidateCount > 0 && (
+              <div className="space-y-2 pt-1">
+                <p className="text-xs text-muted-foreground">
+                  מועמדים ({row.dxfCandidateCount}) · בחר DXF
+                </p>
+                <ul className="space-y-1.5">
+                  {source.dxfCandidates.map((c) => (
+                    <li
+                      key={c.registryEntryId ?? c.partId}
+                      className="rounded-[8px] bg-white/[0.04] px-2 py-1.5 text-xs"
+                    >
+                      <div className="font-medium">{c.partId}</div>
+                      <div className="text-muted-foreground">{c.fileName}</div>
+                      {typeof c.score === "number" && (
+                        <div className="tabular-nums text-muted-foreground">
+                          ציון {c.score.toFixed(3)}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {match.status === "MATCHED" &&
               row.displayPartReference &&
               !source.rawPartReferences.includes(row.displayPartReference) && (

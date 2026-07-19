@@ -6,9 +6,10 @@ import type { QuoteTablePresentationStatus } from "../types";
 
 export function QuoteRowStatusBadge(props: {
   status: QuoteTablePresentationStatus;
+  labelOverride?: string | null;
   className?: string;
 }) {
-  const label = presentationStatusLabelHe(props.status);
+  const label = props.labelOverride ?? presentationStatusLabelHe(props.status);
   return (
     <span
       className={cn(

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { expandExtractionToFacts } from "./expandExtractionToFacts";
+import { classifySourceForProviderExtraction } from "./provider/classifySourceForProviderExtraction";
 import {
   emailExtractionSchema,
   singleDocumentExtractionSchema,
@@ -18,20 +19,23 @@ import {
 import { validateSingleDocumentExtraction } from "./validateDocumentExtraction";
 import { normalizeEmailFacts } from "./emailFactNormalize";
 import {
-  aiWorkbookMappingResultSchema,
   buildWorkbookSnapshot,
-  compactWorkbookForModel,
-  reconstructRawRows,
   normalizedPartRowToExtractedDocumentRow,
-  rawDocumentPartRowToExtractedDocumentRow,
-  validateMappingCoverage,
-  enrichColumnHeadersFromSnapshot,
-  classifyWorkbookMetadataRows,
-  applyDeterministicRowRolesToMapping,
   normalizeWorkbookPartRows,
-  type AiWorkbookMappingResult,
 } from "./normalization";
-import { tryFixedWidthWorkbookReconstruction } from "./workbook/fixed-width";
+import { interpretWorkbook } from "./workbook/interpreter";
+import { workbookInterpreterDebugSummary } from "./workbook/interpreter/workbookInterpreterDebug";
+import { planToSyntheticMapping } from "./workbook/interpreter/planToSyntheticMapping";
+import {
+  buildDirectWorkbookExtractionDebugDto,
+  directExtractionToSyntheticMapping,
+  extractWorkbookDirect,
+  resolveWorkbookExtractionMode,
+} from "./workbook/direct-extraction";
+import type { WorkbookSnapshot } from "./normalization/types";
+import type { RawDocumentPartRow } from "./normalization/types";
+import type { AiWorkbookMappingResult } from "./normalization/types";
+
 
 export type DocumentFileInput = {
   documentId: string;
@@ -94,21 +98,6 @@ MATCHING:
 - No chain-of-thought. Keep excerpts short (<240 chars).
 
 Do NOT invent a file name. Location fields describe where the data appears inside the attached file.`;
-
-const WORKBOOK_MAPPING_SYSTEM_INSTRUCTIONS = `You map table structure in ONE customer spreadsheet for a CNC plate quoting lab.
-
-CRITICAL:
-- You do NOT extract or invent cell values. The server already has the authoritative workbook cells.
-- Return ONLY structural mapping: sheets, tables, column letters, header rows, row roles, unmapped non-empty rows.
-- Multiple tables per sheet are allowed (stacked, side-by-side, or separated by subtotals).
-- Every non-empty row should appear either in a table's rowRoles OR in unmappedNonEmptyRows.
-- Row roles are advisory: PART, SUBTOTAL, TOTAL, HEADER, NOTE, EMPTY, UNKNOWN.
-- columns fields are Excel column letters (e.g. "B", "C"), never numeric values.
-- columnHeaders.statedUnitText is the unit text from the header when visible (e.g. "mm", "m2", "kg").
-- Do NOT copy quantities, thicknesses, materials, or any cell values into the output.
-- Do NOT invent a file name.
-- matched DXF IDs are NOT returned here; the server matches from part-reference cells.
-- No chain-of-thought.`;
 
 const EMAIL_SYSTEM_INSTRUCTIONS = `You extract RFQ instructions from a customer email for a CNC plate quoting lab.
 
@@ -504,317 +493,355 @@ async function extractSpreadsheetDocument(args: {
   }
 
   const snapshot = parsedSnap.snapshot;
-  const compact = compactWorkbookForModel(snapshot);
   const warnings: string[] = [
     ...snapshot.warnings,
-    ...compact.warnings,
     `WORKBOOK_PARSER_KIND:${snapshot.parserKind}`,
   ];
 
-  // Fixed-width one-cell tables: deterministic reconstruction (no OpenAI mapping).
-  const fixedWidth = tryFixedWidthWorkbookReconstruction({
-    snapshot,
-    documentId: descriptor.documentId,
-    registry: args.registry,
-  });
-  if (fixedWidth.activated && fixedWidth.result) {
-    warnings.push(...fixedWidth.result.warnings);
-    const adaptedRows = fixedWidth.result.partRows.map((r) =>
-      rawDocumentPartRowToExtractedDocumentRow(r)
-    );
-    const validated = validateSingleDocumentExtraction(
-      {
-        ...descriptor,
-        rows: dedupeExactSameDocumentRows(adaptedRows),
-        unresolvedItems: [],
-        warnings,
-      },
-      args.registry
-    );
-    const workbookEvidence: WorkbookEvidenceDebug = {
-      parserKind: snapshot.parserKind,
-      snapshot: {
-        documentId: snapshot.documentId,
-        fileName: snapshot.fileName,
-        parserKind: snapshot.parserKind,
-        sheets: snapshot.sheets.map((s) => ({
-          sheetName: s.sheetName,
-          usedRange: s.usedRange,
-          mergedRanges: s.mergedRanges,
-          hidden: s.hidden,
-          cellCount: s.cells.length,
-          cells: s.cells,
-        })),
-        warnings: snapshot.warnings,
-      },
-      mapping: {
-        sheets: fixedWidth.tables.map((t) => ({
-          sheetName: t.detection.sheetName,
-          tables: [
-            {
-              tableId: `fw:${t.detection.sheetName}:${t.detection.headerRowNumber}`,
-              tableRange: null,
-              headerRowNumbers: t.detection.headerRowNumber
-                ? [t.detection.headerRowNumber]
-                : [],
-              firstDataRow: t.reconstructedRows[0]?.rowNumber ?? null,
-              lastDataRow:
-                t.reconstructedRows[t.reconstructedRows.length - 1]
-                  ?.rowNumber ?? null,
-              columns: {
-                partReference: null,
-                quantity: null,
-                thickness: null,
-                material: null,
-                width: null,
-                height: null,
-                area: null,
-                totalArea: null,
-                unitWeight: null,
-                totalWeight: null,
-              },
-              columnHeaders: t.detection.headerFields.map((h) => ({
-                columnLetter: t.detection.sourceColumnLetter ?? "A",
-                rawHeaderText: h.rawHeader,
-                detectedMeaning: h.semantic,
-                statedUnitText: null,
-              })),
-              rowRoles: [],
-              warnings: ["FIXED_WIDTH_RECONSTRUCTION"],
-            },
-          ],
-          unmappedNonEmptyRows: [],
-        })),
-      },
-      coverage: {
-        sourceNonEmptyRowCount: adaptedRows.length,
-        accountedNonEmptyRowCount: adaptedRows.length,
-        mappedPartRowCount: adaptedRows.length,
-        mappedHeaderRowCount: fixedWidth.tables.length,
-        mappedSubtotalRowCount: 0,
-        mappedTotalRowCount: 0,
-        mappedNoteRowCount: 0,
-        mappedEmptyRowCount: 0,
-        unknownNonEmptyRowCount: 0,
-        unaccountedNonEmptyRowCount: 0,
-        coverageComplete: true,
-        issues: [],
-        missingRowKeys: [],
-        nonEmptyRowCount: adaptedRows.length,
-        mappedRowCount: adaptedRows.length,
-        unknownRowCount: 0,
-      },
-      rawPartRows: fixedWidth.result.partRows,
-      excludedTotalSubtotalRows: fixedWidth.result.excludedTotalSubtotalRows,
-      unknownRows: fixedWidth.result.unknownRows,
-      hiddenPartRowsRequiringReview:
-        fixedWidth.result.hiddenPartRowsRequiringReview,
-      workbookReconstructionDiagnostics: fixedWidth.diagnostics,
-    };
+  const extractionMode = resolveWorkbookExtractionMode();
+  warnings.push(`WORKBOOK_EXTRACTION_MODE:${extractionMode}`);
 
-    return {
-      documentId: descriptor.documentId,
-      sourceType: descriptor.sourceType,
-      fileName: descriptor.fileName,
-      rows: validated.rows,
-      unresolvedItems: validated.unresolvedItems,
-      warnings: validated.warnings,
-      status: "SUCCESS" as const,
-      errorCode: null,
-      usage: emptyUsage,
-      durationMs: Date.now() - started,
-      workbookEvidence,
-    };
+  if (extractionMode === "AI_DIRECT") {
+    return extractSpreadsheetDocumentDirect({
+      client: args.client,
+      model: args.model,
+      document: args.document,
+      registry: args.registry,
+      descriptor,
+      started,
+      snapshot,
+      warnings,
+    });
   }
 
-  try {
-    const registryJson = JSON.stringify(args.registry, null, 2);
-    const userText = [
-      "Map table structure for the spreadsheet described below.",
-      "Do NOT invent or copy cell values — return column letters and row roles only.",
-      "",
-      `Authoritative source (server-assigned):`,
-      `documentId=${descriptor.documentId}`,
-      `sourceType=${descriptor.sourceType}`,
-      `fileName=${descriptor.fileName}`,
-      `parserKind=${snapshot.parserKind}`,
-      "",
-      "DXF_PART_REGISTRY (for context only — do not invent values):",
-      registryJson,
-      "",
-      "DETERMINISTIC_WORKBOOK_COMPACT (server-parsed cell evidence; use for structure only):",
-      compact.compactJson,
-    ].join("\n");
+  // LEGACY_PLAN: profile → plan → execute → validate (max 2 AI planner calls).
+  return extractSpreadsheetDocumentLegacyPlan({
+    client: args.client,
+    model: args.model,
+    registry: args.registry,
+    descriptor,
+    started,
+    snapshot,
+    warnings,
+  });
+}
 
-    const response = await args.client.responses.parse({
-      model: args.model,
-      reasoning: { effort: "none" },
-      input: [
-        { role: "system", content: WORKBOOK_MAPPING_SYSTEM_INSTRUCTIONS },
-        { role: "user", content: userText },
-      ],
-      text: {
-        format: zodTextFormat(
-          aiWorkbookMappingResultSchema,
-          "ai_workbook_mapping"
-        ),
-      },
-    });
+function buildCoverageFromDirect(args: {
+  snapshot: WorkbookSnapshot;
+  ledger: Array<{ classification: string }>;
+  partRowCount: number;
+}): Record<string, unknown> {
+  void args.snapshot;
+  const meaningful = args.ledger.length;
+  const classified = args.ledger.filter(
+    (e) => e.classification !== "UNPROCESSED"
+  ).length;
+  const count = (c: string) =>
+    args.ledger.filter((e) => e.classification === c).length;
+  return {
+    sourceNonEmptyRowCount: meaningful,
+    accountedNonEmptyRowCount: classified,
+    mappedPartRowCount: args.partRowCount,
+    mappedHeaderRowCount: count("HEADER") + count("REPEATED_HEADER"),
+    mappedSubtotalRowCount: count("SUBTOTAL"),
+    mappedTotalRowCount: count("TOTAL"),
+    mappedNoteRowCount: count("NOTE") + count("FOOTER"),
+    mappedEmptyRowCount: count("BLANK"),
+    unknownNonEmptyRowCount: count("UNPROCESSED") + count("AMBIGUOUS"),
+    unaccountedNonEmptyRowCount: count("UNPROCESSED"),
+    coverageComplete: count("UNPROCESSED") === 0,
+    issues: [],
+    missingRowKeys: [],
+    nonEmptyRowCount: meaningful,
+    mappedRowCount: classified,
+    unknownRowCount: count("UNPROCESSED") + count("AMBIGUOUS"),
+  };
+}
 
-    const durationMs = Date.now() - started;
-    const parsed = response.output_parsed;
-    if (!parsed) {
-      throw Object.assign(new Error("OPENAI_SCHEMA"), { code: "OPENAI_SCHEMA" });
-    }
-    const modelResult = aiWorkbookMappingResultSchema.parse(parsed);
-    let mapping: AiWorkbookMappingResult = {
-      sheets: modelResult.sheets,
-    };
-    mapping = enrichColumnHeadersFromSnapshot(snapshot, mapping);
-    const classified = classifyWorkbookMetadataRows(snapshot, mapping);
-    mapping = classified.mapping;
-    warnings.push(...classified.info);
-    mapping = applyDeterministicRowRolesToMapping(snapshot, mapping);
-
-    const coverage = validateMappingCoverage(snapshot, mapping);
-    if (!coverage.coverageComplete) {
-      warnings.push("WORKBOOK_MAPPING_INCOMPLETE");
-      warnings.push(
-        ...coverage.issues.filter((i) => !i.startsWith("INFO_"))
-      );
-    } else {
-      warnings.push(...coverage.issues.filter((i) => i.startsWith("INFO_")));
-    }
-    if (compact.truncated) {
-      warnings.push("WORKBOOK_MAPPING_LIMIT_EXCEEDED");
-    }
-
-    const reconstructed = reconstructRawRows({
-      snapshot,
-      mapping,
-      registry: args.registry,
-    });
-    // INFO metadata lines stay as info; UNMAPPED inside tables stay as warnings
-    for (const w of reconstructed.warnings) {
-      warnings.push(w);
-    }
-
-    // Checkpoint 5.2 — unit normalization before adapter / geometry comparison
-    const normalized = normalizeWorkbookPartRows({
-      documentId: descriptor.documentId,
-      mapping,
-      partRows: reconstructed.partRows,
-      registry: args.registry,
-    });
-    for (const nr of normalized.normalizedRows) {
-      for (const issue of nr.issues) {
-        if (
-          issue.severity === "WARNING" ||
-          issue.severity === "BLOCKING"
-        ) {
-          const tag = `${issue.code}:${nr.raw.occurrenceId}`;
-          if (!warnings.includes(tag)) warnings.push(tag);
-        }
+function finalizeWorkbookSuccess(args: {
+  descriptor: SourceDocumentDescriptor;
+  started: number;
+  warnings: string[];
+  snapshot: WorkbookSnapshot;
+  mapping: AiWorkbookMappingResult;
+  partRows: RawDocumentPartRow[];
+  registry: SlimRegistryItem[];
+  coverage: unknown;
+  excludedTotalSubtotalRows: unknown[];
+  workbookInterpreterDiagnostics?: unknown;
+  directWorkbookExtraction?: unknown;
+  workbookExtractionMode: "AI_DIRECT" | "LEGACY_PLAN";
+  emptyUsage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+  };
+  skipDxfMatching?: boolean;
+  suppressDxfOrphans?: boolean;
+}): SourceDocumentResult {
+  const normalized = normalizeWorkbookPartRows({
+    documentId: args.descriptor.documentId,
+    mapping: args.mapping,
+    partRows: args.partRows,
+    registry: args.registry,
+  });
+  const warnings = [...args.warnings];
+  for (const nr of normalized.normalizedRows) {
+    for (const issue of nr.issues) {
+      if (issue.severity === "WARNING" || issue.severity === "BLOCKING") {
+        const tag = `${issue.code}:${nr.raw.occurrenceId}`;
+        if (!warnings.includes(tag)) warnings.push(tag);
       }
     }
+  }
 
-    const adaptedRows = normalized.normalizedRows.map((r) =>
-      normalizedPartRowToExtractedDocumentRow(r)
+  const adaptedRows = normalized.normalizedRows.map((r) =>
+    normalizedPartRowToExtractedDocumentRow(r)
+  );
+
+  const validated = validateSingleDocumentExtraction(
+    {
+      ...args.descriptor,
+      rows: dedupeExactSameDocumentRows(adaptedRows),
+      unresolvedItems: [],
+      warnings,
+    },
+    args.registry
+  );
+
+  const workbookEvidence: WorkbookEvidenceDebug = {
+    parserKind: args.snapshot.parserKind,
+    snapshot: {
+      documentId: args.snapshot.documentId,
+      fileName: args.snapshot.fileName,
+      parserKind: args.snapshot.parserKind,
+      sheets: args.snapshot.sheets.map((s) => ({
+        sheetName: s.sheetName,
+        usedRange: s.usedRange,
+        mergedRanges: s.mergedRanges,
+        hidden: s.hidden,
+        cellCount: s.cells.length,
+        cells: s.cells,
+      })),
+      warnings: args.snapshot.warnings,
+    },
+    mapping: args.mapping,
+    coverage: args.coverage,
+    rawPartRows: args.partRows,
+    excludedTotalSubtotalRows: args.excludedTotalSubtotalRows,
+    unknownRows: [],
+    hiddenPartRowsRequiringReview: [],
+    columnUnitProfiles: normalized.profiles,
+    normalizedMeasurements: normalized.normalizedRows.map((nr) => ({
+      occurrenceId: nr.raw.occurrenceId,
+      partId: nr.raw.matchedDxfPartId,
+      rowNumber: nr.raw.source.rowNumber,
+      thickness: nr.thickness,
+      width: nr.width,
+      height: nr.height,
+      area: nr.area,
+      totalArea: nr.totalArea,
+      unitWeight: nr.unitWeight,
+      totalWeight: nr.totalWeight,
+      issues: nr.issues,
+    })),
+    precisionComparisons: normalized.precisionComparisons,
+    tableUnitInference: normalized.tableUnitInferences,
+    massInterpretation: normalized.massInterpretation ?? null,
+    massInterpretationDebug: normalized.massInterpretationDebug ?? null,
+    workbookInterpreterDiagnostics: args.workbookInterpreterDiagnostics,
+    directWorkbookExtraction: args.directWorkbookExtraction,
+    workbookExtractionMode: args.workbookExtractionMode,
+    skipDxfMatching: args.skipDxfMatching ?? false,
+    suppressDxfOrphans: args.suppressDxfOrphans ?? false,
+  };
+
+  return {
+    documentId: args.descriptor.documentId,
+    sourceType: args.descriptor.sourceType,
+    fileName: args.descriptor.fileName,
+    rows: validated.rows,
+    unresolvedItems: validated.unresolvedItems,
+    warnings: validated.warnings,
+    status: "SUCCESS" as const,
+    errorCode: null,
+    usage: args.emptyUsage,
+    durationMs: Date.now() - args.started,
+    workbookEvidence,
+  };
+}
+
+async function extractSpreadsheetDocumentDirect(args: {
+  client: OpenAI;
+  model: string;
+  document: DocumentFileInput;
+  registry: SlimRegistryItem[];
+  descriptor: SourceDocumentDescriptor;
+  started: number;
+  snapshot: WorkbookSnapshot;
+  warnings: string[];
+}): Promise<SourceDocumentResult> {
+  void args.document; // reserved for future native workbook-file provider input
+  const { descriptor, started, snapshot } = args;
+  const emptyUsage = {
+    inputTokens: null as number | null,
+    outputTokens: null as number | null,
+    totalTokens: null as number | null,
+  };
+  const warnings = [...args.warnings];
+
+  try {
+    const direct = await extractWorkbookDirect({
+      snapshot,
+      client: args.client,
+      model: args.model,
+    });
+    warnings.push(...direct.warnings);
+    warnings.push(
+      `WORKBOOK_DIRECT_PROVIDER_CALLS:${direct.diagnostics.providerCallCount}`
     );
 
-    const unresolvedItems: UnresolvedRequestItem[] =
-      modelResult.unresolvedItems.map((item) => ({
-        rawPartReference: item.rawPartReference,
-        description: item.description,
-        possibleDxfPartIds: [],
-        reason: item.reason,
-        source: {
-          type: descriptor.sourceType,
-          fileName: descriptor.fileName,
-          sheetName: item.location.sheetName,
-          rowNumber: item.location.visibleRowNumber,
-          cellReferences: [],
-          pageNumber: item.location.pageNumber,
-          excerpt: item.location.excerpt,
+    const debugDto = buildDirectWorkbookExtractionDebugDto({
+      diagnostics: direct.diagnostics,
+      extraction: direct.extraction,
+      verification: direct.verification,
+      mappingRequired: direct.mappingRequired,
+      partRowCount: direct.partRows.length,
+    });
+
+    if (
+      direct.status === "MAPPING_REQUIRED" ||
+      direct.status === "TOO_LARGE" ||
+      direct.status === "TIMEOUT" ||
+      direct.status === "FAIL"
+    ) {
+      const isFail =
+        direct.status === "FAIL" || direct.status === "TIMEOUT";
+      const errorCode = isFail
+        ? direct.failure?.code ??
+          (direct.status === "TIMEOUT"
+            ? "WORKBOOK_DIRECT_PROVIDER_TIMEOUT"
+            : "WORKBOOK_DIRECT_EXTRACTION_FAILED")
+        : direct.status === "TOO_LARGE"
+          ? "WORKBOOK_MAPPING_REQUIRED"
+          : "WORKBOOK_MAPPING_REQUIRED";
+      return {
+        documentId: descriptor.documentId,
+        sourceType: descriptor.sourceType,
+        fileName: descriptor.fileName,
+        rows: [],
+        unresolvedItems: [],
+        warnings: [
+          ...warnings,
+          isFail
+            ? `WORKBOOK_DIRECT_EXTRACTION_FAILED:${direct.failure?.stage ?? "UNKNOWN"}:${errorCode}`
+            : "WORKBOOK_MAPPING_REQUIRED",
+          ...(direct.failure
+            ? [
+                `FAILURE_STAGE:${direct.failure.stage}`,
+                `FAILURE_MESSAGE:${direct.failure.message}`,
+              ]
+            : []),
+          ...(direct.mappingRequired?.reasons ?? []),
+        ],
+        status: isFail ? ("FAILED" as const) : ("PARTIAL" as const),
+        errorCode,
+        usage: emptyUsage,
+        durationMs: Date.now() - started,
+        workbookEvidence: {
+          parserKind: snapshot.parserKind,
+          snapshot,
+          mapping: null,
+          coverage: null,
+          rawPartRows: [],
+          excludedTotalSubtotalRows: [],
+          unknownRows: [],
+          hiddenPartRowsRequiringReview: [],
+          directWorkbookExtraction: debugDto,
+          workbookExtractionMode: "AI_DIRECT",
+          skipDxfMatching: true,
+          suppressDxfOrphans: true,
         },
+      };
+    }
+
+    if (!direct.extraction || !direct.verification) {
+      return {
+        documentId: descriptor.documentId,
+        sourceType: descriptor.sourceType,
+        fileName: descriptor.fileName,
+        rows: [],
+        unresolvedItems: [],
+        warnings: [...warnings, "WORKBOOK_DIRECT_EXTRACTION_FAILED"],
+        status: "FAILED" as const,
+        errorCode: "WORKBOOK_DIRECT_EXTRACTION_FAILED",
+        usage: emptyUsage,
+        durationMs: Date.now() - started,
+        workbookEvidence: {
+          parserKind: snapshot.parserKind,
+          snapshot,
+          mapping: null,
+          coverage: null,
+          rawPartRows: [],
+          excludedTotalSubtotalRows: [],
+          unknownRows: [],
+          hiddenPartRowsRequiringReview: [],
+          directWorkbookExtraction: debugDto,
+          workbookExtractionMode: "AI_DIRECT",
+          skipDxfMatching: true,
+          suppressDxfOrphans: true,
+        },
+      };
+    }
+
+    const mapping = directExtractionToSyntheticMapping(direct.extraction);
+    const coverage = buildCoverageFromDirect({
+      snapshot,
+      ledger: direct.extraction.sourceRowLedger,
+      partRowCount: direct.partRows.length,
+    });
+
+    const excluded = direct.extraction.sourceRowLedger
+      .filter(
+        (e) =>
+          e.classification === "TOTAL" ||
+          e.classification === "SUBTOTAL" ||
+          e.classification === "FOOTER"
+      )
+      .map((e) => ({
+        sheetName: e.sheetName,
+        rowNumber: e.rowNumber,
+        classification: e.classification,
+        reason: e.reason,
       }));
 
-    const validated = validateSingleDocumentExtraction(
-      {
-        ...descriptor,
-        rows: dedupeExactSameDocumentRows(adaptedRows),
-        unresolvedItems,
-        warnings: [...warnings, ...modelResult.warnings],
-      },
-      args.registry
-    );
-
-    const workbookEvidence: WorkbookEvidenceDebug = {
-      parserKind: snapshot.parserKind,
-      snapshot: {
-        documentId: snapshot.documentId,
-        fileName: snapshot.fileName,
-        parserKind: snapshot.parserKind,
-        sheets: snapshot.sheets.map((s) => ({
-          sheetName: s.sheetName,
-          usedRange: s.usedRange,
-          mergedRanges: s.mergedRanges,
-          hidden: s.hidden,
-          cellCount: s.cells.length,
-          cells: s.cells,
-        })),
-        warnings: snapshot.warnings,
-      },
+    return finalizeWorkbookSuccess({
+      descriptor,
+      started,
+      warnings,
+      snapshot,
       mapping,
+      partRows: direct.partRows,
+      registry: args.registry,
       coverage,
-      rawPartRows: reconstructed.partRows,
-      excludedTotalSubtotalRows: reconstructed.excludedTotalSubtotalRows,
-      unknownRows: reconstructed.unknownRows,
-      hiddenPartRowsRequiringReview:
-        reconstructed.hiddenPartRowsRequiringReview,
-      columnUnitProfiles: normalized.profiles,
-      normalizedMeasurements: normalized.normalizedRows.map((nr) => ({
-        occurrenceId: nr.raw.occurrenceId,
-        partId: nr.raw.matchedDxfPartId,
-        rowNumber: nr.raw.source.rowNumber,
-        thickness: nr.thickness,
-        width: nr.width,
-        height: nr.height,
-        area: nr.area,
-        totalArea: nr.totalArea,
-        unitWeight: nr.unitWeight,
-        totalWeight: nr.totalWeight,
-        issues: nr.issues,
-      })),
-      precisionComparisons: normalized.precisionComparisons,
-      tableUnitInference: normalized.tableUnitInferences,
-      massInterpretation: normalized.massInterpretation ?? null,
-      massInterpretationDebug: normalized.massInterpretationDebug ?? null,
-    };
-
-    const status: SourceDocumentResult["status"] =
-      compact.truncated || !coverage.coverageComplete ? "PARTIAL" : "SUCCESS";
-
-    return {
-      documentId: descriptor.documentId,
-      sourceType: descriptor.sourceType,
-      fileName: descriptor.fileName,
-      rows: validated.rows,
-      unresolvedItems: validated.unresolvedItems,
-      warnings: validated.warnings,
-      status,
-      errorCode: status === "PARTIAL" ? "WORKBOOK_MAPPING_INCOMPLETE_OR_LIMIT" : null,
-      usage: usageFromResponse(response.usage),
-      durationMs,
-      workbookEvidence,
-    };
+      excludedTotalSubtotalRows: excluded,
+      directWorkbookExtraction: {
+        ...debugDto,
+        skipDxfMatching: direct.skipDxfMatching,
+        suppressDxfOrphans: direct.suppressDxfOrphans,
+      },
+      workbookExtractionMode: "AI_DIRECT",
+      emptyUsage,
+      skipDxfMatching: direct.skipDxfMatching,
+      suppressDxfOrphans: direct.suppressDxfOrphans,
+    });
   } catch (err) {
     const code =
       err && typeof err === "object" && "code" in err
         ? String((err as { code?: string }).code)
-        : "OPENAI_FAILED";
+        : "WORKBOOK_DIRECT_EXTRACTION_FAILED";
     console.error(
-      `[ai-intake] spreadsheet mapping failed ${descriptor.fileName}`,
+      `[ai-intake] direct workbook extraction failed ${descriptor.fileName}`,
       err
     );
     return {
@@ -840,6 +867,186 @@ async function extractSpreadsheetDocument(args: {
         excludedTotalSubtotalRows: [],
         unknownRows: [],
         hiddenPartRowsRequiringReview: [],
+        workbookExtractionMode: "AI_DIRECT",
+      },
+    };
+  }
+}
+
+async function extractSpreadsheetDocumentLegacyPlan(args: {
+  client: OpenAI;
+  model: string;
+  registry: SlimRegistryItem[];
+  descriptor: SourceDocumentDescriptor;
+  started: number;
+  snapshot: WorkbookSnapshot;
+  warnings: string[];
+}): Promise<SourceDocumentResult> {
+  const { descriptor, started, snapshot } = args;
+  const emptyUsage = {
+    inputTokens: null as number | null,
+    outputTokens: null as number | null,
+    totalTokens: null as number | null,
+  };
+  const warnings = [...args.warnings];
+
+  try {
+    const interpreted = await interpretWorkbook({
+      snapshot,
+      client: args.client,
+      model: args.model,
+      allowAiPlanner: true,
+    });
+    warnings.push(...interpreted.warnings);
+
+    if (interpreted.status === "MAPPING_REQUIRED") {
+      return {
+        documentId: descriptor.documentId,
+        sourceType: descriptor.sourceType,
+        fileName: descriptor.fileName,
+        rows: [],
+        unresolvedItems: [],
+        warnings: [
+          ...warnings,
+          "WORKBOOK_MAPPING_REQUIRED",
+          ...(interpreted.mappingRequired?.reasons ?? []),
+        ],
+        status: "PARTIAL" as const,
+        errorCode: "WORKBOOK_MAPPING_REQUIRED",
+        usage: emptyUsage,
+        durationMs: Date.now() - started,
+        workbookEvidence: {
+          parserKind: snapshot.parserKind,
+          snapshot,
+          mapping: interpreted.plan
+            ? { interpreterPlan: interpreted.plan }
+            : null,
+          coverage: interpreted.execution?.coverage ?? null,
+          rawPartRows: [],
+          excludedTotalSubtotalRows: [],
+          unknownRows: [],
+          hiddenPartRowsRequiringReview: [],
+          workbookInterpreterDiagnostics: workbookInterpreterDebugSummary(
+            interpreted.diagnostics
+          ),
+          workbookExtractionMode: "LEGACY_PLAN",
+        },
+      };
+    }
+
+    if (
+      interpreted.status !== "SUCCESS" ||
+      !interpreted.plan ||
+      !interpreted.execution
+    ) {
+      return {
+        documentId: descriptor.documentId,
+        sourceType: descriptor.sourceType,
+        fileName: descriptor.fileName,
+        rows: [],
+        unresolvedItems: [],
+        warnings: [...warnings, "WORKBOOK_INTERPRETER_FAILED"],
+        status: "FAILED" as const,
+        errorCode: "WORKBOOK_INTERPRETER_FAILED",
+        usage: emptyUsage,
+        durationMs: Date.now() - started,
+        workbookEvidence: {
+          parserKind: snapshot.parserKind,
+          snapshot,
+          mapping: null,
+          coverage: null,
+          rawPartRows: [],
+          excludedTotalSubtotalRows: [],
+          unknownRows: [],
+          hiddenPartRowsRequiringReview: [],
+          workbookInterpreterDiagnostics: workbookInterpreterDebugSummary(
+            interpreted.diagnostics
+          ),
+          workbookExtractionMode: "LEGACY_PLAN",
+        },
+      };
+    }
+
+    const mapping = planToSyntheticMapping(interpreted.plan);
+    const coverage = interpreted.execution.coverage;
+    return finalizeWorkbookSuccess({
+      descriptor,
+      started,
+      warnings,
+      snapshot,
+      mapping,
+      partRows: interpreted.partRows,
+      registry: args.registry,
+      coverage: {
+        sourceNonEmptyRowCount: coverage.declaredDataRows,
+        accountedNonEmptyRowCount: coverage.classifiedRows,
+        mappedPartRowCount: coverage.dataOccurrences,
+        mappedHeaderRowCount: interpreted.execution.skippedRows.filter(
+          (s) =>
+            s.classification === "HEADER" ||
+            s.classification === "REPEATED_HEADER"
+        ).length,
+        mappedSubtotalRowCount: interpreted.execution.skippedRows.filter(
+          (s) => s.classification === "SUBTOTAL"
+        ).length,
+        mappedTotalRowCount: interpreted.execution.skippedRows.filter(
+          (s) => s.classification === "TOTAL"
+        ).length,
+        mappedNoteRowCount: interpreted.execution.skippedRows.filter(
+          (s) => s.classification === "NOTE"
+        ).length,
+        mappedEmptyRowCount: interpreted.execution.skippedRows.filter(
+          (s) => s.classification === "BLANK"
+        ).length,
+        unknownNonEmptyRowCount: coverage.unexplainedRows,
+        unaccountedNonEmptyRowCount: coverage.unexplainedRows,
+        coverageComplete: coverage.unexplainedRows === 0,
+        issues: [],
+        missingRowKeys: [],
+        nonEmptyRowCount: coverage.declaredDataRows,
+        mappedRowCount: coverage.classifiedRows,
+        unknownRowCount: coverage.unexplainedRows,
+      },
+      excludedTotalSubtotalRows: interpreted.skippedExcludedRows,
+      workbookInterpreterDiagnostics: workbookInterpreterDebugSummary(
+        interpreted.diagnostics
+      ),
+      workbookExtractionMode: "LEGACY_PLAN",
+      emptyUsage,
+    });
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code?: string }).code)
+        : "WORKBOOK_INTERPRETER_FAILED";
+    console.error(
+      `[ai-intake] workbook interpreter failed ${descriptor.fileName}`,
+      err
+    );
+    return {
+      documentId: descriptor.documentId,
+      sourceType: descriptor.sourceType,
+      fileName: descriptor.fileName,
+      rows: [],
+      unresolvedItems: [],
+      warnings: [
+        ...warnings,
+        `SOURCE_EXTRACTION_FAILED:${descriptor.fileName}:${code}`,
+      ],
+      status: "FAILED",
+      errorCode: code,
+      usage: emptyUsage,
+      durationMs: Date.now() - started,
+      workbookEvidence: {
+        parserKind: snapshot.parserKind,
+        snapshot,
+        mapping: null,
+        coverage: null,
+        rawPartRows: [],
+        excludedTotalSubtotalRows: [],
+        unknownRows: [],
+        hiddenPartRowsRequiringReview: [],
+        workbookExtractionMode: "LEGACY_PLAN",
       },
     };
   }
@@ -1025,7 +1232,14 @@ export async function extractIsolatedSourcesWithOpenAI(args: {
   const concurrency = args.concurrency ?? DEFAULT_CONCURRENCY;
   const started = Date.now();
 
-  const runEmail = Boolean(args.body.trim());
+  const runEmailEligibility = classifySourceForProviderExtraction({
+    kind: "EMAIL",
+    subject: args.subject,
+    body: args.body,
+    attachmentIds: args.documents.map((d) => d.documentId),
+    alreadyHandledAttachmentIds: args.documents.map((d) => d.documentId),
+  });
+  const runEmail = runEmailEligibility.eligible && Boolean(args.body.trim());
 
   const [documentResults, emailResult] = await Promise.all([
     mapPool(args.documents, concurrency, (doc) =>
@@ -1048,7 +1262,13 @@ export async function extractIsolatedSourcesWithOpenAI(args: {
       : Promise.resolve({
           emailFacts: [] as ExtractedEmailFact[],
           unresolvedItems: [] as UnresolvedRequestItem[],
-          warnings: [] as string[],
+          warnings: [
+            ...(runEmailEligibility.eligible
+              ? []
+              : [
+                  `EMAIL_PROVIDER_SKIPPED:${runEmailEligibility.reason}`,
+                ]),
+          ] as string[],
           usage: {
             inputTokens: null,
             outputTokens: null,

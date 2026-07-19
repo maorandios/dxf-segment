@@ -180,6 +180,10 @@ export const extractedDocumentRowSchema = z.object({
     excerpt: z.string().nullable(),
   }),
   issues: z.array(z.string()),
+  /** Geometry correlation candidates (optional; also encoded in notes). */
+  geometryCandidates: z.array(z.unknown()).nullable().optional(),
+  ambiguityGroupId: z.string().nullable().optional(),
+  matchReason: z.string().nullable().optional(),
 });
 
 export type ExtractedDocumentRow = z.infer<typeof extractedDocumentRowSchema>;
@@ -294,6 +298,19 @@ export type WorkbookEvidenceDebug = {
   workbookReconstructionDiagnostics?: unknown;
   /** Geometry correlation diagnostics (often attached client-side). */
   geometryCorrelationDiagnostics?: unknown;
+  /** AI Workbook Interpreter v1 diagnostics (backward-compatible extension). */
+  workbookInterpreterDiagnostics?: unknown;
+  /**
+   * AI-Native Direct Workbook Extraction v1 diagnostics.
+   * Detached DTO — never live domain graphs / circular placeholders.
+   */
+  directWorkbookExtraction?: unknown;
+  /** Production extraction mode for this workbook. */
+  workbookExtractionMode?: "AI_DIRECT" | "LEGACY_PLAN";
+  /** Skip DXF matching after failed workbook extraction with candidate data. */
+  skipDxfMatching?: boolean;
+  /** Suppress ordinary orphan DXF rows (PENDING_SOURCE_EXTRACTION). */
+  suppressDxfOrphans?: boolean;
 };
 
 export type SourceDocumentResult = {
@@ -419,6 +436,15 @@ export type RequestPartOccurrence = {
   material: string | null;
   description: string | null;
   action: "INCLUDE" | "EXCLUDE" | null;
+  /**
+   * How matchedDxfPartId was assigned.
+   * GEOMETRY must not be re-labeled as exact identifier match downstream.
+   */
+  matchMethod?: "EXACT" | "GEOMETRY" | "AMBIGUOUS_GEOMETRY" | null;
+  /** Eligible geometry candidates when matchMethod is AMBIGUOUS_GEOMETRY. */
+  geometryCandidates?: import("./dxf/geometry-correlation/canonicalDxfMatch").CanonicalDxfCandidate[] | null;
+  ambiguityGroupId?: string | null;
+  matchReason?: string | null;
   source: {
     documentId: string | null;
     type: "XLSX" | "PDF" | "EMAIL";

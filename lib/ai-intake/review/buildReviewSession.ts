@@ -64,6 +64,9 @@ function fieldStateFromResolution(
   opts?: { ambiguous?: boolean }
 ): ReviewFieldState {
   if (opts?.ambiguous) return "AMBIGUOUS";
+  // A concrete extracted value must never be classified MISSING solely because
+  // a stale reconciliation status says MISSING.
+  if (value != null && status === "MISSING") return "VERIFIED";
   if (status === "MISSING" || value == null) return "MISSING";
   if (status === "CONFLICT") return "CONFLICT";
   if (status === "USER_RESOLUTION") return "USER_RESOLVED";
@@ -221,8 +224,135 @@ function resolveDxfIdentityMatch(args: {
   occ: RequestPartOccurrence;
   registry: DxfPartRegistryItem[];
 }): DxfIdentityMatchResult {
-  const sourceRawId =
-    args.occ.rawPartReference ?? args.occ.matchedDxfPartId ?? null;
+  // Geometry enrichment: do NOT feed matched DXF ID back into exact matcher.
+  const isAmbiguousGeometry =
+    args.occ.matchMethod === "AMBIGUOUS_GEOMETRY" ||
+    (args.occ.geometryCandidates != null &&
+      args.occ.geometryCandidates.length > 1 &&
+      !args.occ.matchedDxfPartId &&
+      !args.occ.rawPartReference);
+
+  if (isAmbiguousGeometry) {
+    const cands = (args.occ.geometryCandidates ?? []).map((c) => {
+      const entry =
+        args.registry.find((r) => r.id === c.registryEntryId) ??
+        args.registry.find((r) => r.canonicalPartId === c.partId);
+      return {
+        registryEntryId: c.registryEntryId,
+        partId: c.partId,
+        fileName: c.fileName || entry?.filename || `${c.partId}.dxf`,
+        canonicalPartId: c.partId,
+        rawPartId: entry?.rawPartId ?? null,
+        geometryStatus: (c.geometryStatus ??
+          entry?.geometryStatus ??
+          "VALID") as "VALID" | "WARNING" | "INVALID" | "EMPTY",
+        identityOk: entry?.identityOk ?? true,
+      };
+    });
+    if (cands.length > 0) {
+      return {
+        status: "AMBIGUOUS",
+        sourceRawId: null,
+        sourceCanonicalId: null,
+        matchedCanonicalId: null,
+        matchedRegistryEntryId: null,
+        matchedPartId: null,
+        candidates: cands,
+        suggestions: [],
+        reason: "AMBIGUOUS_GEOMETRY_MATCH",
+        geometryStatus: null,
+        method: "GEOMETRY",
+        ambiguityGroupId: args.occ.ambiguityGroupId ?? null,
+        candidateScores: (args.occ.geometryCandidates ?? []).map((c) => ({
+          registryEntryId: c.registryEntryId,
+          score: c.score,
+        })),
+      };
+    }
+  }
+
+  const geometryMatched =
+    (args.occ.matchMethod === "GEOMETRY" ||
+      args.occ.matchReason === "MATCHED_BY_GEOMETRY") &&
+    args.occ.matchedDxfPartId != null &&
+    !args.occ.rawPartReference;
+
+  if (geometryMatched) {
+    const entry =
+      args.registry.find(
+        (r) => r.canonicalPartId === args.occ.matchedDxfPartId
+      ) ?? null;
+    if (entry) {
+      return {
+        status: "MATCHED",
+        sourceRawId: null,
+        sourceCanonicalId: entry.canonicalPartId,
+        matchedCanonicalId: entry.canonicalPartId,
+        matchedRegistryEntryId: entry.id,
+        matchedPartId: entry.canonicalPartId,
+        candidates: [
+          {
+            registryEntryId: entry.id,
+            partId: entry.canonicalPartId,
+            fileName: entry.filename,
+            canonicalPartId: entry.canonicalPartId,
+            rawPartId: entry.rawPartId ?? null,
+            geometryStatus:
+              entry.geometryStatus === "VALID" ||
+              entry.geometryStatus === "WARNING" ||
+              entry.geometryStatus === "INVALID" ||
+              entry.geometryStatus === "EMPTY"
+                ? entry.geometryStatus
+                : "INVALID",
+            identityOk: entry.identityOk,
+          },
+        ],
+        suggestions: [],
+        reason: "MATCHED_BY_GEOMETRY",
+        geometryStatus:
+          entry.geometryStatus === "VALID" ||
+          entry.geometryStatus === "WARNING" ||
+          entry.geometryStatus === "INVALID" ||
+          entry.geometryStatus === "EMPTY"
+            ? entry.geometryStatus
+            : "INVALID",
+        method: "GEOMETRY",
+        ambiguityGroupId: null,
+      };
+    }
+  }
+
+  // Unmatched geometry reasons — never INVALID_SOURCE_ID when no explicit ID.
+  if (
+    !args.occ.rawPartReference &&
+    !args.occ.matchedDxfPartId &&
+    (args.occ.matchMethod === "AMBIGUOUS_GEOMETRY" ||
+      args.occ.matchReason?.startsWith("UNMATCHED_"))
+  ) {
+    const reason =
+      (args.occ.matchReason as
+        | "UNMATCHED_NO_IDENTIFIER"
+        | "UNMATCHED_INSUFFICIENT_GEOMETRY"
+        | "UNMATCHED_GEOMETRY_MISMATCH"
+        | undefined) ?? "UNMATCHED_NO_IDENTIFIER";
+    return {
+      status: "UNMATCHED",
+      sourceRawId: null,
+      sourceCanonicalId: "",
+      matchedCanonicalId: null,
+      matchedRegistryEntryId: null,
+      matchedPartId: null,
+      candidates: [],
+      suggestions: [],
+      reason,
+      geometryStatus: null,
+      method: null,
+      ambiguityGroupId: args.occ.ambiguityGroupId ?? null,
+    };
+  }
+
+  // Exact matching uses source identifier only — never the assigned DXF id alone.
+  const sourceRawId = args.occ.rawPartReference ?? null;
   return matchPartToDxf({
     sourceRawId,
     registry: toDxfMatchRegistryEntries(args.registry),
@@ -273,14 +403,17 @@ function deriveReviewMatchFields(match: DxfIdentityMatchResult): {
   }
 
   if (match.status === "AMBIGUOUS") {
+    const scores = new Map(
+      (match.candidateScores ?? []).map((s) => [s.registryEntryId, s.score])
+    );
     return {
       matchedDxfPartId: null,
       dxfMatchStatus: "AMBIGUOUS",
       dxfCandidates: match.candidates.map((c) => ({
         partId: c.partId,
         fileName: c.fileName,
-        reason: "CANONICAL_ID_COLLISION",
-        score: 1,
+        reason: match.reason,
+        score: scores.get(c.registryEntryId) ?? 1,
         registryEntryId: c.registryEntryId,
       })),
       dxfSuggestions: [],
@@ -385,7 +518,9 @@ function buildRowFromOccurrence(args: {
         ? "MISSING"
         : final?.issues.includes("QUANTITY_CONFLICT")
           ? "CONFLICT"
-          : (qtyRes?.resolutionStatus ?? "SINGLE_SOURCE"),
+          : qtyRes?.resolutionStatus === "MISSING"
+            ? "SINGLE_SOURCE"
+            : (qtyRes?.resolutionStatus ?? "SINGLE_SOURCE"),
     candidates:
       qtyFromOcc != null
         ? occurrenceFieldCandidates({
@@ -414,7 +549,9 @@ function buildRowFromOccurrence(args: {
         ? "MISSING"
         : final?.issues.includes("THICKNESS_CONFLICT")
           ? "CONFLICT"
-          : (thkRes?.resolutionStatus ?? "SINGLE_SOURCE"),
+          : thkRes?.resolutionStatus === "MISSING"
+            ? "SINGLE_SOURCE"
+            : (thkRes?.resolutionStatus ?? "SINGLE_SOURCE"),
     candidates:
       thkFromOcc != null
         ? occurrenceFieldCandidates({
@@ -444,7 +581,9 @@ function buildRowFromOccurrence(args: {
         ? "MISSING"
         : final?.issues.includes("MATERIAL_CONFLICT")
           ? "CONFLICT"
-          : (matRes?.resolutionStatus ?? "SINGLE_SOURCE"),
+          : matRes?.resolutionStatus === "MISSING"
+            ? "SINGLE_SOURCE"
+            : (matRes?.resolutionStatus ?? "SINGLE_SOURCE"),
     candidates:
       matFromOcc != null && String(matFromOcc).trim()
         ? occurrenceFieldCandidates({

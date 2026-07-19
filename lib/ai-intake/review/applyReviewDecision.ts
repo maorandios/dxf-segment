@@ -393,6 +393,25 @@ export function applyReviewDecision(
           : null;
       const row = findRow(next.rows, rowId);
       if (!row) throw new Error(`Unknown row ${rowId}`);
+
+      // SELECT_DXF_CANDIDATE: selected DXF must belong to the ambiguity candidate set.
+      const isCandidateDecision =
+        action.payload.decisionType === "SELECT_DXF_CANDIDATE" ||
+        row.dxfMatch?.reason === "AMBIGUOUS_GEOMETRY_MATCH" ||
+        row.dxfMatchStatus === "AMBIGUOUS";
+      if (isCandidateDecision && row.dxfCandidates.length > 0) {
+        const allowed = row.dxfCandidates.some(
+          (c) =>
+            c.partId === partId ||
+            (registryEntryId != null && c.registryEntryId === registryEntryId)
+        );
+        if (!allowed) {
+          throw new Error(
+            "SELECT_DXF_CANDIDATE_NOT_IN_AMBIGUITY_GROUP"
+          );
+        }
+      }
+
       const prev = row.matchedDxfPartId;
       const prevMatch = row.dxfMatch;
 
@@ -412,6 +431,10 @@ export function applyReviewDecision(
         identityOk: true,
       };
 
+      const fromGeometryAmbiguity =
+        prevMatch.reason === "AMBIGUOUS_GEOMETRY_MATCH" ||
+        action.payload.decisionType === "SELECT_DXF_CANDIDATE";
+
       row.dxfMatch = {
         status: "MATCHED",
         sourceRawId: prevMatch.sourceRawId,
@@ -425,16 +448,22 @@ export function applyReviewDecision(
         matchedPartId: partId,
         candidates: [selectedCandidate],
         suggestions: [],
-        reason: "USER_SELECTED_DXF",
+        reason: fromGeometryAmbiguity
+          ? "MATCHED_BY_GEOMETRY"
+          : "USER_SELECTED_DXF",
         geometryStatus,
-      };
+        method: fromGeometryAmbiguity ? "GEOMETRY" : undefined,
+        ambiguityGroupId: null,
+      } as typeof row.dxfMatch;
       row.matchedDxfPartId = partId;
       row.dxfMatchStatus = "MATCHED";
       row.dxfCandidates = [
         {
           partId,
           fileName: selectedCandidate.fileName,
-          reason: "USER_SELECTED_DXF",
+          reason: fromGeometryAmbiguity
+            ? "MATCHED_BY_GEOMETRY"
+            : "USER_SELECTED_DXF",
           score: 1,
           registryEntryId: selectedCandidate.registryEntryId,
         },
@@ -443,10 +472,14 @@ export function applyReviewDecision(
       row.dxfMatchDiagnostics = {
         sourceRawId: row.dxfMatch.sourceRawId,
         sourceCanonicalId: row.dxfMatch.sourceCanonicalId,
-        exactRegistryMatchCount: 1,
-        exactRegistryEntryIds: [selectedCandidate.registryEntryId],
+        exactRegistryMatchCount: fromGeometryAmbiguity ? 0 : 1,
+        exactRegistryEntryIds: fromGeometryAmbiguity
+          ? []
+          : [selectedCandidate.registryEntryId],
         finalStatus: "MATCHED",
-        finalReason: "USER_SELECTED_DXF",
+        finalReason: fromGeometryAmbiguity
+          ? "MATCHED_BY_GEOMETRY"
+          : "USER_SELECTED_DXF",
         matchedRegistryEntryId: selectedCandidate.registryEntryId,
         suggestionCount: 0,
         suggestions: [],
