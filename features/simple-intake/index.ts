@@ -33,4 +33,12 @@ export {
   FIXED_TABLE_COLUMN_HEADERS,
   resolvePartDisplayName,
 } from "./results";
+export {
+  PostAnalysisWorkflow,
+  buildReviewQueue,
+  countUnresolved,
+  orderQueueWithDeferred,
+  guidedIssueCopy,
+} from "./workflow";
+export type { SimpleIntakeView, GuidedQueueItem } from "./workflow";
 export type * from "./types";

@@ -28,14 +28,10 @@ type SnapshotBody = {
 
 function getClientAndModel(): { client: OpenAI; model: string } {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
-  const model = process.env.OPENAI_EXTRACTION_MODEL?.trim();
+  // Simple Intake workbook extraction only — do not use OPENAI_EXTRACTION_MODEL.
+  const model = "gpt-5.4-mini-2026-03-17";
   if (!apiKey) {
     throw Object.assign(new Error("MISSING_API_KEY"), { code: "MISSING_API_KEY" });
-  }
-  if (!model) {
-    throw Object.assign(new Error("MISSING_MODEL_ENV"), {
-      code: "MISSING_MODEL_ENV",
-    });
   }
   return { client: new OpenAI({ apiKey }), model };
 }

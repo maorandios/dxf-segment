@@ -51,7 +51,19 @@ const FILTER_CHIPS: Array<{ id: FinalFilterId; label: string }> = [
   { id: "EXCLUDED", label: "מוחרג" },
 ];
 
-export function ResultsReviewScreen() {
+export function ResultsReviewScreen({
+  confirmedManual: confirmedManualProp,
+  onConfirmedManualChange,
+  unresolvedCount,
+  onStartGuidedReview,
+  onShowSummary,
+}: {
+  confirmedManual?: Set<string>;
+  onConfirmedManualChange?: (next: Set<string>) => void;
+  unresolvedCount?: number;
+  onStartGuidedReview?: () => void;
+  onShowSummary?: () => void;
+} = {}) {
   const session = useSimpleIntakeSession();
   const [filter, setFilter] = useState<FinalFilterId>("ALL");
   const [search, setSearch] = useState("");
@@ -60,8 +72,19 @@ export function ResultsReviewScreen() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [pickerId, setPickerId] = useState<string | null>(null);
   const [pickerSelected, setPickerSelected] = useState<string | null>(null);
-  const [confirmedManual, setConfirmedManual] = useState<Set<string>>(
-    () => new Set()
+  const [confirmedManualInternal, setConfirmedManualInternal] = useState<
+    Set<string>
+  >(() => new Set());
+  const confirmedManual = confirmedManualProp ?? confirmedManualInternal;
+  const updateConfirmed = useCallback(
+    (updater: (prev: Set<string>) => Set<string>) => {
+      if (onConfirmedManualChange) {
+        onConfirmedManualChange(updater(confirmedManual));
+      } else {
+        setConfirmedManualInternal(updater);
+      }
+    },
+    [confirmedManual, onConfirmedManualChange]
   );
   const [hasLocalEdits, setHasLocalEdits] = useState(false);
 
@@ -130,7 +153,7 @@ export function ResultsReviewScreen() {
   function trySelectDxf(resultRowId: string, dxfId: string | null): boolean {
     if (dxfId == null) {
       simpleIntakeActions.selectDxf(resultRowId, null);
-      setConfirmedManual((prev) => {
+      updateConfirmed((prev) => {
         const next = new Set(prev);
         next.delete(resultRowId);
         return next;
@@ -148,7 +171,7 @@ export function ResultsReviewScreen() {
         forceReassign: true,
       });
     }
-    setConfirmedManual((prev) => {
+    updateConfirmed((prev) => {
       const next = new Set(prev);
       next.delete(resultRowId);
       return next;
@@ -172,7 +195,7 @@ export function ResultsReviewScreen() {
       simpleIntakeActions.selectDxf(id, null);
     }
     simpleIntakeActions.excludeRow(id, true);
-    setConfirmedManual((prev) => {
+    updateConfirmed((prev) => {
       const next = new Set(prev);
       next.delete(id);
       return next;
@@ -193,7 +216,7 @@ export function ResultsReviewScreen() {
       return;
     }
     if (action === "אשר התאמה") {
-      setConfirmedManual((prev) => new Set(prev).add(id));
+      updateConfirmed((prev) => new Set(prev).add(id));
       markEdited();
       return;
     }
@@ -261,6 +284,27 @@ export function ResultsReviewScreen() {
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
+            {onShowSummary && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onShowSummary}
+              >
+                סיכום בדיקה
+              </Button>
+            )}
+            {onStartGuidedReview &&
+              unresolvedCount != null &&
+              unresolvedCount > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onStartGuidedReview}
+                >
+                  טפל ב-{unresolvedCount} שורות
+                </Button>
+              )}
             <Button
               type="button"
               variant="outline"
@@ -397,7 +441,7 @@ export function ResultsReviewScreen() {
         }}
         onConfirmManual={() => {
           if (!detailsId) return;
-          setConfirmedManual((prev) => new Set(prev).add(detailsId));
+          updateConfirmed((prev) => new Set(prev).add(detailsId));
           markEdited();
         }}
         onExclude={() => {

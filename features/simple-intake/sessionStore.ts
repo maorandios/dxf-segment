@@ -191,6 +191,88 @@ export const simpleIntakeActions = {
     });
   },
 
+  /**
+   * During READY guided review: parse only newly added DXFs and rematch locally.
+   * Does not call AI or re-extract the workbook.
+   */
+  async appendDxfFilesAndRematch(files: File[]): Promise<{ added: number }> {
+    if (session.status !== "READY") return { added: 0 };
+    const existingNames = new Set(session.dxfFiles.map((f) => f.name));
+    const newcomers: File[] = [];
+    for (const f of files) {
+      if (!f.name.toLowerCase().endsWith(".dxf")) continue;
+      if (existingNames.has(f.name)) continue;
+      newcomers.push(f);
+      existingNames.add(f.name);
+    }
+    if (newcomers.length === 0) return { added: 0 };
+
+    const mergedFiles = [...session.dxfFiles, ...newcomers];
+    const { parts: newParts } = await parseSimpleDxfFiles(newcomers);
+    const dxfParts = [...session.dxfParts, ...newParts];
+    const extractedRows = session.extractedRows;
+    const matched = matchSimpleRows({
+      extractedRows,
+      dxfParts,
+      extractedRowCount: extractedRows.length,
+    });
+    // Preserve local guided/table edits and exclusions across rematch.
+    const prevByExtractedId = new Map(
+      session.resultRows.map((r) => [r.extracted.rowId, r] as const)
+    );
+    const mergedResultRows = matched.resultRows.map((r) => {
+      const prev = prevByExtractedId.get(r.extracted.rowId);
+      if (!prev) return r;
+      const next = {
+        ...r,
+        edits: { ...prev.edits },
+        excluded: prev.excluded,
+      };
+      return {
+        ...next,
+        status: next.excluded
+          ? ("EXCLUDED" as const)
+          : deriveResultRowStatus(next),
+      };
+    });
+    const coverageIssues = session.coverageIssues;
+    const refreshed = refreshAvailability(
+      mergedResultRows,
+      dxfParts,
+      coverageIssues
+    );
+    const coverageStats = {
+      exactIdsFoundInWorkbook:
+        session.localSummary?.exactIdsFoundInWorkbook ?? 0,
+      exactIdsPresentInExtractedRows:
+        session.localSummary?.exactIdsPresentInExtractedRows ?? 0,
+      exactIdsMissingFromExtraction:
+        session.localSummary?.exactIdsMissingFromExtraction ?? 0,
+    };
+    const localSummary = buildSimpleIntakeResultSummary({
+      extractedRowCount: extractedRows.length,
+      validatedRows: extractedRows,
+      resultRows: mergedResultRows,
+      dxfAvailability: refreshed.dxfAvailability,
+      coverageStats,
+    });
+    setSession({
+      ...getSimpleIntakeSession(),
+      dxfFiles: mergedFiles,
+      dxfParts,
+      resultRows: mergedResultRows,
+      matchingDiagnostics: {
+        ...matched.diagnostics,
+        dxfAvailability: refreshed.dxfAvailability,
+        localSummary,
+      },
+      ...refreshed,
+      localSummary,
+      providerCallCount: session.providerCallCount,
+    });
+    return { added: newcomers.length };
+  },
+
   removeDxf(fileName: string): void {
     const merged = session.dxfFiles.filter((f) => f.name !== fileName);
     setSession({

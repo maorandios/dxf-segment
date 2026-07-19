@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * Ready step — final commercial results table and actionable review UI.
+ * Ready step — analysis summary → guided review → final table.
  */
 
-import { ResultsReviewScreen } from "../results/ResultsReviewScreen";
+import { PostAnalysisWorkflow } from "../workflow/PostAnalysisWorkflow";
+import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
 
 export function ReadyStep() {
-  return <ResultsReviewScreen />;
+  const session = useSimpleIntakeSession();
+  return <PostAnalysisWorkflow key={session.runId ?? "idle"} />;
 }
