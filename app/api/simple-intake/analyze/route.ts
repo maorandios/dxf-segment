@@ -175,16 +175,24 @@ export async function POST(req: Request): Promise<Response> {
       });
     }
 
-    // Default: OpenAI Mini material-list v1 (snapshot only, one call).
+    // Default: OpenAI Mini material-list v1 (snapshot only; optional one repair).
     const out = await runOpenAiMaterialListExtraction({ snapshot });
     return NextResponse.json({
       ok: true,
       materialListRows: out.rows,
       materialListStage: sanitizeDebug(out.materialListStageDebug),
+      qualityGatePassed: out.qualityGatePassed,
+      qualityGate: out.qualityGate,
+      targetedRepair: out.targetedRepair,
       providerCallCount: out.providerCallCount,
       model: out.model,
       durationMs: Date.now() - started,
       usage: out.usage,
+      costs: {
+        primaryEstimatedCostUsd: out.primaryEstimatedCostUsd,
+        repairEstimatedCostUsd: out.repairEstimatedCostUsd,
+        totalEstimatedCostUsd: out.totalEstimatedCostUsd,
+      },
       extractionProvider: "openai",
       extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
       result: {

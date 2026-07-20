@@ -53,6 +53,7 @@ function baseRow(
     widthMm: partial.widthMm ?? null,
     lengthMm: partial.lengthMm ?? null,
     userOverrides: partial.userOverrides ?? {},
+    fieldResolutions: partial.fieldResolutions ?? {},
     approvalStatus: "NEEDS_COMPLETION",
   };
   return { ...row, approvalStatus: deriveApprovalStatus(row) };
@@ -223,7 +224,10 @@ console.log("=== Excel to Approved Material List v1 ===\n");
 }
 
 {
-  assertEq(MATERIAL_LIST_TABLE_HEADERS.length, 9, "stage1 cols");
+  assertEq(MATERIAL_LIST_TABLE_HEADERS.length, 13, "stage1 cols");
+  assertEq(MATERIAL_LIST_TABLE_HEADERS[3], "סוג חומר", "material col");
+  assertEq(MATERIAL_LIST_TABLE_HEADERS[8], 'שטח יחידה (מ"ר)', "unit area");
+  assertEq(MATERIAL_LIST_TABLE_HEADERS[12], "", "icon col unlabeled");
   assertEq(FIXED_TABLE_COLUMN_HEADERS.length, 12, "stage2 table unchanged");
   console.log("✓ Fixed Stage 1 columns; Stage 2 table columns unchanged");
 }

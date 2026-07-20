@@ -7,6 +7,7 @@ import { ReadyStep } from "./components/ReadyStep";
 import { UploadStep } from "./components/UploadStep";
 import {
   DxfUploadStage,
+  MaterialListQualityFailedScreen,
   MaterialListReviewScreen,
 } from "./materialList";
 import { useSimpleIntakeSession } from "./useSimpleIntakeSession";
@@ -17,6 +18,8 @@ export function SimpleIntakeShell() {
   let body: React.ReactNode;
   if (session.status === "ANALYZING") {
     body = <AnalyzingStep />;
+  } else if (session.status === "MATERIAL_LIST_QUALITY_FAILED") {
+    body = <MaterialListQualityFailedScreen />;
   } else if (session.status === "MATERIAL_LIST_REVIEW") {
     body = <MaterialListReviewScreen />;
   } else if (session.status === "DXF_UPLOAD") {

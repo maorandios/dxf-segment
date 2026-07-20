@@ -12,6 +12,7 @@ import {
   matchSimpleRows,
 } from "./matchSimpleRows";
 import {
+  effectiveMaterialFields,
   refreshRowCompleteness,
   summarizeMaterialList,
 } from "./materialList/completeness";
@@ -66,6 +67,7 @@ function createEmptySession(): SimpleIntakeSession {
     workbookSnapshot: null,
     materialListRows: [],
     materialListApproved: false,
+    materialListShowUnresolvedOnly: false,
     extractedRows: [],
     dxfParts: [],
     resultRows: [],
@@ -408,6 +410,7 @@ export const simpleIntakeActions = {
       extractedRows: [],
       materialListRows: [],
       materialListApproved: false,
+      materialListShowUnresolvedOnly: false,
       unmatchedDxfIds: [],
       dxfAvailability: [],
       coverageIssues: [],
@@ -435,15 +438,104 @@ export const simpleIntakeActions = {
     }
     const materialListRows = session.materialListRows.map((r) => {
       if (r.rowId !== rowId) return r;
+      const fieldResolutions = { ...r.fieldResolutions };
+      for (const key of Object.keys(patch) as Array<keyof typeof patch>) {
+        if (
+          key === "material" ||
+          key === "thicknessMm" ||
+          key === "quantity" ||
+          key === "widthMm" ||
+          key === "lengthMm"
+        ) {
+          const v = patch[key];
+          if (v != null && v !== "") {
+            fieldResolutions[key] = "EXACT_PRIMARY";
+          }
+        }
+      }
       const next: MaterialListRow = {
         ...r,
         userOverrides: { ...r.userOverrides, ...patch },
+        fieldResolutions,
       };
       return refreshRowCompleteness(next, {
         keepApprovedWithMissing: session.materialListApproved,
       });
     });
     setSession({ ...session, materialListRows });
+  },
+
+  duplicateMaterialListRow(rowId: string): void {
+    if (
+      session.status !== "MATERIAL_LIST_REVIEW" &&
+      session.status !== "MATERIAL_LIST_QUALITY_FAILED"
+    ) {
+      return;
+    }
+    const idx = session.materialListRows.findIndex((r) => r.rowId === rowId);
+    if (idx < 0) return;
+    const source = session.materialListRows[idx]!;
+    const e = effectiveMaterialFields(source);
+    const newRowId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? `material-row-${crypto.randomUUID()}`
+        : `material-row-${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const draft: MaterialListRow = {
+      rowId: newRowId,
+      sheetName: source.sheetName,
+      sourceRow: null,
+      sourceCell: null,
+      partId: null,
+      profile: null,
+      description: null,
+      material: null,
+      thicknessMm: null,
+      quantity: null,
+      widthMm: null,
+      lengthMm: null,
+      userOverrides: {
+        partId: e.partId,
+        profile: e.profile,
+        description: e.description,
+        material: e.material,
+        thicknessMm: e.thicknessMm,
+        quantity: e.quantity,
+        widthMm: e.widthMm,
+        lengthMm: e.lengthMm,
+      },
+      fieldResolutions: { ...source.fieldResolutions },
+      approvalStatus: "NEEDS_COMPLETION",
+    };
+    const duplicated = refreshRowCompleteness(draft);
+    const materialListRows = [
+      ...session.materialListRows.slice(0, idx + 1),
+      duplicated,
+      ...session.materialListRows.slice(idx + 1),
+    ];
+    setSession({ ...session, materialListRows });
+  },
+
+  deleteMaterialListRow(rowId: string): void {
+    if (
+      session.status !== "MATERIAL_LIST_REVIEW" &&
+      session.status !== "MATERIAL_LIST_QUALITY_FAILED"
+    ) {
+      return;
+    }
+    const materialListRows = session.materialListRows.filter(
+      (r) => r.rowId !== rowId
+    );
+    if (materialListRows.length === session.materialListRows.length) return;
+    setSession({ ...session, materialListRows });
+  },
+
+  showUnresolvedMaterialItems(): void {
+    if (session.status !== "MATERIAL_LIST_QUALITY_FAILED") return;
+    setSession({
+      ...session,
+      status: "MATERIAL_LIST_REVIEW",
+      materialListShowUnresolvedOnly: true,
+    });
   },
 
   approveMaterialList(opts: { allowMissing: boolean }): void {
@@ -670,6 +762,7 @@ export const simpleIntakeActions = {
       extractedRows: [],
       materialListRows: [],
       materialListApproved: false,
+      materialListShowUnresolvedOnly: false,
       unmatchedDxfIds: [],
       dxfAvailability: [],
       coverageIssues: [],
@@ -736,6 +829,10 @@ export const simpleIntakeActions = {
         model?: string;
         usage?: Record<string, unknown>;
         materialListStage?: Record<string, unknown>;
+        qualityGatePassed?: boolean;
+        qualityGate?: Record<string, unknown>;
+        targetedRepair?: Record<string, unknown>;
+        costs?: Record<string, unknown>;
         extractionProviderDebug?: Record<string, unknown>;
         extractionProvider?: string;
       };
@@ -858,6 +955,7 @@ export const simpleIntakeActions = {
       timing.totalMs = Date.now() - t0;
       const completedAt = new Date().toISOString();
       const mlSummary = summarizeMaterialList(materialListRows);
+      const qualityGatePassed = aiJson.qualityGatePassed !== false;
 
       const debug = buildSimpleIntakeDebug({
         runId,
@@ -873,6 +971,7 @@ export const simpleIntakeActions = {
           materialListRowCount: materialListRows.length,
           usage: aiJson.usage ?? null,
           model: aiJson.model ?? null,
+          costs: aiJson.costs ?? null,
         },
         validatedRows: materialListToExtractedRows(materialListRows),
         dxfParts: [],
@@ -880,7 +979,14 @@ export const simpleIntakeActions = {
         unmatchedDxfIds: [],
         diagnostics: null,
         snapshotCoverage: snapResult.coverage,
-        error: null,
+        error: qualityGatePassed
+          ? null
+          : {
+              stage: "VALIDATION",
+              message:
+                "חלק מהנתונים קיימים בקובץ אך לא פוענחו בצורה אמינה.",
+              retryable: true,
+            },
         extractionProviderDebug: aiJson.extractionProviderDebug ?? null,
       });
       (debug as Record<string, unknown>).materialListStage =
@@ -893,18 +999,29 @@ export const simpleIntakeActions = {
           completeRowCount: mlSummary.completeRows,
           incompleteRowCount: mlSummary.incompleteRows,
         };
+      (debug as Record<string, unknown>).qualityGate =
+        aiJson.qualityGate ?? null;
+      (debug as Record<string, unknown>).targetedRepair =
+        aiJson.targetedRepair ?? null;
+      (debug as Record<string, unknown>).costs = aiJson.costs ?? null;
       (debug as Record<string, unknown>).providerCall = {
         provider: "openai",
-        count: 1,
-        purpose: "MATERIAL_LIST_EXTRACTION",
+        count: providerCallCount,
+        purpose:
+          providerCallCount > 1
+            ? "MATERIAL_LIST_EXTRACTION_PLUS_REPAIR"
+            : "MATERIAL_LIST_EXTRACTION",
       };
 
       setSession({
         ...getSimpleIntakeSession(),
-        status: "MATERIAL_LIST_REVIEW",
+        status: qualityGatePassed
+          ? "MATERIAL_LIST_REVIEW"
+          : "MATERIAL_LIST_QUALITY_FAILED",
         analyzingLabel: null,
         materialListRows,
         materialListApproved: false,
+        materialListShowUnresolvedOnly: false,
         extractedRows: materialListToExtractedRows(materialListRows),
         dxfParts: [],
         resultRows: [],
@@ -920,7 +1037,14 @@ export const simpleIntakeActions = {
         completedAt,
         lastDebug: debug,
         providerCallCount,
-        error: null,
+        error: qualityGatePassed
+          ? null
+          : {
+              stage: "VALIDATION",
+              message:
+                "חלק מהנתונים קיימים בקובץ אך לא פוענחו בצורה אמינה.",
+              retryable: true,
+            },
       });
     } catch (err) {
       const error: SimpleIntakeError = {

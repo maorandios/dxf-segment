@@ -10,6 +10,7 @@ export type SimpleIntakeStatus =
   | "FILES_READY"
   | "ANALYZING"
   | "MATERIAL_LIST_REVIEW"
+  | "MATERIAL_LIST_QUALITY_FAILED"
   | "DXF_UPLOAD"
   | "READY"
   | "FAILED";
@@ -297,6 +298,8 @@ export type SimpleIntakeSession = {
   materialListRows: MaterialListRow[];
   /** True after user approved the material list (possibly with missing data). */
   materialListApproved: boolean;
+  /** When true, prefer filtering review to unresolved/incomplete items. */
+  materialListShowUnresolvedOnly: boolean;
   extractedRows: SimpleExtractedRow[];
   dxfParts: SimpleDxfPart[];
   resultRows: SimpleResultRow[];

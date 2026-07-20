@@ -1,5 +1,8 @@
 /**
  * Adapt AI material-list Structured Output into canonical MaterialListRow[].
+ *
+ * Exact provenance uniqueness: at most one canonical row per sheetName+sourceRow.
+ * Entities without exact provenance are dropped (no sourceRow:0 fallback rows).
  */
 
 import { deriveApprovalStatus } from "./completeness";
@@ -118,6 +121,12 @@ export function adaptMaterialListRows(result: unknown): {
       warnings.push(`INVALID_ENTITY_${i}`);
       continue;
     }
+    // Exact provenance required for canonical material-list rows.
+    if (checked.data.sheetName == null || checked.data.sourceRow == null) {
+      invalidRowCount++;
+      warnings.push(`MISSING_PROVENANCE_DROPPED_${i}`);
+      continue;
+    }
     parsed.push(checked.data);
   }
 
@@ -125,48 +134,43 @@ export function adaptMaterialListRows(result: unknown): {
     [];
   const byProvenance = new Map<string, AiMaterialListRow[]>();
   for (const row of parsed) {
-    if (row.sheetName == null || row.sourceRow == null) continue;
     const key = `${row.sheetName}::${row.sourceRow}`;
     const list = byProvenance.get(key) ?? [];
     list.push(row);
     byProvenance.set(key, list);
   }
 
-  const keep = new Set(parsed);
+  const keep = new Set<AiMaterialListRow>();
   let duplicateRowsRemoved = 0;
+  const provenanceFallbackCount = 0;
+
   for (const [key, list] of byProvenance) {
-    if (list.length < 2) continue;
+    if (list.length === 1) {
+      keep.add(list[0]!);
+      continue;
+    }
     const fps = list.map(fingerprint);
     const unique = new Set(fps);
-    if (unique.size === 1) {
-      for (let i = 1; i < list.length; i++) {
-        keep.delete(list[i]!);
-        duplicateRowsRemoved++;
-      }
-    } else {
+    // Always keep exactly one row per exact provenance key (first occurrence).
+    keep.add(list[0]!);
+    duplicateRowsRemoved += list.length - 1;
+    if (unique.size > 1) {
       const [sheetName, sourceRowStr] = key.split("::");
       provenanceConflicts.push({
         sheetName: sheetName ?? null,
         sourceRow: Number(sourceRowStr),
-        reason: "CONFLICTING_VALUES_SAME_SOURCE_ROW",
+        reason: "CONFLICTING_VALUES_SAME_SOURCE_ROW_KEPT_FIRST",
       });
     }
   }
 
+  // Preserve original encounter order among kept rows.
   const ordered = parsed.filter((r) => keep.has(r));
-  let provenanceFallbackCount = 0;
   const rows: MaterialListRow[] = [];
 
   for (let i = 0; i < ordered.length; i++) {
     const r = ordered[i]!;
-    let rowId: string;
-    if (r.sheetName != null && r.sourceRow != null) {
-      rowId = `${normalizeSheetKey(r.sheetName)}-${r.sourceRow}`;
-    } else {
-      rowId = `material-row-${i}`;
-      provenanceFallbackCount++;
-      warnings.push(`PROVENANCE_FALLBACK_${i}`);
-    }
+    const rowId = `${normalizeSheetKey(r.sheetName!)}-${r.sourceRow!}`;
     const base: MaterialListRow = {
       rowId,
       sheetName: r.sheetName,
@@ -181,6 +185,7 @@ export function adaptMaterialListRows(result: unknown): {
       widthMm: r.widthMm,
       lengthMm: r.lengthMm,
       userOverrides: {},
+      fieldResolutions: {},
       approvalStatus: "NEEDS_COMPLETION",
     };
     rows.push({

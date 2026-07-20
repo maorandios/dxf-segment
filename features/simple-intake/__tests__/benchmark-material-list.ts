@@ -1,8 +1,8 @@
 /**
- * Developer benchmark helper for Stage 1 material-list extraction.
+ * Developer benchmark helper for Stage 1 material-list extraction + quality gate.
  *
- * Expected benchmark material rows (manual reference only): 158
- * Never use that number in production logic.
+ * Expected benchmark material rows (manual reference only): 158 / 1902 units
+ * Never use those numbers in production logic.
  *
  * Usage (with credentials):
  *   npx tsx features/simple-intake/__tests__/benchmark-material-list.ts path/to.xlsx [runs]
@@ -12,13 +12,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { buildSimpleWorkbookSnapshot } from "../buildSimpleWorkbookSnapshot";
 import { runOpenAiMaterialListExtraction } from "../materialList/openaiMaterialListExtract";
-import { EXPECTED_BENCHMARK_MATERIAL_ROWS } from "../materialList/types";
+import {
+  EXPECTED_BENCHMARK_MATERIAL_ROWS,
+  EXPECTED_BENCHMARK_MATERIAL_UNITS,
+} from "../materialList/types";
 import { effectiveMaterialFields } from "../materialList/completeness";
+import { countDuplicateSourceRows } from "../materialList/qualityGate";
 import type { MaterialListRow } from "../materialList/types";
-
-/** Approximate list prices ($ / 1M tokens) for reporting only — not billing. */
-const EST_INPUT_PER_M = 0.25;
-const EST_OUTPUT_PER_M = 2.0;
 
 function loadEnvLocal(): void {
   const envPath = path.resolve(process.cwd(), ".env.local");
@@ -64,17 +64,6 @@ function totalUnits(rows: MaterialListRow[]): number {
   return sum;
 }
 
-function estimateCostUsd(
-  inputTokens: number | null,
-  outputTokens: number | null
-): number | null {
-  if (inputTokens == null || outputTokens == null) return null;
-  return (
-    (inputTokens / 1_000_000) * EST_INPUT_PER_M +
-    (outputTokens / 1_000_000) * EST_OUTPUT_PER_M
-  );
-}
-
 async function main(): Promise<void> {
   loadEnvLocal();
   const filePath = process.argv[2];
@@ -113,26 +102,37 @@ async function main(): Promise<void> {
     const units = totalUnits(out.rows);
     const sourceRows = out.rows
       .map((r) => r.sourceRow)
-      .filter((n): n is number => n != null)
-      .sort((a, b) => a - b);
+      .filter((n): n is number => n != null && n > 0);
     const report = {
       run: i + 1,
       model: out.model,
-      rowCount: out.rows.length,
-      totalUnits: units,
-      sourceRowCount: sourceRows.length,
-      durationMs: Date.now() - started,
-      usage: out.usage,
-      estimatedCostUsd: estimateCostUsd(
-        out.usage.inputTokens,
-        out.usage.outputTokens
-      ),
+      primaryRowCount:
+        (out.materialListStageDebug.adaptDiagnostics as { validatedRowCount?: number })
+          ?.validatedRowCount ?? out.rows.length,
+      finalCanonicalRowCount: out.rows.length,
+      unitCount: units,
+      lengthCoverageBefore: out.qualityGate.fieldCoverageBefore.lengthMm,
+      lengthCoverageAfter: out.qualityGate.fieldCoverageAfter.lengthMm,
+      repairTriggered: out.qualityGate.triggeredRepair,
+      duplicateSourceRows: countDuplicateSourceRows(out.rows),
+      unresolvedValues: out.qualityGate.unresolvedFieldCount,
+      primaryTokens: out.primaryUsage,
+      repairTokens: out.targetedRepair.usage,
+      providerCallCount: out.providerCallCount,
+      primaryCostUsd: out.primaryEstimatedCostUsd,
+      repairCostUsd: out.repairEstimatedCostUsd,
+      totalCostUsd: out.totalEstimatedCostUsd,
+      totalDurationMs: Date.now() - started,
+      qualityGatePassed: out.qualityGatePassed,
       reference: {
         expectedRows: EXPECTED_BENCHMARK_MATERIAL_ROWS,
-        expectedUnits: 1902,
+        expectedUnits: EXPECTED_BENCHMARK_MATERIAL_UNITS,
       },
       matchesReference:
-        out.rows.length === EXPECTED_BENCHMARK_MATERIAL_ROWS && units === 1902,
+        out.rows.length === EXPECTED_BENCHMARK_MATERIAL_ROWS &&
+        units === EXPECTED_BENCHMARK_MATERIAL_UNITS &&
+        out.qualityGate.fieldCoverageAfter.lengthMm ===
+          EXPECTED_BENCHMARK_MATERIAL_ROWS,
     };
     runReports.push(report);
     console.log(JSON.stringify(report, null, 2));
@@ -148,10 +148,11 @@ async function main(): Promise<void> {
     console.log(
       JSON.stringify(
         {
-          compareToRun1: i + 1,
-          exactEqual: missing.length === 0 && added.length === 0,
-          missing: missing.length,
-          added: added.length,
+          compare: `run1 vs run${i + 1}`,
+          fingerprintDiff: {
+            missingFromRun: missing.length,
+            addedInRun: added.length,
+          },
         },
         null,
         2
@@ -159,19 +160,15 @@ async function main(): Promise<void> {
     );
   }
 
-  const allStable = fingerprints.every(
-    (fps) =>
-      fps.length === base.length && fps.every((f, idx) => f === base[idx])
-  );
   console.log(
     JSON.stringify(
       {
         summary: {
-          configuredModel: process.env.SIMPLE_INTAKE_OPENAI_MODEL ?? null,
           runs,
-          allFingerprintsStable: allStable,
-          runReports,
+          referenceRows: EXPECTED_BENCHMARK_MATERIAL_ROWS,
+          referenceUnits: EXPECTED_BENCHMARK_MATERIAL_UNITS,
         },
+        runs: runReports,
       },
       null,
       2

@@ -7,6 +7,20 @@ export type MaterialListApprovalStatus =
   | "NEEDS_COMPLETION"
   | "APPROVED_WITH_MISSING_DATA";
 
+export type RepairableMaterialField =
+  | "material"
+  | "thicknessMm"
+  | "quantity"
+  | "widthMm"
+  | "lengthMm";
+
+export type MaterialFieldResolution =
+  | "EXACT_PRIMARY"
+  | "EXACT_REPAIR"
+  | "DERIVED_FROM_PROFILE"
+  | "MISSING_IN_SOURCE"
+  | "UNRESOLVED";
+
 export type MaterialListUserOverrides = {
   partId?: string | null;
   profile?: string | null;
@@ -17,6 +31,10 @@ export type MaterialListUserOverrides = {
   widthMm?: number | null;
   lengthMm?: number | null;
 };
+
+export type MaterialListFieldResolutions = Partial<
+  Record<RepairableMaterialField, MaterialFieldResolution>
+>;
 
 /** Local canonical row — rowId / overrides / approvalStatus are never from the AI. */
 export type MaterialListRow = {
@@ -34,6 +52,8 @@ export type MaterialListRow = {
   lengthMm: number | null;
   userOverrides: MaterialListUserOverrides;
   approvalStatus: MaterialListApprovalStatus;
+  /** Internal field provenance — never shown as raw enum to end users. */
+  fieldResolutions: MaterialListFieldResolutions;
 };
 
 /** Strict Structured Output from the workbook model (no local fields). */
@@ -65,6 +85,53 @@ export type MaterialListSummary = {
   unitsComplete: boolean;
 };
 
+export type MaterialListFieldCoverage = Record<RepairableMaterialField, number>;
+
+export type MaterialListQualityGateResult = {
+  passed: boolean;
+  shouldRepair: boolean;
+  repairFields: RepairableMaterialField[];
+  triggerReasons: string[];
+  fieldCoverage: MaterialListFieldCoverage;
+  fieldCoverageCounts: Record<RepairableMaterialField, number>;
+  itemCount: number;
+  exactSourceRowCount: number;
+  duplicateSourceRows: number;
+  missingProvenance: number;
+  invalidNumeric: number;
+};
+
+export type MaterialListQualityGateDebug = {
+  passedBeforeRepair: boolean;
+  passedAfterRepair: boolean;
+  fieldCoverageBefore: Record<RepairableMaterialField, number>;
+  fieldCoverageAfter: Record<RepairableMaterialField, number>;
+  triggeredRepair: boolean;
+  repairFields: RepairableMaterialField[];
+  triggerReasons: string[];
+  duplicateSourceRowsBefore: number;
+  duplicateSourceRowsAfter: number;
+  unresolvedFieldCount: number;
+  missingInSourceFieldCount: number;
+};
+
+export type TargetedRepairDebug = {
+  provider: "openai";
+  model: string;
+  callCount: 0 | 1;
+  repairedSourceRowCount: number;
+  exactValuesMerged: number;
+  unresolvedValues: number;
+  missingInSourceValues: number;
+  durationMs: number | null;
+  usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+  };
+  estimatedCostUsd: number | null;
+};
+
 export type MaterialListStageDebug = {
   provider: "openai";
   model: string;
@@ -85,15 +152,20 @@ export type MaterialListStageDebug = {
 };
 
 export const MATERIAL_LIST_TABLE_HEADERS = [
+  "",
   "סטטוס",
   "חלק / פרופיל",
-  "חומר",
+  "סוג חומר",
   "עובי",
   "כמות",
   "רוחב",
   "אורך",
-  "מקור",
-  "פעולות",
+  'שטח יחידה (מ"ר)',
+  'שטח כללי (מ"ר)',
+  'משקל יחידה (ק"ג)',
+  'משקל כללי (ק"ג)',
+  "",
 ] as const;
 
 export const EXPECTED_BENCHMARK_MATERIAL_ROWS = 158;
+export const EXPECTED_BENCHMARK_MATERIAL_UNITS = 1902;

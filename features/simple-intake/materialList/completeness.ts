@@ -82,12 +82,24 @@ export function missingCompletionFields(
   const missing: Array<
     "material" | "thicknessMm" | "quantity" | "widthMm" | "lengthMm"
   > = [];
-  if (!isFieldComplete("material", e.material)) missing.push("material");
-  if (!isFieldComplete("thicknessMm", e.thicknessMm))
-    missing.push("thicknessMm");
-  if (!isFieldComplete("quantity", e.quantity)) missing.push("quantity");
-  if (!isFieldComplete("widthMm", e.widthMm)) missing.push("widthMm");
-  if (!isFieldComplete("lengthMm", e.lengthMm)) missing.push("lengthMm");
+  const fr = row.fieldResolutions ?? {};
+
+  const pushIfNeeded = (
+    key: "material" | "thicknessMm" | "quantity" | "widthMm" | "lengthMm",
+    complete: boolean
+  ) => {
+    if (fr[key] === "UNRESOLVED") {
+      missing.push(key);
+      return;
+    }
+    if (!complete) missing.push(key);
+  };
+
+  pushIfNeeded("material", isFieldComplete("material", e.material));
+  pushIfNeeded("thicknessMm", isFieldComplete("thicknessMm", e.thicknessMm));
+  pushIfNeeded("quantity", isFieldComplete("quantity", e.quantity));
+  pushIfNeeded("widthMm", isFieldComplete("widthMm", e.widthMm));
+  pushIfNeeded("lengthMm", isFieldComplete("lengthMm", e.lengthMm));
   return missing;
 }
 
@@ -154,17 +166,51 @@ export function summarizeMaterialList(
 export function missingFieldsMessageHe(row: MaterialListRow): string | null {
   const missing = missingCompletionFields(row);
   if (missing.length === 0) return null;
+  const fr = row.fieldResolutions ?? {};
   const labels: Record<(typeof missing)[number], string> = {
-    material: "חומר",
+    material: "סוג חומר",
     thicknessMm: "עובי",
     quantity: "כמות",
     widthMm: "רוחב",
     lengthMm: "אורך",
   };
-  const names = missing.map((m) => labels[m]);
-  if (names.length === 1) return `חסר ${names[0]}`;
-  if (names.length === 2) return `חסרים ${names[0]} ו${names[1]}`;
-  return `חסרים ${names.slice(0, -1).join(", ")} ו${names[names.length - 1]}`;
+
+  const unresolved = missing.filter((m) => fr[m] === "UNRESOLVED");
+  const trulyMissing = missing.filter((m) => fr[m] !== "UNRESOLVED");
+
+  const parts: string[] = [];
+  if (unresolved.length > 0) {
+    const names = unresolved.map((m) => labels[m]);
+    if (names.length === 1) parts.push(`${names[0]} לא פוענח`);
+    else if (names.length === 2)
+      parts.push(`${names[0]} ו${names[1]} לא פוענחו`);
+    else
+      parts.push(
+        `${names.slice(0, -1).join(", ")} ו${names[names.length - 1]} לא פוענחו`
+      );
+  }
+  if (trulyMissing.length > 0) {
+    const names = trulyMissing.map((m) => labels[m]);
+    if (names.length === 1) parts.push(`חסר ${names[0]}`);
+    else if (names.length === 2) parts.push(`חסרים ${names[0]} ו${names[1]}`);
+    else
+      parts.push(
+        `חסרים ${names.slice(0, -1).join(", ")} ו${names[names.length - 1]}`
+      );
+  }
+  return parts.join(" · ");
+}
+
+/** User-facing cell status for a required field. */
+export function fieldDisplayKind(
+  row: MaterialListRow,
+  field: "material" | "thicknessMm" | "quantity" | "widthMm" | "lengthMm"
+): "value" | "missing" | "unresolved" {
+  if (row.fieldResolutions?.[field] === "UNRESOLVED") return "unresolved";
+  const e = effectiveMaterialFields(row);
+  const complete = isFieldComplete(field, e[field]);
+  if (!complete) return "missing";
+  return "value";
 }
 
 export function provenanceLabelHe(row: MaterialListRow): string {
