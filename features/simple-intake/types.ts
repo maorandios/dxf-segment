@@ -3,10 +3,14 @@
  * No dependency on complex ai-intake pipeline.
  */
 
+import type { MaterialListRow } from "./materialList/types";
+
 export type SimpleIntakeStatus =
   | "IDLE"
   | "FILES_READY"
   | "ANALYZING"
+  | "MATERIAL_LIST_REVIEW"
+  | "DXF_UPLOAD"
   | "READY"
   | "FAILED";
 
@@ -289,6 +293,10 @@ export type SimpleIntakeSession = {
   workbookFile: File | null;
   dxfFiles: File[];
   workbookSnapshot: SimpleWorkbookSnapshot | null;
+  /** Stage 1 canonical material list (before / after approval). */
+  materialListRows: MaterialListRow[];
+  /** True after user approved the material list (possibly with missing data). */
+  materialListApproved: boolean;
   extractedRows: SimpleExtractedRow[];
   dxfParts: SimpleDxfPart[];
   resultRows: SimpleResultRow[];

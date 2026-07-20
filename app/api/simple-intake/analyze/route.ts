@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
 import {
-  SIMPLE_INTAKE_SYSTEM_PROMPT,
-  simpleAiWorkbookResultSchema,
-} from "@/features/simple-intake/aiSchema";
-import { buildSimpleAnalyzeUserText } from "@/features/simple-intake/buildAnalyzeRequest";
-import { SIMPLE_INTAKE_TIMEOUT_MS } from "@/features/simple-intake/types";
+  getSimpleWorkbookExtractionProvider,
+  LlamaExtractError,
+  runLlamaExtractWorkbook,
+} from "@/features/simple-intake/extraction";
+import { simpleAiWorkbookResultSchema } from "@/features/simple-intake/aiSchema";
+import { runOpenAiMaterialListExtraction } from "@/features/simple-intake/materialList/openaiMaterialListExtract";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+/** LlamaExtract polling may take up to ~240s; OpenAI material list is shorter. */
+export const maxDuration = 300;
 
 type SnapshotBody = {
   workbookId: string;
@@ -26,45 +26,62 @@ type SnapshotBody = {
   }>;
 };
 
-function getClientAndModel(): { client: OpenAI; model: string } {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  // Simple Intake workbook extraction only — do not use OPENAI_EXTRACTION_MODEL.
-  const model = "gpt-5.4-mini-2026-03-17";
-  if (!apiKey) {
-    throw Object.assign(new Error("MISSING_API_KEY"), { code: "MISSING_API_KEY" });
+const HEBREW_FAIL =
+  "לא הצלחנו לקרוא את קובץ האקסל. נסה שוב או העלה קובץ אחר.";
+
+async function readRequest(req: Request): Promise<{
+  snapshot: SnapshotBody | null;
+  workbookBytes: Buffer | null;
+  workbookFilename: string | null;
+}> {
+  const contentType = req.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    const form = await req.formData();
+    const snapshotRaw = form.get("snapshot");
+    let snapshot: SnapshotBody | null = null;
+    if (typeof snapshotRaw === "string") {
+      snapshot = JSON.parse(snapshotRaw) as SnapshotBody;
+    }
+    const file = form.get("workbook");
+    let workbookBytes: Buffer | null = null;
+    let workbookFilename: string | null = null;
+    if (file && typeof file === "object" && "arrayBuffer" in file) {
+      const f = file as File;
+      workbookFilename = f.name || snapshot?.filename || "workbook.xlsx";
+      workbookBytes = Buffer.from(await f.arrayBuffer());
+    }
+    return { snapshot, workbookBytes, workbookFilename };
   }
-  return { client: new OpenAI({ apiKey }), model };
+
+  const body = (await req.json()) as {
+    snapshot?: SnapshotBody;
+  };
+  return {
+    snapshot: body.snapshot ?? null,
+    workbookBytes: null,
+    workbookFilename: body.snapshot?.filename ?? null,
+  };
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(
-            Object.assign(new Error("PROVIDER_TIMEOUT"), {
-              code: "PROVIDER_TIMEOUT",
-            })
-          );
-        }, ms);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+function sanitizeDebug(debug: Record<string, unknown>): Record<string, unknown> {
+  const json = JSON.stringify(debug, (_k, v) => {
+    if (typeof v === "string" && /sk-|llama.*key|api[_-]?key/i.test(v)) {
+      return "[redacted]";
+    }
+    return v;
+  });
+  return JSON.parse(json) as Record<string, unknown>;
 }
 
 export async function POST(req: Request): Promise<Response> {
   const started = Date.now();
+  // Active path for this checkpoint is OpenAI material-list v1.
+  // LlamaExtract remains available only when explicitly selected (POC).
+  const provider = getSimpleWorkbookExtractionProvider();
+
   try {
-    const body = (await req.json()) as {
-      snapshot?: SnapshotBody;
-      /** @deprecated Ignored — DXF hints must not influence extraction. */
-      knownExactIdentifiersFoundInWorkbook?: unknown;
-    };
-    const snapshot = body.snapshot;
+    const { snapshot, workbookBytes, workbookFilename } = await readRequest(req);
+
     if (!snapshot || !Array.isArray(snapshot.sheets)) {
       return NextResponse.json(
         {
@@ -77,8 +94,8 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    const raw = JSON.stringify(body);
-    if (/"entities"|"dxfBytes"|"dxfContent"/i.test(raw)) {
+    const probe = JSON.stringify(snapshot);
+    if (/"entities"|"dxfBytes"|"dxfContent"/i.test(probe)) {
       return NextResponse.json(
         {
           ok: false,
@@ -90,84 +107,156 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    const { client, model } = getClientAndModel();
-    // Workbook snapshot only — legacy DXF hints are never forwarded
-    const userText = buildSimpleAnalyzeUserText(snapshot);
+    if (provider === "llama-extract") {
+      // POC path only — not the default Excel→Approved Material List workflow.
+      if (!workbookBytes || workbookBytes.length === 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            stage: "AI_REQUEST",
+            message: HEBREW_FAIL,
+            code: "MISSING_WORKBOOK_FILE",
+            retryable: false,
+            extractionProvider: "llama-extract",
+            durationMs: Date.now() - started,
+          },
+          { status: 400 }
+        );
+      }
 
-    const response = await withTimeout(
-      client.responses.parse({
-        model,
-        reasoning: { effort: "none" },
-        input: [
-          { role: "system", content: SIMPLE_INTAKE_SYSTEM_PROMPT },
-          { role: "user", content: userText },
-        ],
-        text: {
-          format: zodTextFormat(
-            simpleAiWorkbookResultSchema,
-            "omega_simple_intake_extraction"
-          ),
-        },
-      }),
-      SIMPLE_INTAKE_TIMEOUT_MS
-    );
+      const out = await runLlamaExtractWorkbook({
+        workbookBytes,
+        filename: workbookFilename || snapshot.filename || "workbook.xlsx",
+      });
 
-    const parsed = response.output_parsed;
-    if (!parsed) {
+      const normalizedRows = out.result.rows.map((r) => ({
+        ...r,
+        thicknessMm:
+          typeof r.thicknessMm === "number" && r.thicknessMm > 0
+            ? r.thicknessMm
+            : null,
+        widthMm:
+          typeof r.widthMm === "number" && r.widthMm > 0 ? r.widthMm : null,
+        lengthMm:
+          typeof r.lengthMm === "number" && r.lengthMm > 0 ? r.lengthMm : null,
+      }));
+      const parsed = simpleAiWorkbookResultSchema.safeParse({
+        ...out.result,
+        rows: normalizedRows,
+      });
+      if (!parsed.success) {
+        return NextResponse.json(
+          {
+            ok: false,
+            stage: "AI_REQUEST",
+            code: "LLAMA_RESULT_SCHEMA_INVALID",
+            message: HEBREW_FAIL,
+            retryable: false,
+            durationMs: Date.now() - started,
+            extractionProvider: "llama-extract",
+            extractionProviderDebug: sanitizeDebug({
+              ...out.extractionProviderDebug,
+              schemaIssues: parsed.error.issues.slice(0, 20),
+            }),
+          },
+          { status: 502 }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        result: parsed.data,
+        providerCallCount: out.providerCallCount,
+        model: out.model,
+        durationMs: Date.now() - started,
+        usage: out.usage,
+        extractionProvider: "llama-extract",
+        extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
+      });
+    }
+
+    // Default: OpenAI Mini material-list v1 (snapshot only, one call).
+    const out = await runOpenAiMaterialListExtraction({ snapshot });
+    return NextResponse.json({
+      ok: true,
+      materialListRows: out.rows,
+      materialListStage: sanitizeDebug(out.materialListStageDebug),
+      providerCallCount: out.providerCallCount,
+      model: out.model,
+      durationMs: Date.now() - started,
+      usage: out.usage,
+      extractionProvider: "openai",
+      extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
+      result: {
+        status: "SUCCESS",
+        summary: `material-list-v1:${out.rows.length}`,
+        rows: [],
+        warnings: [],
+      },
+    });
+  } catch (err) {
+    if (err instanceof LlamaExtractError) {
       return NextResponse.json(
         {
           ok: false,
           stage: "AI_RESPONSE",
-          message: "Empty structured output",
-          retryable: true,
+          code: err.code,
+          message: HEBREW_FAIL,
+          retryable:
+            err.code === "LLAMA_POLL_TIMEOUT" ||
+            err.code === "MISSING_LLAMA_API_KEY",
           durationMs: Date.now() - started,
+          extractionProvider: "llama-extract",
+          extractionProviderDebug: sanitizeDebug(err.debug),
         },
-        { status: 502 }
+        {
+          status:
+            err.code === "LLAMA_POLL_TIMEOUT"
+              ? 504
+              : err.code === "MISSING_LLAMA_API_KEY"
+                ? 500
+                : 502,
+        }
       );
     }
 
-    const result = simpleAiWorkbookResultSchema.parse(parsed);
-    return NextResponse.json({
-      ok: true,
-      result,
-      providerCallCount: 1,
-      model,
-      durationMs: Date.now() - started,
-      usage: {
-        inputTokens: response.usage?.input_tokens ?? null,
-        outputTokens: response.usage?.output_tokens ?? null,
-      },
-    });
-  } catch (err) {
     const code =
       err && typeof err === "object" && "code" in err
         ? String((err as { code?: string }).code)
         : "AI_REQUEST_FAILED";
     const retryable =
-      code === "PROVIDER_TIMEOUT" ||
-      code === "MISSING_API_KEY" ||
-      code === "MISSING_MODEL_ENV"
-        ? code !== "MISSING_API_KEY" && code !== "MISSING_MODEL_ENV"
-        : true;
+      code === "PROVIDER_TIMEOUT"
+        ? true
+        : code !== "MISSING_API_KEY" && code !== "MISSING_MODEL_ENV";
     const message =
       code === "PROVIDER_TIMEOUT"
         ? "תם הזמן המוקצב לבקשת ה-AI"
         : code === "MISSING_API_KEY" || code === "MISSING_MODEL_ENV"
-          ? "חסרה הגדרת מפתח/מודל לשרת"
-          : err instanceof Error
-            ? err.message
-            : String(err);
+          ? "חסר מפתח או מודל לניתוח"
+          : code === "EMPTY_MATERIAL_LIST"
+            ? HEBREW_FAIL
+            : err instanceof Error
+              ? err.message
+              : HEBREW_FAIL;
 
     return NextResponse.json(
       {
         ok: false,
-        stage: code === "PROVIDER_TIMEOUT" ? "AI_RESPONSE" : "AI_REQUEST",
+        stage: "AI_REQUEST",
         code,
         message,
-        retryable: code === "PROVIDER_TIMEOUT" ? true : retryable,
+        retryable,
         durationMs: Date.now() - started,
+        extractionProvider: "openai",
       },
-      { status: code === "PROVIDER_TIMEOUT" ? 504 : 500 }
+      {
+        status:
+          code === "PROVIDER_TIMEOUT"
+            ? 504
+            : code === "MISSING_API_KEY"
+              ? 500
+              : 502,
+      }
     );
   }
 }

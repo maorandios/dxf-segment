@@ -11,6 +11,15 @@ import {
   buildSimpleIntakeResultSummary,
   matchSimpleRows,
 } from "./matchSimpleRows";
+import {
+  refreshRowCompleteness,
+  summarizeMaterialList,
+} from "./materialList/completeness";
+import { materialListToExtractedRows } from "./materialList/toExtractedRows";
+import type {
+  MaterialListRow,
+  MaterialListUserOverrides,
+} from "./materialList/types";
 import { normalizePartIdForMatch } from "./normalizePartId";
 import { parseSimpleDxfFiles } from "./parseSimpleDxfFiles";
 import type {
@@ -55,6 +64,8 @@ function createEmptySession(): SimpleIntakeSession {
     workbookFile: null,
     dxfFiles: [],
     workbookSnapshot: null,
+    materialListRows: [],
+    materialListApproved: false,
     extractedRows: [],
     dxfParts: [],
     resultRows: [],
@@ -88,10 +99,9 @@ function setSession(next: SimpleIntakeSession): void {
 }
 
 function recomputeReadyStatus(
-  workbook: File | null,
-  dxfs: File[]
+  workbook: File | null
 ): SimpleIntakeSession["status"] {
-  if (workbook && dxfs.length > 0) return "FILES_READY";
+  if (workbook) return "FILES_READY";
   return "IDLE";
 }
 
@@ -154,13 +164,20 @@ export const simpleIntakeActions = {
     const next = {
       ...session,
       workbookFile: file,
-      status: recomputeReadyStatus(file, session.dxfFiles),
+      status: recomputeReadyStatus(file),
       error: null,
     };
-    if (session.status === "READY" || session.status === "FAILED") {
-      next.status = recomputeReadyStatus(file, session.dxfFiles);
+    if (
+      session.status === "READY" ||
+      session.status === "FAILED" ||
+      session.status === "MATERIAL_LIST_REVIEW" ||
+      session.status === "DXF_UPLOAD"
+    ) {
+      next.status = recomputeReadyStatus(file);
       next.resultRows = [];
       next.extractedRows = [];
+      next.materialListRows = [];
+      next.materialListApproved = false;
       next.workbookSnapshot = null;
       next.error = null;
       next.dxfAvailability = [];
@@ -182,11 +199,16 @@ export const simpleIntakeActions = {
       merged.push(f);
       existingNames.add(f.name);
     }
+    const status =
+      session.status === "DXF_UPLOAD" ||
+      session.status === "READY" ||
+      session.status === "MATERIAL_LIST_REVIEW"
+        ? session.status
+        : recomputeReadyStatus(session.workbookFile);
     setSession({
       ...session,
       dxfFiles: merged,
-      status: recomputeReadyStatus(session.workbookFile, merged),
-      resultRows: session.status === "READY" ? [] : session.resultRows,
+      status,
       error: null,
     });
   },
@@ -273,12 +295,102 @@ export const simpleIntakeActions = {
     return { added: newcomers.length };
   },
 
+  /**
+   * Re-run local matching using edited source dimensions (and other edits).
+   * Does not call AI or re-extract the workbook.
+   */
+  rematchLocallyPreservingEdits(): void {
+    if (session.status !== "READY") return;
+    const extractedRows = session.resultRows.map((r) => {
+      const e = { ...r.extracted };
+      if (Object.prototype.hasOwnProperty.call(r.edits, "widthMm")) {
+        e.widthMm = r.edits.widthMm ?? null;
+      }
+      if (Object.prototype.hasOwnProperty.call(r.edits, "lengthMm")) {
+        e.lengthMm = r.edits.lengthMm ?? null;
+      }
+      if (Object.prototype.hasOwnProperty.call(r.edits, "partId")) {
+        e.partId = r.edits.partId ?? null;
+      }
+      return e;
+    });
+    const matched = matchSimpleRows({
+      extractedRows,
+      dxfParts: session.dxfParts,
+      extractedRowCount: extractedRows.length,
+    });
+    const prevByExtractedId = new Map(
+      session.resultRows.map((r) => [r.extracted.rowId, r] as const)
+    );
+    const mergedResultRows = matched.resultRows.map((r) => {
+      const prev = prevByExtractedId.get(r.extracted.rowId);
+      if (!prev) return r;
+      const next = {
+        ...r,
+        edits: { ...prev.edits },
+        excluded: prev.excluded,
+        // Keep extracted identity/source cells from original extraction,
+        // but use rematched geometry dims already applied via extractedRows copy.
+        extracted: {
+          ...prev.extracted,
+          widthMm: r.extracted.widthMm,
+          lengthMm: r.extracted.lengthMm,
+          partId: r.extracted.partId,
+        },
+      };
+      return {
+        ...next,
+        status: next.excluded
+          ? ("EXCLUDED" as const)
+          : deriveResultRowStatus(next),
+      };
+    });
+    const refreshed = refreshAvailability(
+      mergedResultRows,
+      session.dxfParts,
+      session.coverageIssues
+    );
+    const coverageStats = {
+      exactIdsFoundInWorkbook:
+        session.localSummary?.exactIdsFoundInWorkbook ?? 0,
+      exactIdsPresentInExtractedRows:
+        session.localSummary?.exactIdsPresentInExtractedRows ?? 0,
+      exactIdsMissingFromExtraction:
+        session.localSummary?.exactIdsMissingFromExtraction ?? 0,
+    };
+    const localSummary = buildSimpleIntakeResultSummary({
+      extractedRowCount: session.extractedRows.length,
+      validatedRows: session.extractedRows,
+      resultRows: mergedResultRows,
+      dxfAvailability: refreshed.dxfAvailability,
+      coverageStats,
+    });
+    setSession({
+      ...session,
+      resultRows: mergedResultRows,
+      matchingDiagnostics: {
+        ...matched.diagnostics,
+        dxfAvailability: refreshed.dxfAvailability,
+        localSummary,
+      },
+      ...refreshed,
+      localSummary,
+      providerCallCount: session.providerCallCount,
+    });
+  },
+
   removeDxf(fileName: string): void {
     const merged = session.dxfFiles.filter((f) => f.name !== fileName);
+    const status =
+      session.status === "DXF_UPLOAD" ||
+      session.status === "READY" ||
+      session.status === "MATERIAL_LIST_REVIEW"
+        ? session.status
+        : recomputeReadyStatus(session.workbookFile);
     setSession({
       ...session,
       dxfFiles: merged,
-      status: recomputeReadyStatus(session.workbookFile, merged),
+      status,
     });
   },
 
@@ -289,11 +401,13 @@ export const simpleIntakeActions = {
   backToFiles(): void {
     setSession({
       ...session,
-      status: recomputeReadyStatus(session.workbookFile, session.dxfFiles),
+      status: recomputeReadyStatus(session.workbookFile),
       error: null,
       analyzingLabel: null,
       resultRows: [],
       extractedRows: [],
+      materialListRows: [],
+      materialListApproved: false,
       unmatchedDxfIds: [],
       dxfAvailability: [],
       coverageIssues: [],
@@ -306,6 +420,517 @@ export const simpleIntakeActions = {
       lastDebug: null,
       providerCallCount: 0,
     });
+  },
+
+  updateMaterialListOverrides(
+    rowId: string,
+    patch: MaterialListUserOverrides
+  ): void {
+    if (
+      session.status !== "MATERIAL_LIST_REVIEW" &&
+      session.status !== "DXF_UPLOAD" &&
+      session.status !== "READY"
+    ) {
+      return;
+    }
+    const materialListRows = session.materialListRows.map((r) => {
+      if (r.rowId !== rowId) return r;
+      const next: MaterialListRow = {
+        ...r,
+        userOverrides: { ...r.userOverrides, ...patch },
+      };
+      return refreshRowCompleteness(next, {
+        keepApprovedWithMissing: session.materialListApproved,
+      });
+    });
+    setSession({ ...session, materialListRows });
+  },
+
+  approveMaterialList(opts: { allowMissing: boolean }): void {
+    if (session.status !== "MATERIAL_LIST_REVIEW") return;
+    const summary = summarizeMaterialList(session.materialListRows);
+    if (!opts.allowMissing && summary.incompleteRows > 0) return;
+
+    const materialListRows = session.materialListRows.map((r) => {
+      if (r.approvalStatus === "COMPLETE") return r;
+      if (opts.allowMissing) {
+        return { ...r, approvalStatus: "APPROVED_WITH_MISSING_DATA" as const };
+      }
+      return r;
+    });
+
+    setSession({
+      ...session,
+      materialListRows,
+      materialListApproved: true,
+      status: "DXF_UPLOAD",
+      extractedRows: materialListToExtractedRows(materialListRows),
+    });
+  },
+
+  backToMaterialList(): void {
+    if (
+      session.status !== "DXF_UPLOAD" &&
+      session.status !== "READY" &&
+      session.status !== "MATERIAL_LIST_REVIEW"
+    ) {
+      return;
+    }
+    setSession({
+      ...session,
+      status: "MATERIAL_LIST_REVIEW",
+      // Keep DXF files/parts and resultRows when returning is safe; clear match
+      // results so Stage 2 can be re-run after further edits.
+      resultRows: [],
+      dxfParts: session.status === "READY" ? session.dxfParts : session.dxfParts,
+      unmatchedDxfIds: [],
+      dxfAvailability: [],
+      localSummary: null,
+      matchingDiagnostics: null,
+    });
+  },
+
+  async runDxfStageFromApprovedList(): Promise<void> {
+    if (!session.materialListApproved) return;
+    if (session.dxfFiles.length === 0) return;
+    if (session.status !== "DXF_UPLOAD" && session.status !== "READY") return;
+
+    const dxfFiles = [...session.dxfFiles];
+    const materialListRows = session.materialListRows;
+    const extractedRows = materialListToExtractedRows(materialListRows);
+    const runId = session.runId ?? newRunId();
+    const startedAt = session.startedAt ?? new Date().toISOString();
+    const t0 = Date.now();
+    const timing = { ...session.timing };
+
+    setSession({
+      ...session,
+      status: "ANALYZING",
+      analyzingLabel: "קורא קובצי DXF",
+      extractedRows,
+    });
+
+    try {
+      const tDxf = Date.now();
+      const { parts: dxfParts } = await parseSimpleDxfFiles(dxfFiles);
+      timing.dxfParseMs = Date.now() - tDxf;
+
+      setSession({
+        ...getSimpleIntakeSession(),
+        dxfParts,
+        analyzingLabel: "מתאים בין הנתונים לקובצי DXF",
+        timing: { ...timing },
+      });
+
+      const tMatch = Date.now();
+      const matched = matchSimpleRows({
+        extractedRows,
+        dxfParts,
+        extractedRowCount: extractedRows.length,
+      });
+      timing.matchingMs = Date.now() - tMatch;
+      timing.candidateGenerationMs =
+        matched.diagnostics.timing.candidateGenerationMs;
+      timing.automaticAssignmentMs =
+        matched.diagnostics.timing.automaticAssignmentMs;
+      timing.strongAssignmentMs =
+        matched.diagnostics.timing.strongAssignmentMs;
+      timing.propagationMs = matched.diagnostics.timing.propagationMs;
+      timing.finalClassificationMs =
+        matched.diagnostics.timing.finalClassificationMs;
+
+      const tAvail = Date.now();
+      const dxfAvailability = deriveSimpleDxfAvailability({
+        dxfParts,
+        resultRows: matched.resultRows,
+        coverageIssues: [],
+      });
+      timing.availabilityDerivationMs = Date.now() - tAvail;
+
+      const localSummary = buildSimpleIntakeResultSummary({
+        extractedRowCount: extractedRows.length,
+        validatedRows: extractedRows,
+        resultRows: matched.resultRows,
+        dxfAvailability,
+        coverageStats: {
+          exactIdsFoundInWorkbook: 0,
+          exactIdsPresentInExtractedRows: 0,
+          exactIdsMissingFromExtraction: 0,
+        },
+      });
+      localSummary.extractedRows = extractedRows.length;
+      localSummary.validatedRows = extractedRows.length;
+
+      const unmatchedDxfIds = dxfAvailability
+        .filter((d) => d.state === "UNUSED")
+        .map((d) => d.dxfId);
+
+      timing.totalMs = (session.timing.totalMs ?? 0) + (Date.now() - t0);
+      const completedAt = new Date().toISOString();
+      const diagnostics = {
+        ...matched.diagnostics,
+        dxfAvailability,
+        localSummary,
+      };
+
+      const prevDebug = session.lastDebug ?? {};
+      const debug = buildSimpleIntakeDebug({
+        runId,
+        startedAt,
+        completedAt,
+        timing,
+        workbookFileName: session.workbookFile?.name ?? null,
+        dxfFileNames: dxfFiles.map((f) => f.name),
+        snapshot: session.workbookSnapshot,
+        providerCallCount: session.providerCallCount,
+        aiRawResult: {
+          ...(typeof prevDebug.aiRawResult === "object" &&
+          prevDebug.aiRawResult
+            ? prevDebug.aiRawResult
+            : {}),
+          stage2: "DXF_MATCH_ONLY_NO_AI",
+        },
+        validatedRows: extractedRows,
+        dxfParts,
+        resultRows: matched.resultRows,
+        unmatchedDxfIds,
+        diagnostics,
+        snapshotCoverage: null,
+        error: null,
+        extractionProviderDebug:
+          (prevDebug.extractionProvider as Record<string, unknown>) ??
+          (prevDebug.extractionProviderDebug as Record<string, unknown>) ??
+          null,
+      });
+
+      // Preserve materialListStage from Stage 1 debug when present.
+      if (
+        prevDebug.materialListStage &&
+        typeof prevDebug.materialListStage === "object"
+      ) {
+        (debug as Record<string, unknown>).materialListStage =
+          prevDebug.materialListStage;
+      }
+
+      setSession({
+        ...getSimpleIntakeSession(),
+        status: "READY",
+        analyzingLabel: null,
+        materialListRows,
+        materialListApproved: true,
+        extractedRows,
+        dxfParts,
+        resultRows: matched.resultRows,
+        unmatchedDxfIds,
+        dxfAvailability,
+        coverageIssues: [],
+        hasCoverageWarnings: false,
+        localSummary,
+        matchingDiagnostics: diagnostics,
+        timing,
+        completedAt,
+        lastDebug: debug,
+        error: null,
+        providerCallCount: session.providerCallCount,
+      });
+    } catch (err) {
+      const error: SimpleIntakeError = {
+        stage: "DXF_READ",
+        message: err instanceof Error ? err.message : String(err),
+        retryable: true,
+      };
+      setSession({
+        ...getSimpleIntakeSession(),
+        status: "DXF_UPLOAD",
+        analyzingLabel: null,
+        error,
+      });
+    }
+  },
+
+  async analyze(): Promise<void> {
+    if (!session.workbookFile) return;
+    if (session.status === "ANALYZING") return;
+
+    const workbookFile = session.workbookFile;
+    const runId = newRunId();
+    const startedAt = new Date().toISOString();
+    const t0 = Date.now();
+    const timing = emptyTiming();
+
+    setSession({
+      ...session,
+      status: "ANALYZING",
+      runId,
+      startedAt,
+      completedAt: null,
+      error: null,
+      analyzingLabel: "קוראים את קובץ האקסל...",
+      resultRows: [],
+      extractedRows: [],
+      materialListRows: [],
+      materialListApproved: false,
+      unmatchedDxfIds: [],
+      dxfAvailability: [],
+      coverageIssues: [],
+      exactIdOccurrences: [],
+      hasCoverageWarnings: false,
+      localSummary: null,
+      matchingDiagnostics: null,
+      lastDebug: null,
+      providerCallCount: 0,
+      dxfParts: [],
+      timing,
+    });
+
+    try {
+      const tWb = Date.now();
+      const snapResult = await buildSimpleWorkbookSnapshot({
+        file: workbookFile,
+        workbookId: `wb_${runId}`,
+      });
+      timing.workbookSnapshotMs = Date.now() - tWb;
+      if (!snapResult.ok) {
+        const incomplete = snapResult.message.includes(
+          "WORKBOOK_SNAPSHOT_INCOMPLETE"
+        );
+        const error: SimpleIntakeError = {
+          stage: incomplete
+            ? "WORKBOOK_SNAPSHOT_INCOMPLETE"
+            : "WORKBOOK_READ",
+          message: snapResult.message,
+          retryable: true,
+        };
+        timing.totalMs = Date.now() - t0;
+        fail(
+          error,
+          timing,
+          runId,
+          startedAt,
+          [],
+          null,
+          null,
+          0,
+          snapResult.coverage
+        );
+        return;
+      }
+
+      setSession({
+        ...getSimpleIntakeSession(),
+        workbookSnapshot: snapResult.snapshot,
+        analyzingLabel: "מארגנים את הנתונים לטבלה אחידה...",
+        timing: { ...timing },
+      });
+
+      const tAi = Date.now();
+      let aiJson: {
+        ok: boolean;
+        result?: unknown;
+        materialListRows?: MaterialListRow[];
+        message?: string;
+        stage?: string;
+        retryable?: boolean;
+        providerCallCount?: number;
+        durationMs?: number;
+        model?: string;
+        usage?: Record<string, unknown>;
+        materialListStage?: Record<string, unknown>;
+        extractionProviderDebug?: Record<string, unknown>;
+        extractionProvider?: string;
+      };
+      try {
+        const form = new FormData();
+        form.append("snapshot", JSON.stringify(snapResult.snapshot));
+        form.append(
+          "workbook",
+          workbookFile,
+          workbookFile.name || snapResult.snapshot.filename
+        );
+        const res = await fetch("/api/simple-intake/analyze", {
+          method: "POST",
+          body: form,
+        });
+        aiJson = (await res.json()) as typeof aiJson;
+        timing.aiCallMs = Date.now() - tAi;
+        if (!res.ok || !aiJson.ok) {
+          const error: SimpleIntakeError = {
+            stage:
+              (aiJson.stage as SimpleIntakeError["stage"]) || "AI_REQUEST",
+            message: aiJson.message || "בקשת ה-AI נכשלה",
+            retryable: aiJson.retryable ?? true,
+          };
+          timing.totalMs = Date.now() - t0;
+          fail(
+            error,
+            timing,
+            runId,
+            startedAt,
+            [],
+            snapResult.snapshot,
+            {
+              ...aiJson,
+              extractionProviderDebug: aiJson.extractionProviderDebug,
+            },
+            aiJson.providerCallCount ?? 0,
+            snapResult.coverage
+          );
+          return;
+        }
+      } catch (err) {
+        timing.aiCallMs = Date.now() - tAi;
+        const error: SimpleIntakeError = {
+          stage: "AI_REQUEST",
+          message: err instanceof Error ? err.message : String(err),
+          retryable: true,
+        };
+        timing.totalMs = Date.now() - t0;
+        fail(
+          error,
+          timing,
+          runId,
+          startedAt,
+          [],
+          snapResult.snapshot,
+          null,
+          0,
+          snapResult.coverage
+        );
+        return;
+      }
+
+      const providerCallCount = aiJson.providerCallCount ?? 1;
+      const materialListRows = Array.isArray(aiJson.materialListRows)
+        ? aiJson.materialListRows
+        : [];
+
+      if (materialListRows.length === 0) {
+        // Legacy OpenAI / Llama path: adapt via validateSimpleAiResult
+        const aiResult = aiJson.result as Parameters<
+          typeof validateSimpleAiResult
+        >[0]["ai"];
+        const validated = validateSimpleAiResult({
+          snapshot: snapResult.snapshot,
+          ai: aiResult,
+        });
+        if (!validated.ok || validated.rows.length === 0) {
+          const error: SimpleIntakeError = {
+            stage: "VALIDATION",
+            message: validated.ok
+              ? "לא נמצאו שורות חומר בקובץ"
+              : (validated.errorMessage ?? "אימות נכשל"),
+            retryable: false,
+          };
+          timing.totalMs = Date.now() - t0;
+          fail(
+            error,
+            timing,
+            runId,
+            startedAt,
+            [],
+            snapResult.snapshot,
+            aiResult,
+            providerCallCount,
+            snapResult.coverage
+          );
+          return;
+        }
+        // Should not happen on default OpenAI material-list path
+        timing.totalMs = Date.now() - t0;
+        fail(
+          {
+            stage: "VALIDATION",
+            message: "תשובת השרת אינה בפורמט רשימת חומר",
+            retryable: true,
+          },
+          timing,
+          runId,
+          startedAt,
+          [],
+          snapResult.snapshot,
+          aiJson,
+          providerCallCount,
+          snapResult.coverage
+        );
+        return;
+      }
+
+      timing.totalMs = Date.now() - t0;
+      const completedAt = new Date().toISOString();
+      const mlSummary = summarizeMaterialList(materialListRows);
+
+      const debug = buildSimpleIntakeDebug({
+        runId,
+        startedAt,
+        completedAt,
+        timing,
+        workbookFileName: workbookFile.name,
+        dxfFileNames: [],
+        snapshot: snapResult.snapshot,
+        providerCallCount,
+        aiRawResult: {
+          ok: true,
+          materialListRowCount: materialListRows.length,
+          usage: aiJson.usage ?? null,
+          model: aiJson.model ?? null,
+        },
+        validatedRows: materialListToExtractedRows(materialListRows),
+        dxfParts: [],
+        resultRows: [],
+        unmatchedDxfIds: [],
+        diagnostics: null,
+        snapshotCoverage: snapResult.coverage,
+        error: null,
+        extractionProviderDebug: aiJson.extractionProviderDebug ?? null,
+      });
+      (debug as Record<string, unknown>).materialListStage =
+        aiJson.materialListStage ?? {
+          provider: "openai",
+          model: aiJson.model ?? null,
+          schemaVersion: "material-list-v1",
+          extractedRowCount: materialListRows.length,
+          validatedRowCount: materialListRows.length,
+          completeRowCount: mlSummary.completeRows,
+          incompleteRowCount: mlSummary.incompleteRows,
+        };
+      (debug as Record<string, unknown>).providerCall = {
+        provider: "openai",
+        count: 1,
+        purpose: "MATERIAL_LIST_EXTRACTION",
+      };
+
+      setSession({
+        ...getSimpleIntakeSession(),
+        status: "MATERIAL_LIST_REVIEW",
+        analyzingLabel: null,
+        materialListRows,
+        materialListApproved: false,
+        extractedRows: materialListToExtractedRows(materialListRows),
+        dxfParts: [],
+        resultRows: [],
+        unmatchedDxfIds: [],
+        dxfAvailability: [],
+        coverageIssues: [],
+        exactIdOccurrences: [],
+        hasCoverageWarnings: false,
+        localSummary: null,
+        matchingDiagnostics: null,
+        workbookSnapshot: snapResult.snapshot,
+        timing,
+        completedAt,
+        lastDebug: debug,
+        providerCallCount,
+        error: null,
+      });
+    } catch (err) {
+      const error: SimpleIntakeError = {
+        stage: "AI_REQUEST",
+        message: err instanceof Error ? err.message : String(err),
+        retryable: true,
+      };
+      timing.totalMs = Date.now() - t0;
+      fail(error, timing, runId, startedAt, [], null, null, 0);
+    }
   },
 
   selectDxf(
@@ -376,7 +1001,41 @@ export const simpleIntakeActions = {
       session.dxfParts,
       session.coverageIssues
     );
-    setSession({ ...session, resultRows, ...refreshed });
+    // Keep Stage 1 canonical list in sync with table/readiness edits.
+    const touched = resultRows.find((r) => r.resultRowId === resultRowId);
+    let materialListRows = session.materialListRows;
+    if (touched) {
+      materialListRows = session.materialListRows.map((ml) => {
+        if (ml.rowId !== touched.extracted.rowId) return ml;
+        const patch: MaterialListUserOverrides = {};
+        if (Object.prototype.hasOwnProperty.call(edits, "material")) {
+          patch.material = edits.material ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(edits, "thicknessMm")) {
+          patch.thicknessMm = edits.thicknessMm ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(edits, "quantity")) {
+          patch.quantity = edits.quantity ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(edits, "widthMm")) {
+          patch.widthMm = edits.widthMm ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(edits, "lengthMm")) {
+          patch.lengthMm = edits.lengthMm ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(edits, "partId")) {
+          patch.partId = edits.partId ?? null;
+        }
+        const next = {
+          ...ml,
+          userOverrides: { ...ml.userOverrides, ...patch },
+        };
+        return refreshRowCompleteness(next, {
+          keepApprovedWithMissing: session.materialListApproved,
+        });
+      });
+    }
+    setSession({ ...session, resultRows, materialListRows, ...refreshed });
   },
 
   /**
@@ -501,309 +1160,6 @@ export const simpleIntakeActions = {
     });
   },
 
-  async analyze(): Promise<void> {
-    if (!session.workbookFile || session.dxfFiles.length === 0) return;
-    if (session.status === "ANALYZING") return;
-
-    const workbookFile = session.workbookFile;
-    const dxfFiles = [...session.dxfFiles];
-    const runId = newRunId();
-    const startedAt = new Date().toISOString();
-    const t0 = Date.now();
-    const timing = emptyTiming();
-
-    setSession({
-      ...session,
-      status: "ANALYZING",
-      runId,
-      startedAt,
-      completedAt: null,
-      error: null,
-      analyzingLabel: "קורא קובצי DXF",
-      resultRows: [],
-      extractedRows: [],
-      unmatchedDxfIds: [],
-      dxfAvailability: [],
-      coverageIssues: [],
-      exactIdOccurrences: [],
-      hasCoverageWarnings: false,
-      localSummary: null,
-      matchingDiagnostics: null,
-      lastDebug: null,
-      providerCallCount: 0,
-      timing,
-    });
-
-    try {
-      const tDxf = Date.now();
-      const { parts: dxfParts } = await parseSimpleDxfFiles(dxfFiles);
-      timing.dxfParseMs = Date.now() - tDxf;
-
-      setSession({
-        ...getSimpleIntakeSession(),
-        dxfParts,
-        analyzingLabel: "קורא את קובץ ה-Excel",
-        timing: { ...timing },
-      });
-
-      const tWb = Date.now();
-      const snapResult = await buildSimpleWorkbookSnapshot({
-        file: workbookFile,
-        workbookId: `wb_${runId}`,
-      });
-      timing.workbookSnapshotMs = Date.now() - tWb;
-      if (!snapResult.ok) {
-        const incomplete = snapResult.message.includes(
-          "WORKBOOK_SNAPSHOT_INCOMPLETE"
-        );
-        const error: SimpleIntakeError = {
-          stage: incomplete
-            ? "WORKBOOK_SNAPSHOT_INCOMPLETE"
-            : "WORKBOOK_READ",
-          message: snapResult.message,
-          retryable: true,
-        };
-        timing.totalMs = Date.now() - t0;
-        fail(
-          error,
-          timing,
-          runId,
-          startedAt,
-          dxfParts,
-          null,
-          null,
-          0,
-          snapResult.coverage
-        );
-        return;
-      }
-
-      // Source-faithful: do NOT scan workbook text against DXF filenames.
-      // Numeric DXF names (1.dxf, 6.dxf, …) must not create extraction hints.
-      const exactIdOccurrences: SimpleIntakeSession["exactIdOccurrences"] = [];
-
-      setSession({
-        ...getSimpleIntakeSession(),
-        workbookSnapshot: snapResult.snapshot,
-        exactIdOccurrences,
-        analyzingLabel: "מנתח את ה-Excel באמצעות AI",
-        timing: { ...timing },
-      });
-
-      const tAi = Date.now();
-      let aiJson: {
-        ok: boolean;
-        result?: unknown;
-        message?: string;
-        stage?: string;
-        retryable?: boolean;
-        providerCallCount?: number;
-        durationMs?: number;
-      };
-      try {
-        const res = await fetch("/api/simple-intake/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          // Workbook snapshot only — no DXF filenames, IDs, geometry, or hints
-          body: JSON.stringify({
-            snapshot: snapResult.snapshot,
-          }),
-        });
-        aiJson = (await res.json()) as typeof aiJson;
-        timing.aiCallMs = Date.now() - tAi;
-        if (!res.ok || !aiJson.ok) {
-          const error: SimpleIntakeError = {
-            stage:
-              (aiJson.stage as SimpleIntakeError["stage"]) || "AI_REQUEST",
-            message: aiJson.message || "בקשת ה-AI נכשלה",
-            retryable: aiJson.retryable ?? true,
-          };
-          timing.totalMs = Date.now() - t0;
-          fail(
-            error,
-            timing,
-            runId,
-            startedAt,
-            dxfParts,
-            snapResult.snapshot,
-            aiJson,
-            aiJson.providerCallCount ?? 0,
-            snapResult.coverage
-          );
-          return;
-        }
-      } catch (err) {
-        timing.aiCallMs = Date.now() - tAi;
-        const error: SimpleIntakeError = {
-          stage: "AI_REQUEST",
-          message: err instanceof Error ? err.message : String(err),
-          retryable: true,
-        };
-        timing.totalMs = Date.now() - t0;
-        fail(
-          error,
-          timing,
-          runId,
-          startedAt,
-          dxfParts,
-          snapResult.snapshot,
-          null,
-          0,
-          snapResult.coverage
-        );
-        return;
-      }
-
-      const providerCallCount = aiJson.providerCallCount ?? 1;
-      const aiResult = aiJson.result as Parameters<
-        typeof validateSimpleAiResult
-      >[0]["ai"];
-
-      setSession({
-        ...getSimpleIntakeSession(),
-        analyzingLabel: "מתאים בין הנתונים לקובצי DXF",
-        providerCallCount,
-        timing: { ...timing },
-      });
-
-      const validated = validateSimpleAiResult({
-        snapshot: snapResult.snapshot,
-        ai: aiResult,
-      });
-      if (!validated.ok) {
-        const error: SimpleIntakeError = {
-          stage: "VALIDATION",
-          message: validated.errorMessage ?? "אימות נכשל",
-          retryable: false,
-        };
-        timing.totalMs = Date.now() - t0;
-        fail(
-          error,
-          timing,
-          runId,
-          startedAt,
-          dxfParts,
-          snapResult.snapshot,
-          aiResult,
-          providerCallCount,
-          snapResult.coverage
-        );
-        return;
-      }
-
-      // Counts always from arrays — never from AI summary text
-      const extractedRowCount = Array.isArray(aiResult.rows)
-        ? aiResult.rows.length
-        : validated.rows.length;
-      const validatedRowCount = validated.rows.length;
-
-      timing.coverageCheckMs = 0;
-
-      const tMatch = Date.now();
-      const matched = matchSimpleRows({
-        extractedRows: validated.rows,
-        dxfParts,
-        extractedRowCount,
-      });
-      timing.matchingMs = Date.now() - tMatch;
-      timing.candidateGenerationMs =
-        matched.diagnostics.timing.candidateGenerationMs;
-      timing.automaticAssignmentMs =
-        matched.diagnostics.timing.automaticAssignmentMs;
-      timing.strongAssignmentMs =
-        matched.diagnostics.timing.strongAssignmentMs;
-      timing.propagationMs = matched.diagnostics.timing.propagationMs;
-      timing.finalClassificationMs =
-        matched.diagnostics.timing.finalClassificationMs;
-
-      const coverageStats = {
-        exactIdsFoundInWorkbook: 0,
-        exactIdsPresentInExtractedRows: 0,
-        exactIdsMissingFromExtraction: 0,
-      };
-
-      const tAvail = Date.now();
-      const dxfAvailability = deriveSimpleDxfAvailability({
-        dxfParts,
-        resultRows: matched.resultRows,
-        coverageIssues: [],
-      });
-      timing.availabilityDerivationMs = Date.now() - tAvail;
-
-      const localSummary = buildSimpleIntakeResultSummary({
-        extractedRowCount,
-        validatedRows: validated.rows,
-        resultRows: matched.resultRows,
-        dxfAvailability,
-        coverageStats,
-      });
-      // Ensure displayed counts match arrays (ignore any AI summary claims)
-      localSummary.extractedRows = extractedRowCount;
-      localSummary.validatedRows = validatedRowCount;
-
-      const unmatchedDxfIds = dxfAvailability
-        .filter((d) => d.state === "UNUSED")
-        .map((d) => d.dxfId);
-
-      timing.totalMs = Date.now() - t0;
-      const completedAt = new Date().toISOString();
-
-      const diagnostics = {
-        ...matched.diagnostics,
-        dxfAvailability,
-        localSummary,
-      };
-
-      const debug = buildSimpleIntakeDebug({
-        runId,
-        startedAt,
-        completedAt,
-        timing,
-        workbookFileName: workbookFile.name,
-        dxfFileNames: dxfFiles.map((f) => f.name),
-        snapshot: snapResult.snapshot,
-        providerCallCount,
-        aiRawResult: aiResult,
-        validatedRows: validated.rows,
-        dxfParts,
-        resultRows: matched.resultRows,
-        unmatchedDxfIds,
-        diagnostics,
-        snapshotCoverage: snapResult.coverage,
-        error: null,
-      });
-
-      setSession({
-        ...getSimpleIntakeSession(),
-        status: "READY",
-        analyzingLabel: null,
-        extractedRows: validated.rows,
-        dxfParts,
-        resultRows: matched.resultRows,
-        unmatchedDxfIds,
-        dxfAvailability,
-        coverageIssues: [],
-        exactIdOccurrences: [],
-        hasCoverageWarnings: false,
-        localSummary,
-        matchingDiagnostics: diagnostics,
-        workbookSnapshot: snapResult.snapshot,
-        timing,
-        completedAt,
-        lastDebug: debug,
-        providerCallCount,
-        error: null,
-      });
-    } catch (err) {
-      const error: SimpleIntakeError = {
-        stage: "AI_REQUEST",
-        message: err instanceof Error ? err.message : String(err),
-        retryable: true,
-      };
-      timing.totalMs = Date.now() - t0;
-      fail(error, timing, runId, startedAt, [], null, null, 0);
-    }
-  },
 };
 
 function fail(
@@ -819,6 +1175,14 @@ function fail(
 ): void {
   const completedAt = new Date().toISOString();
   const cur = getSimpleIntakeSession();
+  const extractionProviderDebug =
+    aiRaw &&
+    typeof aiRaw === "object" &&
+    aiRaw !== null &&
+    "extractionProviderDebug" in aiRaw
+      ? ((aiRaw as { extractionProviderDebug?: Record<string, unknown> })
+          .extractionProviderDebug ?? null)
+      : null;
   const debug = buildSimpleIntakeDebug({
     runId,
     startedAt,
@@ -836,6 +1200,7 @@ function fail(
     diagnostics: null,
     snapshotCoverage: snapshotCoverage ?? null,
     error,
+    extractionProviderDebug,
   });
   setSession({
     ...cur,

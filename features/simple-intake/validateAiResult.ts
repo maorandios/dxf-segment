@@ -82,7 +82,7 @@ export function validateSimpleAiResult(args: {
     }
 
     let quantity = r.quantity;
-    if (quantity != null && (!(quantity > 0) || !Number.isFinite(quantity))) {
+    if (quantity != null && (!Number.isFinite(quantity) || quantity < 0)) {
       warnings.push("INVALID_QUANTITY");
       quantity = null;
     }

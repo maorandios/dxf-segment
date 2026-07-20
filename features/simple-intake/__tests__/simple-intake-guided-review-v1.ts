@@ -596,10 +596,8 @@ function run(): void {
       path.join(root, "workflow/PostAnalysisWorkflow.tsx"),
       "utf8"
     );
-    assert(workflow.includes("ANALYSIS_SUMMARY"), "summary state");
-    assert(workflow.includes("GUIDED_REVIEW"), "guided state");
+    assert(workflow.includes("ANALYSIS_SUMMARY") || workflow.includes("SUMMARY") || workflow.includes("ReadinessSummary"), "summary state");
     assert(workflow.includes("FINAL_TABLE"), "table state");
-    assert(workflow.includes("REVIEW_COMPLETE"), "complete state");
     assert(
       workflow.includes("appendDxfFilesAndRematch"),
       "local dxf append"
@@ -623,22 +621,12 @@ function run(): void {
     assert(route.includes("providerCallCount: 1"), "exactly one AI call");
 
     const summaryUi = fs.readFileSync(
-      path.join(root, "workflow/AnalysisSummaryScreen.tsx"),
+      path.join(root, "readiness/ReadinessSummary.tsx"),
       "utf8"
     );
     assert(summaryUi.includes("הבדיקה הושלמה"), "summary heading");
     assert(summaryUi.includes("טפל ב-"), "guided CTA");
-    assert(summaryUi.includes("הצג טבלה מלאה"), "table secondary");
-
-    const guided = fs.readFileSync(
-      path.join(root, "workflow/GuidedIssueReview.tsx"),
-      "utf8"
-    );
-    assert(guided.includes("השלמת פרטים"), "guided heading");
-    assert(guided.includes("טפל אחר כך"), "skip action");
-    assert(guided.includes("שמור והמשך"), "save continue");
-    assert(!guided.includes("totalScore"), "no scores in UI");
-    assert(!guided.includes("confidence"), "no confidence in UI");
+    assert(summaryUi.includes("המשך לטבלה") || summaryUi.includes("הצג טבלה"), "table secondary");
 
     console.log("✓ Workflow wiring + single provider call preserved");
   }

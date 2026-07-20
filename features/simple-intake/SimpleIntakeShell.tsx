@@ -5,6 +5,10 @@ import { AnalyzingStep } from "./components/AnalyzingStep";
 import { FailedStep } from "./components/FailedStep";
 import { ReadyStep } from "./components/ReadyStep";
 import { UploadStep } from "./components/UploadStep";
+import {
+  DxfUploadStage,
+  MaterialListReviewScreen,
+} from "./materialList";
 import { useSimpleIntakeSession } from "./useSimpleIntakeSession";
 
 export function SimpleIntakeShell() {
@@ -13,6 +17,10 @@ export function SimpleIntakeShell() {
   let body: React.ReactNode;
   if (session.status === "ANALYZING") {
     body = <AnalyzingStep />;
+  } else if (session.status === "MATERIAL_LIST_REVIEW") {
+    body = <MaterialListReviewScreen />;
+  } else if (session.status === "DXF_UPLOAD") {
+    body = <DxfUploadStage />;
   } else if (session.status === "READY") {
     body = <ReadyStep />;
   } else if (session.status === "FAILED") {
@@ -23,12 +31,12 @@ export function SimpleIntakeShell() {
 
   return (
     <PageContainer className="space-y-6">
-      <header className="space-y-1">
+      <header className="space-y-1" dir="rtl">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
-          OMEGA · Simple Intake v1
+          OMEGA · רשימת חומר מאושרת
         </p>
         <h1 className="text-xl font-semibold tracking-tight">
-          ניתוח פשוט: Excel + DXF
+          Excel לרשימת חומר מוכנה לתמחור
         </h1>
       </header>
       {body}

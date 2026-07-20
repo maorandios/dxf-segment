@@ -103,5 +103,23 @@ export function deriveIssueCodes(args: {
     codes.push("MISSING_THICKNESS");
   }
 
+  // Source dims are critical only when still needed to find/verify a usable DXF.
+  const hasSourceDims =
+    args.sourceWidthMm != null &&
+    args.sourceLengthMm != null &&
+    args.sourceWidthMm > 0 &&
+    args.sourceLengthMm > 0;
+  const hasUsableMatchedDxfDims =
+    row.match.status === "MATCHED" &&
+    args.dxf != null &&
+    args.dxf.geometryStatus === "VALID" &&
+    args.dxf.widthMm != null &&
+    args.dxf.lengthMm != null &&
+    args.dxf.widthMm > 0 &&
+    args.dxf.lengthMm > 0;
+  if (!hasSourceDims && !hasUsableMatchedDxfDims) {
+    codes.push("MISSING_REQUIRED_DIMENSIONS");
+  }
+
   return codes;
 }

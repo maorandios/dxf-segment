@@ -13,6 +13,7 @@ export type FinalIssueCode =
   | "MISSING_QUANTITY"
   | "MISSING_MATERIAL"
   | "MISSING_THICKNESS"
+  | "MISSING_REQUIRED_DIMENSIONS"
   | "MANUAL_MATCH_NOT_CONFIRMED";
 
 export type FinalReviewStatus =

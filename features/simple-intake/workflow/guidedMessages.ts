@@ -56,6 +56,12 @@ export function guidedIssueCopy(code: FinalIssueCode): GuidedIssueCopy {
         explanation:
           "כדי לחשב את הכמות והמשקל הכולל צריך להשלים כמה יחידות נדרשות.",
       };
+    case "MISSING_REQUIRED_DIMENSIONS":
+      return {
+        title: "חסרות מידות",
+        explanation:
+          "חסרות מידות הנדרשות למציאת קובץ DXF מתאים.",
+      };
     case "PART_ID_DIMENSION_MISMATCH":
       return {
         title: "שם החלק מתאים, אבל המידות שונות",

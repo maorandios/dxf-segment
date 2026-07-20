@@ -49,6 +49,8 @@ export function issueMessageHe(
       return "חסר סוג חומר.";
     case "MISSING_THICKNESS":
       return "חסר עובי פלטה.";
+    case "MISSING_REQUIRED_DIMENSIONS":
+      return "חסרות מידות הנדרשות למציאת קובץ DXF מתאים.";
     case "MANUAL_MATCH_NOT_CONFIRMED":
       return "נבחר קובץ DXF ידנית. יש לאשר את הבחירה.";
     default:
@@ -62,6 +64,7 @@ export function primaryActionLabelHe(codes: FinalIssueCode[]): string | null {
   if (codes.includes("MISSING_MATERIAL")) return "הזן חומר";
   if (codes.includes("MISSING_THICKNESS")) return "הזן עובי";
   if (codes.includes("MISSING_QUANTITY")) return "הזן כמות";
+  if (codes.includes("MISSING_REQUIRED_DIMENSIONS")) return "הזן מידות";
   if (
     codes.includes("NO_DXF_FOUND") ||
     codes.includes("DXF_ASSIGNED_TO_BETTER_ROW") ||

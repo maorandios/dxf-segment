@@ -71,6 +71,10 @@ function deriveAvailableActions(args: {
   if (args.issueCodes.includes("MISSING_QUANTITY")) {
     actions.push("ENTER_QUANTITY");
   }
+  if (args.issueCodes.includes("MISSING_REQUIRED_DIMENSIONS")) {
+    // Reuse pick-DXF path after dims are entered; details drawer for now.
+    actions.push("VIEW_DETAILS");
+  }
   return actions;
 }
 
@@ -114,6 +118,16 @@ export function deriveFinalRows(args: {
       row.edits,
       "quantity",
       extracted.quantity
+    );
+    const sourceWidthMm = effectiveField(
+      row.edits,
+      "widthMm",
+      extracted.widthMm
+    );
+    const sourceLengthMm = effectiveField(
+      row.edits,
+      "lengthMm",
+      extracted.lengthMm
     );
     const sourcePartIdRaw = effectiveField(
       row.edits,
@@ -186,8 +200,8 @@ export function deriveFinalRows(args: {
       material,
       thicknessMm,
       quantity,
-      sourceWidthMm: extracted.widthMm,
-      sourceLengthMm: extracted.lengthMm,
+      sourceWidthMm,
+      sourceLengthMm,
       unmatchedReason,
       duplicateDxf,
       manualMatchUnconfirmed,
@@ -210,8 +224,8 @@ export function deriveFinalRows(args: {
       issueCodes.length === 0
         ? null
         : issueMessageHe(issueCodes[0]!, {
-            sourceWidthMm: extracted.widthMm,
-            sourceLengthMm: extracted.lengthMm,
+            sourceWidthMm,
+            sourceLengthMm,
             noDxfFilesUploaded: !dxfFilesUploaded,
           });
 
@@ -256,8 +270,8 @@ export function deriveFinalRows(args: {
           extracted.sheetName,
           extracted.sourceRow
         ),
-        sourceWidthMm: extracted.widthMm,
-        sourceLengthMm: extracted.lengthMm,
+        sourceWidthMm,
+        sourceLengthMm,
         sourceAreaM2: extracted.sourceAreaM2,
         sourceWeightKg: extracted.sourceWeightKg,
       },

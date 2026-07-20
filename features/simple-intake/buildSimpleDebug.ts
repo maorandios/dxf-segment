@@ -35,6 +35,7 @@ export function buildSimpleIntakeDebug(args: {
   diagnostics?: SimpleMatchingDiagnostics | null;
   snapshotCoverage?: SnapshotSheetCoverage[] | null;
   error: SimpleIntakeError | null;
+  extractionProviderDebug?: Record<string, unknown> | null;
 }): Record<string, unknown> {
   const d = args.diagnostics;
   const source = buildSourceFieldSummary(args.validatedRows);
@@ -109,7 +110,32 @@ export function buildSimpleIntakeDebug(args: {
     providerCall: {
       count: args.providerCallCount,
       purpose: "SIMPLE_WORKBOOK_EXTRACTION",
+      ...(args.extractionProviderDebug &&
+      typeof args.extractionProviderDebug.providerCall === "object"
+        ? (args.extractionProviderDebug.providerCall as Record<string, unknown>)
+        : {}),
     },
+    extractionProvider: args.extractionProviderDebug
+      ? {
+          provider: args.extractionProviderDebug.provider ?? null,
+          apiVersion: args.extractionProviderDebug.apiVersion ?? null,
+          tier: args.extractionProviderDebug.tier ?? null,
+          pinnedVersion: args.extractionProviderDebug.pinnedVersion ?? null,
+          extractionTarget:
+            args.extractionProviderDebug.extractionTarget ?? null,
+          citeSources: args.extractionProviderDebug.citeSources ?? null,
+          confidenceScores:
+            args.extractionProviderDebug.confidenceScores ?? null,
+          timings: args.extractionProviderDebug.timings ?? null,
+          llamaJob: args.extractionProviderDebug.llamaJob ?? null,
+          usage: args.extractionProviderDebug.usage ?? null,
+          adaptDiagnostics:
+            args.extractionProviderDebug.adaptDiagnostics ?? null,
+          cleanupError: args.extractionProviderDebug.cleanupError ?? null,
+          // Full safe debug blob (already redacted server-side when present)
+          detail: args.extractionProviderDebug,
+        }
+      : null,
     aiRawResult: args.aiRawResult,
     validatedRows: args.validatedRows,
     dxfRegistry: args.dxfParts.map((part) => ({

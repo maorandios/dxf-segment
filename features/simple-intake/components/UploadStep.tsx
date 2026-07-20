@@ -13,7 +13,7 @@ import { simpleIntakeActions } from "../sessionStore";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
 
 type UploadNotice = {
-  kind: "duplicate" | "unsupported" | "info";
+  kind: "unsupported" | "info";
   message: string;
 };
 
@@ -22,25 +22,19 @@ function isWorkbookName(name: string): boolean {
   return lower.endsWith(".xlsx") || lower.endsWith(".xls");
 }
 
-function isDxfName(name: string): boolean {
-  return name.toLowerCase().endsWith(".dxf");
-}
-
 export function UploadStep() {
   const session = useSimpleIntakeSession();
   const wbRef = useRef<HTMLInputElement>(null);
-  const dxfRef = useRef<HTMLInputElement>(null);
   const [notices, setNotices] = useState<UploadNotice[]>([]);
 
-  const canAnalyze =
-    session.workbookFile != null && session.dxfFiles.length > 0;
+  const canAnalyze = session.workbookFile != null;
 
   return (
-    <Card className="mx-auto w-full max-w-2xl border-0 shadow-sm">
+    <Card className="mx-auto w-full max-w-2xl border-0 shadow-sm" dir="rtl">
       <CardHeader>
-        <CardTitle className="text-2xl">Simple Intake</CardTitle>
+        <CardTitle className="text-2xl">העלאת רשימת חומר</CardTitle>
         <CardDescription>
-          העלו קובץ Excel אחד (XLS/XLSX) וקובצי DXF. ניתוח ישיר ללא צינור מורכב.
+          העלה קובץ Excel ואנחנו נסדר אותו לרשימת חומר ברורה ואחידה.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -67,8 +61,7 @@ export function UploadStep() {
                   return;
                 }
                 if (!isWorkbookName(f.name)) {
-                  setNotices((n) => [
-                    ...n,
+                  setNotices([
                     {
                       kind: "unsupported",
                       message: `קובץ לא נתמך: ${f.name}`,
@@ -94,84 +87,11 @@ export function UploadStep() {
               </Button>
             )}
           </div>
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium">קובצי DXF</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => dxfRef.current?.click()}
-            >
-              הוסף DXF
-            </Button>
-            <input
-              ref={dxfRef}
-              type="file"
-              accept=".dxf"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                const list = e.target.files
-                  ? Array.from(e.target.files)
-                  : [];
-                e.target.value = "";
-                const nextNotices: UploadNotice[] = [];
-                const accepted: File[] = [];
-                const existing = new Set(session.dxfFiles.map((f) => f.name));
-                for (const f of list) {
-                  if (!isDxfName(f.name)) {
-                    nextNotices.push({
-                      kind: "unsupported",
-                      message: `קובץ לא נתמך: ${f.name}`,
-                    });
-                    continue;
-                  }
-                  if (existing.has(f.name)) {
-                    nextNotices.push({
-                      kind: "duplicate",
-                      message: `שם כפול (דולג): ${f.name}`,
-                    });
-                    continue;
-                  }
-                  accepted.push(f);
-                  existing.add(f.name);
-                }
-                if (accepted.length > 0) {
-                  simpleIntakeActions.addDxfFiles(accepted);
-                }
-                setNotices(nextNotices);
-              }}
-            />
-            <span className="text-sm text-muted-foreground">
-              {session.dxfFiles.length} קבצים
-            </span>
-          </div>
-          {session.dxfFiles.length > 0 && (
-            <ul className="max-h-40 space-y-1 overflow-auto text-sm">
-              {session.dxfFiles.map((f: File) => (
-                <li
-                  key={f.name}
-                  className="flex items-center justify-between gap-2 rounded bg-white/[0.04] px-2 py-1"
-                >
-                  <span className="truncate">{f.name}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => simpleIntakeActions.removeDxf(f.name)}
-                  >
-                    הסר
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="text-xs text-muted-foreground">קבצים נתמכים: .xlsx · .xls</p>
         </div>
 
         {notices.length > 0 && (
-          <ul className="space-y-1 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          <ul className="space-y-1 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
             {notices.map((n, i) => (
               <li key={`${n.message}-${i}`}>{n.message}</li>
             ))}
@@ -181,10 +101,11 @@ export function UploadStep() {
         <div className="flex justify-end">
           <Button
             type="button"
+            size="lg"
             disabled={!canAnalyze}
             onClick={() => void simpleIntakeActions.analyze()}
           >
-            נתח
+            נתח את הקובץ
           </Button>
         </div>
       </CardContent>

@@ -16,7 +16,7 @@ export const simpleAiRowSchema = z.object({
   partId: z.string().nullable(),
   profile: z.string().nullable(),
   description: z.string().nullable(),
-  quantity: positiveNullable,
+  quantity: nonnegativeNullable,
   material: z.string().nullable(),
   thicknessMm: positiveNullable,
   widthMm: positiveNullable,
@@ -66,7 +66,7 @@ workbook material or part row. Do not determine business meaning. Do not calcula
 20. Return the original source row and source cell (sheetName, sourceRow, sourceCell).
 
 Field rules:
-- quantity: explicit quantity only (positive when present).
+- quantity: explicit quantity only (non-negative when present; preserve zero).
 - material: explicit grade/material token only (e.g. S235, S355). Never inherit.
 - thicknessMm / widthMm: explicit columns when present; otherwise may parse from
   clear plate profile text (first/second numeric in PL25*480, PL12X100, FLT10*90).

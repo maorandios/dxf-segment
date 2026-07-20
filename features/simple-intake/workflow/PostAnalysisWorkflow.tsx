@@ -8,16 +8,22 @@ import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
 import { deriveFinalRows, summarizeFinalRows } from "../results/deriveFinalRows";
 import { ResultsReviewScreen } from "../results/ResultsReviewScreen";
 import type { FinalDxfCandidate, FinalIntakeRow } from "../results/types";
-import { AnalysisSummaryScreen } from "./AnalysisSummaryScreen";
 import {
-  buildReviewQueue,
-  countUnresolved,
-  orderQueueWithDeferred,
-} from "./buildReviewQueue";
-import { GuidedIssueReview } from "./GuidedIssueReview";
-import { ReviewCompleteScreen } from "./ReviewCompleteScreen";
-import { SkippedRemainingScreen } from "./SkippedRemainingScreen";
-import type { SimpleIntakeView } from "./types";
+  categorizeReadinessIssues,
+  ContinueWithIssuesDialog,
+  DxfSelectionDialog,
+  ReadinessIssueList,
+  ReadinessSummary,
+  viewForCategory,
+  type ReadinessCategoryId,
+  type ReadinessView,
+} from "../readiness";
+import {
+  makeDeferredKey,
+  type DeferredIssueKey,
+} from "../readiness/issuePresentation";
+import { pruneDeferredKeys } from "../readiness/pickPrimaryIssue";
+import type { IssueCardHandlers } from "../readiness/ReadinessIssueCard";
 
 function bumpConfirmed(
   prev: Set<string>,
@@ -30,16 +36,26 @@ function bumpConfirmed(
   return next;
 }
 
+function firstOpenCategory(
+  breakdown: ReturnType<typeof categorizeReadinessIssues>
+): ReadinessCategoryId | null {
+  if (breakdown.missingInfo.length > 0) return "MISSING_INFO";
+  if (breakdown.dxfCoverage.length > 0) return "DXF_COVERAGE";
+  if (breakdown.dxfDecision.length > 0) return "DXF_DECISION";
+  return null;
+}
+
 export function PostAnalysisWorkflow() {
   const session = useSimpleIntakeSession();
-  const [view, setView] = useState<SimpleIntakeView>("ANALYSIS_SUMMARY");
+  const [view, setView] = useState<ReadinessView>("SUMMARY");
   const [confirmedManual, setConfirmedManual] = useState<Set<string>>(
     () => new Set()
   );
-  const [deferredIds, setDeferredIds] = useState<string[]>([]);
-  const [showSkipLoop, setShowSkipLoop] = useState(false);
-  const [reviewBaseline, setReviewBaseline] = useState(0);
-  const [reviewStep, setReviewStep] = useState(1);
+  const [deferredIssueKeys, setDeferredIssueKeys] = useState<
+    Set<DeferredIssueKey>
+  >(() => new Set());
+  const [confirmContinueOpen, setConfirmContinueOpen] = useState(false);
+  const [pickerRowId, setPickerRowId] = useState<string | null>(null);
 
   const finalRows = useMemo(
     () =>
@@ -61,27 +77,18 @@ export function PostAnalysisWorkflow() {
     ]
   );
 
-  const summary = useMemo(() => summarizeFinalRows(finalRows), [finalRows]);
-  const unresolvedCount = useMemo(
-    () => countUnresolved(finalRows),
-    [finalRows]
+  const effectiveDeferred = useMemo(
+    () => pruneDeferredKeys(finalRows, deferredIssueKeys),
+    [finalRows, deferredIssueKeys]
   );
 
-  const queue = useMemo(() => {
-    const base = buildReviewQueue(finalRows);
-    return orderQueueWithDeferred(base, deferredIds);
-  }, [finalRows, deferredIds]);
-
-  const currentItem = queue[0] ?? null;
-  const currentRow: FinalIntakeRow | null = useMemo(() => {
-    if (!currentItem) return null;
-    return finalRows.find((r) => r.id === currentItem.rowId) ?? null;
-  }, [currentItem, finalRows]);
-
-  const displayView: SimpleIntakeView =
-    view === "GUIDED_REVIEW" && !showSkipLoop && queue.length === 0
-      ? "REVIEW_COMPLETE"
-      : view;
+  const summary = useMemo(() => summarizeFinalRows(finalRows), [finalRows]);
+  const breakdown = useMemo(
+    () => categorizeReadinessIssues(finalRows),
+    [finalRows]
+  );
+  const criticalCount = breakdown.criticalRowCount;
+  const unusedDxfCount = session.unmatchedDxfIds.length;
 
   const allCandidates: FinalDxfCandidate[] = useMemo(
     () =>
@@ -99,36 +106,52 @@ export function PostAnalysisWorkflow() {
     [session.dxfParts]
   );
 
-  const duplicateRows = useMemo(() => {
-    if (!currentRow?.part.matchedDxfId) return [];
-    const dxfId = currentRow.part.matchedDxfId;
-    return finalRows.filter(
-      (r) => !r.isExcluded && r.part.matchedDxfId === dxfId
-    );
-  }, [currentRow, finalRows]);
+  const pickerRow: FinalIntakeRow | null = useMemo(() => {
+    if (!pickerRowId) return null;
+    return finalRows.find((r) => r.id === pickerRowId) ?? null;
+  }, [pickerRowId, finalRows]);
 
-  const startGuidedReview = useCallback(() => {
-    const n = countUnresolved(finalRows);
-    setReviewBaseline(n);
-    setReviewStep(1);
-    setDeferredIds([]);
-    setShowSkipLoop(false);
-    setView("GUIDED_REVIEW");
-  }, [finalRows]);
+  const pickerCandidates = useMemo(() => {
+    if (!pickerRow) return allCandidates;
+    const base =
+      pickerRow.match.candidates.length > 0
+        ? pickerRow.match.candidates
+        : allCandidates;
+    return base.map((c) => {
+      const srcW = pickerRow.source.sourceWidthMm;
+      const srcL = pickerRow.source.sourceLengthMm;
+      return {
+        ...c,
+        widthDifferenceMm:
+          srcW != null && c.widthMm != null ? Math.abs(srcW - c.widthMm) : null,
+        lengthDifferenceMm:
+          srcL != null && c.lengthMm != null
+            ? Math.abs(srcL - c.lengthMm)
+            : null,
+      };
+    });
+  }, [pickerRow, allCandidates]);
 
-  const advanceProgress = useCallback(() => {
-    setReviewStep((s) =>
-      reviewBaseline > 0 ? Math.min(s + 1, reviewBaseline) : s + 1
-    );
-  }, [reviewBaseline]);
+  const requestContinueToTable = useCallback(() => {
+    if (criticalCount > 0) {
+      setConfirmContinueOpen(true);
+      return;
+    }
+    setView("FINAL_TABLE");
+  }, [criticalCount]);
+
+  const openCategory = useCallback((id: ReadinessCategoryId) => {
+    setView(viewForCategory(id));
+  }, []);
+
+  const treatAll = useCallback(() => {
+    const first = firstOpenCategory(breakdown);
+    if (first) setView(viewForCategory(first));
+    else setView("FINAL_TABLE");
+  }, [breakdown]);
 
   const trySelectDxf = useCallback(
-    (resultRowId: string, dxfId: string | null, force = false): boolean => {
-      if (dxfId == null) {
-        simpleIntakeActions.selectDxf(resultRowId, null);
-        setConfirmedManual((prev) => bumpConfirmed(prev, resultRowId, false));
-        return true;
-      }
+    (resultRowId: string, dxfId: string, force = false): boolean => {
       const first = simpleIntakeActions.selectDxf(resultRowId, dxfId);
       if (first.conflict) {
         if (!force) {
@@ -142,40 +165,79 @@ export function PostAnalysisWorkflow() {
         });
       }
       setConfirmedManual((prev) => bumpConfirmed(prev, resultRowId, true));
-      setDeferredIds((prev) => prev.filter((id) => id !== resultRowId));
-      advanceProgress();
       return true;
     },
-    [advanceProgress]
+    []
   );
 
-  const handleSkip = useCallback(() => {
-    if (!currentItem) return;
-    const id = currentItem.rowId;
-    const nextDeferred = [...deferredIds.filter((x) => x !== id), id];
-    const nextQueue = orderQueueWithDeferred(
-      buildReviewQueue(finalRows),
-      nextDeferred
-    );
-    const activeFront = nextQueue.filter((q) => !nextDeferred.includes(q.rowId));
-    setDeferredIds(nextDeferred);
-    advanceProgress();
-    if (activeFront.length === 0 && nextQueue.length > 0) {
-      setShowSkipLoop(true);
-    }
-  }, [advanceProgress, currentItem, deferredIds, finalRows]);
+  const handleExclude = useCallback(
+    (id: string) => {
+      const row = session.resultRows.find((r) => r.resultRowId === id);
+      if (row?.match.matchedDxfId) {
+        simpleIntakeActions.selectDxf(id, null);
+      }
+      simpleIntakeActions.excludeRow(id, true);
+      setConfirmedManual((prev) => bumpConfirmed(prev, id, false));
+    },
+    [session.resultRows]
+  );
 
-  const handleExclude = useCallback(() => {
-    if (!currentRow) return;
-    const id = currentRow.id;
-    if (currentRow.part.matchedDxfId) {
-      simpleIntakeActions.selectDxf(id, null);
-    }
-    simpleIntakeActions.excludeRow(id, true);
-    setConfirmedManual((prev) => bumpConfirmed(prev, id, false));
-    setDeferredIds((prev) => prev.filter((x) => x !== id));
-    advanceProgress();
-  }, [advanceProgress, currentRow]);
+  const handlers: IssueCardHandlers = useMemo(
+    () => ({
+      onSaveQuantity: (id, value) => {
+        simpleIntakeActions.updateRowEdits(id, { quantity: value });
+      },
+      onSaveMaterial: (id, value) => {
+        simpleIntakeActions.updateRowEdits(id, { material: value });
+      },
+      onSaveThickness: (id, value) => {
+        simpleIntakeActions.updateRowEdits(id, { thicknessMm: value });
+      },
+      onSaveDimensions: (id, widthMm, lengthMm) => {
+        simpleIntakeActions.updateRowEdits(id, { widthMm, lengthMm });
+        simpleIntakeActions.rematchLocallyPreservingEdits();
+      },
+      onSelectDxf: (id) => setPickerRowId(id),
+      onCompareDxf: (id) => setPickerRowId(id),
+      onUploadDxfs: (files) => {
+        void simpleIntakeActions.appendDxfFilesAndRematch(Array.from(files));
+      },
+      onExclude: handleExclude,
+      onDefer: (rowId, issue) => {
+        setDeferredIssueKeys((prev) => {
+          const next = new Set(prev);
+          next.add(makeDeferredKey(rowId, issue));
+          return next;
+        });
+      },
+      onRestore: (rowId, issue) => {
+        setDeferredIssueKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(makeDeferredKey(rowId, issue));
+          return next;
+        });
+      },
+    }),
+    [handleExclude]
+  );
+
+  const listCategory: ReadinessCategoryId | null =
+    view === "LIST_MISSING_INFO"
+      ? "MISSING_INFO"
+      : view === "LIST_DXF_COVERAGE"
+        ? "DXF_COVERAGE"
+        : view === "LIST_DXF_DECISION"
+          ? "DXF_DECISION"
+          : null;
+
+  const listRows =
+    listCategory === "MISSING_INFO"
+      ? breakdown.missingInfo
+      : listCategory === "DXF_COVERAGE"
+        ? breakdown.dxfCoverage
+        : listCategory === "DXF_DECISION"
+          ? breakdown.dxfDecision
+          : [];
 
   if (session.resultRows.length === 0) {
     return <ResultsReviewScreen />;
@@ -183,155 +245,85 @@ export function PostAnalysisWorkflow() {
 
   return (
     <div className="space-y-4" dir="rtl">
-      {displayView !== "FINAL_TABLE" && (
+      {view !== "FINAL_TABLE" && (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setView("ANALYSIS_SUMMARY")}
-          >
-            סיכום בדיקה
-          </Button>
-          {unresolvedCount > 0 && displayView !== "GUIDED_REVIEW" && (
+          {view !== "SUMMARY" && (
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={startGuidedReview}
+              onClick={() => setView("SUMMARY")}
             >
-              טפל ב-{unresolvedCount} שורות
+              חזרה לסיכום
             </Button>
           )}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => setView("FINAL_TABLE")}
+            onClick={requestContinueToTable}
           >
-            הצג טבלה מלאה
+            המשך לטבלה
           </Button>
         </div>
       )}
 
-      {displayView === "ANALYSIS_SUMMARY" && (
-        <AnalysisSummaryScreen
+      {view === "SUMMARY" && (
+        <ReadinessSummary
           summary={summary}
-          onStartGuidedReview={startGuidedReview}
-          onShowTable={() => setView("FINAL_TABLE")}
+          breakdown={breakdown}
+          unusedDxfCount={unusedDxfCount}
+          onOpenCategory={openCategory}
+          onTreatAll={treatAll}
+          onContinueToTable={requestContinueToTable}
         />
       )}
 
-      {displayView === "GUIDED_REVIEW" && showSkipLoop && (
-        <SkippedRemainingScreen
-          remainingCount={unresolvedCount}
-          onRetryIssues={() => {
-            setDeferredIds([]);
-            setShowSkipLoop(false);
-            setReviewStep(1);
-            setReviewBaseline(unresolvedCount);
-          }}
-          onShowTable={() => {
-            setShowSkipLoop(false);
-            setView("FINAL_TABLE");
-          }}
+      {listCategory && (
+        <ReadinessIssueList
+          category={listCategory}
+          rows={listRows}
+          deferredIssueKeys={effectiveDeferred}
+          onBackToSummary={() => setView("SUMMARY")}
+          onContinueToTable={requestContinueToTable}
+          onTreatOtherIssues={() => setView("SUMMARY")}
+          hasOtherIssues={criticalCount > 0}
+          handlers={handlers}
         />
       )}
 
-      {displayView === "GUIDED_REVIEW" &&
-        !showSkipLoop &&
-        currentItem &&
-        currentRow && (
-          <GuidedIssueReview
-            row={currentRow}
-            queueItem={currentItem}
-            progressIndex={Math.min(
-              Math.max(reviewStep, 1),
-              Math.max(reviewBaseline, queue.length, 1)
-            )}
-            progressTotal={Math.max(reviewBaseline, queue.length, 1)}
-            allCandidates={allCandidates}
-            duplicateRows={duplicateRows}
-            onSkip={handleSkip}
-            onShowTable={() => setView("FINAL_TABLE")}
-            onSaveMaterial={(value) => {
-              simpleIntakeActions.updateRowEdits(currentRow.id, {
-                material: value,
-              });
-              setDeferredIds((prev) =>
-                prev.filter((id) => id !== currentRow.id)
-              );
-              advanceProgress();
-            }}
-            onSaveThickness={(value) => {
-              simpleIntakeActions.updateRowEdits(currentRow.id, {
-                thicknessMm: value,
-              });
-              setDeferredIds((prev) =>
-                prev.filter((id) => id !== currentRow.id)
-              );
-              advanceProgress();
-            }}
-            onSaveQuantity={(value) => {
-              simpleIntakeActions.updateRowEdits(currentRow.id, {
-                quantity: value,
-              });
-              setDeferredIds((prev) =>
-                prev.filter((id) => id !== currentRow.id)
-              );
-              advanceProgress();
-            }}
-            onConfirmDxf={(dxfId) => {
-              trySelectDxf(currentRow.id, dxfId);
-            }}
-            onConfirmManualMatch={() => {
-              setConfirmedManual((prev) =>
-                bumpConfirmed(prev, currentRow.id, true)
-              );
-              setDeferredIds((prev) =>
-                prev.filter((id) => id !== currentRow.id)
-              );
-              advanceProgress();
-            }}
-            onExclude={handleExclude}
-            onUploadDxfs={(files) => {
-              void simpleIntakeActions.appendDxfFilesAndRematch(
-                Array.from(files)
-              );
-            }}
-            onKeepDuplicateOnThisRow={() => {
-              if (!currentRow.part.matchedDxfId) return;
-              trySelectDxf(currentRow.id, currentRow.part.matchedDxfId, true);
-            }}
-            onReleaseDxf={() => {
-              simpleIntakeActions.selectDxf(currentRow.id, null);
-              setConfirmedManual((prev) =>
-                bumpConfirmed(prev, currentRow.id, false)
-              );
-              setDeferredIds((prev) =>
-                prev.filter((id) => id !== currentRow.id)
-              );
-              advanceProgress();
-            }}
-          />
-        )}
-
-      {displayView === "REVIEW_COMPLETE" && (
-        <ReviewCompleteScreen
-          summary={summary}
-          onShowTable={() => setView("FINAL_TABLE")}
-        />
-      )}
-
-      {displayView === "FINAL_TABLE" && (
+      {view === "FINAL_TABLE" && (
         <ResultsReviewScreen
           confirmedManual={confirmedManual}
           onConfirmedManualChange={setConfirmedManual}
-          unresolvedCount={unresolvedCount}
-          onStartGuidedReview={startGuidedReview}
-          onShowSummary={() => setView("ANALYSIS_SUMMARY")}
+          unresolvedCount={criticalCount}
+          onStartGuidedReview={() => setView("SUMMARY")}
+          onShowSummary={() => setView("SUMMARY")}
         />
       )}
+
+      <DxfSelectionDialog
+        open={pickerRowId != null}
+        row={pickerRow}
+        candidates={pickerCandidates}
+        onCancel={() => setPickerRowId(null)}
+        onConfirm={(dxfId) => {
+          if (!pickerRowId) return;
+          if (trySelectDxf(pickerRowId, dxfId)) {
+            setPickerRowId(null);
+          }
+        }}
+      />
+
+      <ContinueWithIssuesDialog
+        open={confirmContinueOpen}
+        unresolvedCount={criticalCount}
+        onBack={() => setConfirmContinueOpen(false)}
+        onContinueAnyway={() => {
+          setConfirmContinueOpen(false);
+          setView("FINAL_TABLE");
+        }}
+      />
     </div>
   );
 }

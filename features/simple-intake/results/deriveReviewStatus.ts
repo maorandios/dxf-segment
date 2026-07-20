@@ -11,6 +11,7 @@ const BLOCKING: FinalIssueCode[] = [
   "MISSING_QUANTITY",
   "MISSING_MATERIAL",
   "MISSING_THICKNESS",
+  "MISSING_REQUIRED_DIMENSIONS",
 ];
 
 const REVIEW: FinalIssueCode[] = [
