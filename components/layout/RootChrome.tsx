@@ -8,10 +8,20 @@ function isOmegaPath(pathname: string | null): boolean {
   return pathname === "/omega" || pathname.startsWith("/omega/");
 }
 
+/** Full-viewport product shells that own their own chrome. */
+function isFullscreenProductPath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return (
+    isOmegaPath(pathname) ||
+    pathname === "/quotes/simple" ||
+    pathname.startsWith("/quotes/simple/")
+  );
+}
+
 export function RootChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  if (isOmegaPath(pathname)) {
+  if (isFullscreenProductPath(pathname)) {
     return <>{children}</>;
   }
 

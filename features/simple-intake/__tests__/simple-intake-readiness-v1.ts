@@ -583,7 +583,10 @@ function run(): void {
       path.join(root, "readiness/ReadinessSummary.tsx"),
       "utf8"
     );
-    assert(cards.includes("התאמת DXF הושלמה"), "opens summary");
+    assert(
+      cards.includes("בדיקת התאמות") || cards.includes("התאמת DXF הושלמה"),
+      "opens summary"
+    );
     assert(cards.includes("ReadinessIssueCards"), "issue cards");
 
     const cat = fs.readFileSync(

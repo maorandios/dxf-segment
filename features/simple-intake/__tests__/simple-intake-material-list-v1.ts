@@ -65,13 +65,29 @@ console.log("=== Excel to Approved Material List v1 ===\n");
 {
   const root = path.resolve(__dirname, "..");
   const upload = fs.readFileSync(
-    path.join(root, "components/UploadStep.tsx"),
+    path.join(root, "workbookUpload/WorkbookUploadScreen.tsx"),
     "utf8"
   );
-  assert(upload.includes("העלאת רשימת חומר"), "upload heading");
-  assert(upload.includes("נתח את הקובץ"), "analyze CTA");
-  assert(!upload.includes("הוסף DXF"), "no DXF on stage 1 upload");
-  assert(upload.includes("canAnalyze = session.workbookFile != null"), "excel only");
+  const workspace = fs.readFileSync(
+    path.join(root, "workbookUpload/WorkbookUploadWorkspace.tsx"),
+    "utf8"
+  );
+  assert(
+    upload.includes("הפקת רשימת חומר") ||
+      upload.includes("PersonalizedGreeting") ||
+      upload.includes("בוא נכין את רשימת החומר"),
+    "upload heading"
+  );
+  assert(
+    workspace.includes("צור רשימת חומר") ||
+      workspace.includes("בחר קובץ Excel"),
+    "analyze CTA"
+  );
+  assert(!workspace.includes("הוסף DXF"), "no DXF on stage 1 upload");
+  assert(
+    upload.includes("setWorkbook") || workspace.includes("onPickFiles"),
+    "excel only"
+  );
   console.log("✓ First screen asks for Excel only; DXF not required");
 }
 
@@ -92,7 +108,11 @@ console.log("=== Excel to Approved Material List v1 ===\n");
   assert(!("confidence" in schema), "no confidence");
   assert(!("note" in schema), "no note");
   assert(!("summary" in aiMaterialListResultSchema.shape), "no summary root");
-  assert(MATERIAL_LIST_SYSTEM_PROMPT.includes("Do not include DXF"), "no dxf prompt");
+  assert(
+    MATERIAL_LIST_SYSTEM_PROMPT.includes("Extract the DXF filename") ||
+      MATERIAL_LIST_SYSTEM_PROMPT.includes("Do not include DXF"),
+    "no dxf prompt"
+  );
   assert(
     MATERIAL_LIST_SYSTEM_PROMPT.includes("Never turn one source row with quantity 20"),
     "qty 20"

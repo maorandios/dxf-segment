@@ -28,6 +28,8 @@ import type {
 import { normalizePartIdForMatch } from "./normalizePartId";
 import { parseSimpleDxfFiles } from "./parseSimpleDxfFiles";
 import type {
+  OmegaQuoteStage,
+  QuoteWorkspaceDetails,
   SimpleExtractionCoverageIssue,
   SimpleExtractedRow,
   SimpleIntakeError,
@@ -40,6 +42,27 @@ import type {
 import { validateSimpleAiResult } from "./validateAiResult";
 
 type Listener = () => void;
+
+const QUOTE_STAGE_ORDER: OmegaQuoteStage[] = [
+  "MATERIAL_LIST",
+  "DXF_MATCHING",
+  "DATA_APPROVAL",
+  "QUOTE_PRICING",
+  "COMPLETED",
+];
+
+function markEntered(
+  prev: OmegaQuoteStage[],
+  stage: OmegaQuoteStage
+): OmegaQuoteStage[] {
+  if (stage === "QUOTE_SETUP") return prev;
+  if (prev.includes(stage)) return prev;
+  return [...prev, stage];
+}
+
+function stageIndex(stage: OmegaQuoteStage): number {
+  return QUOTE_STAGE_ORDER.indexOf(stage);
+}
 
 function newRunId(): string {
   return `simple_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -65,6 +88,9 @@ function emptyTiming(): SimpleTiming {
 function createEmptySession(): SimpleIntakeSession {
   return {
     status: "IDLE",
+    quoteDetails: null,
+    quoteStage: "QUOTE_SETUP",
+    enteredQuoteStages: [],
     runId: null,
     workbookFile: null,
     dxfFiles: [],
@@ -164,6 +190,100 @@ export function subscribeSimpleIntake(listener: Listener): () => void {
 export const simpleIntakeActions = {
   reset(): void {
     setSession(createEmptySession());
+  },
+
+  createQuote(details: {
+    projectName: string;
+    customerName: string;
+  }): boolean {
+    const projectName = details.projectName.trim();
+    const customerName = details.customerName.trim();
+    if (!projectName || !customerName) return false;
+    const quoteDetails: QuoteWorkspaceDetails = {
+      projectName,
+      customerName,
+      createdAt: new Date().toISOString(),
+    };
+    setSession({
+      ...session,
+      quoteDetails,
+      quoteStage: "MATERIAL_LIST",
+      enteredQuoteStages: markEntered([], "MATERIAL_LIST"),
+    });
+    return true;
+  },
+
+  updateQuoteDetails(details: {
+    projectName: string;
+    customerName: string;
+  }): boolean {
+    if (!session.quoteDetails) return false;
+    const projectName = details.projectName.trim();
+    const customerName = details.customerName.trim();
+    if (!projectName || !customerName) return false;
+    setSession({
+      ...session,
+      quoteDetails: {
+        ...session.quoteDetails,
+        projectName,
+        customerName,
+      },
+    });
+    return true;
+  },
+
+  /**
+   * Navigate to an already-entered quote stage without wiping workflow data.
+   */
+  goToQuoteStage(stage: OmegaQuoteStage): void {
+    if (!session.quoteDetails) return;
+    if (stage === "QUOTE_SETUP") return;
+    const currentIdx = stageIndex(session.quoteStage);
+    const targetIdx = stageIndex(stage);
+    if (targetIdx < 0) return;
+
+    const entered = session.enteredQuoteStages.includes(stage);
+    if (targetIdx > currentIdx && !entered) return;
+    if (targetIdx < currentIdx && !entered) return;
+
+    let status = session.status;
+    if (stage === "MATERIAL_LIST") {
+      status =
+        session.materialListRows.length > 0
+          ? "MATERIAL_LIST_REVIEW"
+          : recomputeReadyStatus(session.workbookFile);
+    } else if (stage === "DXF_MATCHING") {
+      if (session.resultRows.length > 0) status = "DXF_REVIEW";
+      else if (session.materialListApproved) status = "DXF_UPLOAD";
+    } else if (stage === "DATA_APPROVAL") {
+      status = "FINAL_PRICING_TABLE";
+    } else if (stage === "QUOTE_PRICING" || stage === "COMPLETED") {
+      status = "FINAL_PRICING_TABLE";
+    }
+
+    setSession({
+      ...session,
+      status,
+      quoteStage: stage,
+      enteredQuoteStages: markEntered(session.enteredQuoteStages, stage),
+    });
+  },
+
+  advanceToPricing(): void {
+    if (
+      session.quoteStage !== "DATA_APPROVAL" &&
+      session.status !== "FINAL_PRICING_TABLE" &&
+      session.status !== "DXF_REVIEW" &&
+      session.status !== "READY"
+    ) {
+      return;
+    }
+    setSession({
+      ...session,
+      status: "FINAL_PRICING_TABLE",
+      quoteStage: "QUOTE_PRICING",
+      enteredQuoteStages: markEntered(session.enteredQuoteStages, "QUOTE_PRICING"),
+    });
   },
 
   setWorkbook(file: File | null): void {
@@ -408,6 +528,10 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       status: recomputeReadyStatus(session.workbookFile),
+      quoteStage: session.quoteDetails ? "MATERIAL_LIST" : "QUOTE_SETUP",
+      enteredQuoteStages: session.quoteDetails
+        ? markEntered(session.enteredQuoteStages, "MATERIAL_LIST")
+        : [],
       error: null,
       analyzingLabel: null,
       resultRows: [],
@@ -561,6 +685,11 @@ export const simpleIntakeActions = {
       materialListRows,
       materialListApproved: true,
       status: "DXF_UPLOAD",
+      quoteStage: "DXF_MATCHING",
+      enteredQuoteStages: markEntered(
+        session.enteredQuoteStages,
+        "DXF_MATCHING"
+      ),
       extractedRows: materialListToExtractedRows(materialListRows),
     });
   },
@@ -578,12 +707,12 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       status: "MATERIAL_LIST_REVIEW",
-      // Keep DXF files; clear match results so Stage 2 can be re-run after edits.
-      resultRows: [],
-      unmatchedDxfIds: [],
-      dxfAvailability: [],
-      localSummary: null,
-      matchingDiagnostics: null,
+      quoteStage: "MATERIAL_LIST",
+      enteredQuoteStages: markEntered(
+        session.enteredQuoteStages,
+        "MATERIAL_LIST"
+      ),
+      // Keep DXF files and prior match results for back-nav preservation.
     });
   },
 
@@ -738,6 +867,11 @@ export const simpleIntakeActions = {
       setSession({
         ...getSimpleIntakeSession(),
         status: "DXF_REVIEW",
+        quoteStage: "DXF_MATCHING",
+        enteredQuoteStages: markEntered(
+          getSimpleIntakeSession().enteredQuoteStages,
+          "DXF_MATCHING"
+        ),
         analyzingLabel: null,
         materialListRows,
         materialListApproved: true,
@@ -782,6 +916,11 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       status: "FINAL_PRICING_TABLE",
+      quoteStage: "DATA_APPROVAL",
+      enteredQuoteStages: markEntered(
+        session.enteredQuoteStages,
+        "DATA_APPROVAL"
+      ),
     });
   },
 

@@ -22,6 +22,7 @@ import {
 } from "./SimpleFinalItemsTable";
 import { SimpleItemDetailsDrawer } from "./SimpleItemDetailsDrawer";
 import { SimpleResultsSummary } from "./SimpleResultsSummary";
+import { EmptyState, ScreenHeader, StickyActionBar } from "../ui";
 import type {
   FinalDxfCandidate,
   FinalFilterId,
@@ -268,132 +269,132 @@ export function ResultsReviewScreen({
     );
   }
 
+  const pendingCount = summary.needsReview + summary.blocked;
+  const excludedCount = summary.excluded;
+
   return (
-    <div className="space-y-4" dir="rtl">
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
-          <div>
-            <CardTitle>טבלת תוצאות סופית</CardTitle>
-            <CardDescription>
-              {session.workbookFile?.name ?? "קובץ חומרים"}
-              {hasLocalEdits && (
-                <span className="ms-2 text-amber-700 dark:text-amber-300">
-                  · השינויים נשמרים זמנית במסך זה.
-                </span>
-              )}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {onShowSummary && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onShowSummary}
-              >
-                סיכום בדיקה
+    <div className="flex min-h-[calc(100vh-11rem)] flex-col" dir="rtl">
+      <div className="flex-1 space-y-4 pb-4">
+        <ScreenHeader
+          title="הרשימה מוכנה לתמחור"
+          supportingText={`${summary.ready.toLocaleString("he-IL")} פריטים מוכנים · ${pendingCount.toLocaleString("he-IL")} ממתינים להשלמה · ${excludedCount.toLocaleString("he-IL")} לא נכללים`}
+        />
+
+        <div className="flex flex-wrap gap-2">
+          {onShowSummary && (
+            <Button type="button" variant="ghost" size="sm" onClick={onShowSummary}>
+              סיכום בדיקה
+            </Button>
+          )}
+          {onStartGuidedReview &&
+            unresolvedCount != null &&
+            unresolvedCount > 0 && (
+              <Button type="button" size="sm" onClick={onStartGuidedReview}>
+                טפל ב-{unresolvedCount} שורות
               </Button>
             )}
-            {onStartGuidedReview &&
-              unresolvedCount != null &&
-              unresolvedCount > 0 && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={onStartGuidedReview}
-                >
-                  טפל ב-{unresolvedCount} שורות
-                </Button>
-              )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => simpleIntakeActions.backToFiles()}
+          {hasLocalEdits && (
+            <span
+              className="self-center text-[12px]"
+              style={{ color: "var(--ow-attention)" }}
             >
-              חזרה לקבצים
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => downloadDebug(session.lastDebug)}
-            >
-              הורד JSON לדיבאג
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <SimpleResultsSummary
-            summary={summary}
-            activeFilter={filter}
-            onFilterChange={setFilter}
-            allReady={
-              summary.total > 0 &&
-              summary.ready === summary.total &&
-              summary.needsAttention === 0
-            }
-            needsAttentionCount={summary.needsAttention}
-          />
+              השינויים נשמרו מקומית במסך זה
+            </span>
+          )}
+        </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex gap-1 overflow-x-auto pb-1">
-              {FILTER_CHIPS.map((chip) => (
-                <Button
-                  key={chip.id}
-                  type="button"
-                  size="sm"
-                  variant={filter === chip.id ? "default" : "outline"}
-                  className={
-                    chip.id === "NEEDS_ATTENTION" && summary.needsAttention > 0
-                      ? "border-amber-500/60"
-                      : undefined
-                  }
-                  onClick={() => setFilter(chip.id)}
-                  aria-pressed={filter === chip.id}
-                >
-                  {chip.label}
-                  {chip.id === "NEEDS_ATTENTION" && (
-                    <span className="ms-1 tabular-nums">
-                      ({summary.needsAttention})
-                    </span>
-                  )}
-                </Button>
-              ))}
-            </div>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="חיפוש: חלק, DXF, חומר, פרופיל, גיליון…"
-              aria-label="חיפוש פריטים"
-              className="sm:max-w-xs"
-            />
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              מיון
-              <select
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                value={sort}
-                onChange={(e) => setSort(e.target.value as FinalSortId)}
-                aria-label="מיון שורות"
+        <SimpleResultsSummary
+          summary={summary}
+          activeFilter={filter}
+          onFilterChange={setFilter}
+          allReady={
+            summary.total > 0 &&
+            summary.ready === summary.total &&
+            summary.needsAttention === 0
+          }
+          needsAttentionCount={summary.needsAttention}
+        />
+
+        <div
+          className="flex flex-col gap-2 rounded-[var(--ow-radius)] border px-3 py-2.5 sm:flex-row sm:items-center"
+          style={{
+            backgroundColor: "var(--ow-surface)",
+            borderColor: "var(--ow-border)",
+          }}
+        >
+          <div className="flex gap-1 overflow-x-auto pb-1">
+            {FILTER_CHIPS.map((chip) => (
+              <Button
+                key={chip.id}
+                type="button"
+                size="sm"
+                variant={filter === chip.id ? "default" : "ghost"}
+                className="h-8"
+                style={
+                  filter === chip.id
+                    ? {
+                        backgroundColor: "var(--ow-accent)",
+                        color: "var(--ow-accent-fg)",
+                      }
+                    : undefined
+                }
+                onClick={() => setFilter(chip.id)}
+                aria-pressed={filter === chip.id}
               >
-                <option value="DEFAULT">ברירת מחדל</option>
-                <option value="SOURCE">סדר מקור</option>
-                <option value="PART">שם חלק</option>
-                <option value="MATERIAL">חומר</option>
-                <option value="THICKNESS">עובי</option>
-                <option value="QUANTITY">כמות</option>
-                <option value="TOTAL_WEIGHT">משקל כולל</option>
-                <option value="STATUS">סטטוס</option>
-              </select>
-            </label>
+                {chip.label}
+                {chip.id === "NEEDS_ATTENTION" && (
+                  <span className="ms-1 tabular-nums">
+                    ({summary.needsAttention})
+                  </span>
+                )}
+              </Button>
+            ))}
           </div>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="חיפוש לפי חלק או פרופיל"
+            aria-label="חיפוש פריטים"
+            className="h-8 sm:max-w-xs"
+          />
+          <label
+            className="flex items-center gap-2 text-[13px]"
+            style={{ color: "var(--ow-text-muted)" }}
+          >
+            מיון
+            <select
+              className="h-8 rounded-md border px-2 text-[13px]"
+              style={{
+                borderColor: "var(--ow-border)",
+                backgroundColor: "var(--ow-surface)",
+              }}
+              value={sort}
+              onChange={(e) => setSort(e.target.value as FinalSortId)}
+              aria-label="מיון שורות"
+            >
+              <option value="DEFAULT">ברירת מחדל</option>
+              <option value="SOURCE">סדר מקור</option>
+              <option value="PART">שם חלק</option>
+              <option value="MATERIAL">חומר</option>
+              <option value="THICKNESS">עובי</option>
+              <option value="QUANTITY">כמות</option>
+              <option value="TOTAL_WEIGHT">משקל כולל</option>
+              <option value="STATUS">סטטוס</option>
+            </select>
+          </label>
+        </div>
 
-          {visible.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              אין פריטים התואמים לסינון הנוכחי.
-            </p>
-          ) : (
-            <>
+        {visible.length === 0 ? (
+          <EmptyState title="אין פריטים התואמים לסינון הנוכחי." />
+        ) : (
+          <>
+            <div
+              className="overflow-x-auto rounded-[var(--ow-radius)] border"
+              style={{
+                backgroundColor: "var(--ow-surface)",
+                borderColor: "var(--ow-border)",
+              }}
+            >
               <SimpleFinalItemsTable
                 rows={visible}
                 selectedIds={selectedIds}
@@ -417,17 +418,31 @@ export function ResultsReviewScreen({
                 onRowAction={handleRowAction}
                 noDxfFilesUploaded={noDxfFilesUploaded}
               />
-              <SimpleFinalItemCards
-                rows={visible}
-                onOpenDetails={setDetailsId}
-                onEditField={handleEditField}
-                onRowAction={handleRowAction}
-                noDxfFilesUploaded={noDxfFilesUploaded}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
+            </div>
+            <SimpleFinalItemCards
+              rows={visible}
+              onOpenDetails={setDetailsId}
+              onEditField={handleEditField}
+              onRowAction={handleRowAction}
+              noDxfFilesUploaded={noDxfFilesUploaded}
+            />
+          </>
+        )}
+      </div>
+
+      <StickyActionBar
+        statusText={`${summary.ready.toLocaleString("he-IL")} פריטים מוכנים`}
+        helperText="לאחר אישור הנתונים תעברו לשלב התמחור"
+        secondary={{
+          label: "ייצוא רשימה",
+          onClick: () => downloadDebug(session.lastDebug),
+          disabled: !session.lastDebug,
+        }}
+        primary={{
+          label: "אשר נתונים והמשך לתמחור",
+          onClick: () => simpleIntakeActions.advanceToPricing(),
+        }}
+      />
 
       <SimpleItemDetailsDrawer
         row={detailsRow}

@@ -27,14 +27,16 @@ import type { IssueCardHandlers } from "../readiness/ReadinessIssueCard";
 import {
   buildDxfLinkedMaterialItems,
 } from "../dxfLink";
-import {
-  DXF_MATCH_LEVEL_HE,
-} from "../dxfLink/types";
 import { CompletionRequestDrawer } from "../dxfLink/CompletionRequestDrawer";
 import {
   buildFilenameCoverageNotice,
 } from "../matchWithFilenamePriority";
 import { hasExplicitDxfFileName } from "../normalizeDxfFileKey";
+import {
+  OmegaSideDrawer,
+  ScreenHeader,
+  WorkflowNotice,
+} from "../ui";
 
 function bumpConfirmed(
   prev: Set<string>,
@@ -321,93 +323,26 @@ export function PostAnalysisWorkflow() {
       {view === "SUMMARY" &&
         !filenameNoticeDismissed &&
         filenameCoverageNotice.kind === "NO_FILENAMES" && (
-          <div className="rounded-lg border border-sky-500/40 bg-sky-500/5 p-4 space-y-3">
-            <h3 className="text-base font-semibold">
-              {filenameCoverageNotice.headingHe}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {filenameCoverageNotice.bodyHe}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                onClick={() => setFilenameNoticeDismissed(true)}
-              >
-                {filenameCoverageNotice.continueLabelHe}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => simpleIntakeActions.backToMaterialList()}
-              >
-                {filenameCoverageNotice.backLabelHe}
-              </Button>
-            </div>
-          </div>
+          <WorkflowNotice
+            severity="recommendation"
+            heading={
+              filenameCoverageNotice.headingHe ||
+              "לא נמצאו שמות קובצי DXF ברשימת החומר"
+            }
+            actionLabel="בדיקת התאמות מוצעות"
+            onAction={() => setFilenameNoticeDismissed(true)}
+            secondaryLabel={filenameCoverageNotice.backLabelHe}
+            onSecondary={() => simpleIntakeActions.backToMaterialList()}
+          >
+            {filenameCoverageNotice.bodyHe}
+          </WorkflowNotice>
         )}
 
       {view === "SUMMARY" && filenameCoverageNotice.kind === "PARTIAL" && (
-        <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-          {filenameCoverageNotice.messageHe}
-        </p>
-      )}
-
-      {view === "SUMMARY" && (
-        <div className="flex flex-wrap gap-3 text-sm">
-          {matchLevelSummary.certain > 0 && (
-            <span>
-              {DXF_MATCH_LEVEL_HE.CERTAIN}:{" "}
-              <strong className="tabular-nums">{matchLevelSummary.certain}</strong>
-            </span>
-          )}
-          {matchLevelSummary.suggested > 0 && (
-            <span>
-              {DXF_MATCH_LEVEL_HE.SUGGESTED}:{" "}
-              <strong className="tabular-nums">
-                {matchLevelSummary.suggested}
-              </strong>
-            </span>
-          )}
-          {matchLevelSummary.unassigned > 0 && (
-            <span>
-              {DXF_MATCH_LEVEL_HE.UNASSIGNED}:{" "}
-              <strong className="tabular-nums">
-                {matchLevelSummary.unassigned}
-              </strong>
-            </span>
-          )}
-          {matchLevelSummary.explicitMissing > 0 && (
-            <span>
-              קבצים שלא הועלו:{" "}
-              <strong className="tabular-nums">
-                {matchLevelSummary.explicitMissing}
-              </strong>
-            </span>
-          )}
-        </div>
-      )}
-
-      {view !== "FINAL_TABLE" && (
-        <div className="flex flex-wrap justify-end gap-2">
-          {view !== "SUMMARY" && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setView("SUMMARY")}
-            >
-              חזרה לסיכום
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={requestContinueToTable}
-          >
-            המשך לטבלה
-          </Button>
-        </div>
+        <WorkflowNotice
+          severity="information"
+          heading={filenameCoverageNotice.messageHe ?? "כיסוי שמות חלקי"}
+        />
       )}
 
       {view === "SUMMARY" && (
@@ -421,20 +356,38 @@ export function PostAnalysisWorkflow() {
           onContinueToTable={requestContinueToTable}
           onShowUnusedDxfs={() => setUnusedOpen(true)}
           onOpenCompletionRequest={() => setCompletionOpen(true)}
+          matchMetrics={matchLevelSummary}
         />
       )}
 
       {listCategory && (
-        <ReadinessIssueList
-          category={listCategory}
-          rows={listRows}
-          deferredIssueKeys={effectiveDeferred}
-          onBackToSummary={() => setView("SUMMARY")}
-          onContinueToTable={requestContinueToTable}
-          onTreatOtherIssues={() => setView("SUMMARY")}
-          hasOtherIssues={criticalCount > 0}
-          handlers={handlers}
-        />
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <ScreenHeader
+              title="בדיקת התאמות"
+              supportingText="טפלו בפריט אחד בכל פעם — ההתאמות המוצלחות נשארות ברקע."
+              className="mb-0"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setView("SUMMARY")}
+            >
+              חזרה לסיכום
+            </Button>
+          </div>
+          <ReadinessIssueList
+            category={listCategory}
+            rows={listRows}
+            deferredIssueKeys={effectiveDeferred}
+            onBackToSummary={() => setView("SUMMARY")}
+            onContinueToTable={requestContinueToTable}
+            onTreatOtherIssues={() => setView("SUMMARY")}
+            hasOtherIssues={criticalCount > 0}
+            handlers={handlers}
+          />
+        </div>
       )}
 
       {view === "FINAL_TABLE" && (
@@ -479,53 +432,44 @@ export function PostAnalysisWorkflow() {
         originalFilename={session.workbookFile?.name ?? "workbook.xlsx"}
       />
 
-      {unusedOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-          role="dialog"
-          aria-modal
-          aria-label="קבצי DXF לא משויכים"
-        >
-          <div className="w-full max-w-md rounded-lg bg-background p-4 shadow-lg">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">
-                {unusedDxfCount} קבצי DXF לא שויכו
-              </h2>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setUnusedOpen(false)}
+      <OmegaSideDrawer
+        open={unusedOpen}
+        onClose={() => setUnusedOpen(false)}
+        title={`${unusedDxfCount.toLocaleString("he-IL")} קבצי DXF לא שויכו`}
+        description="קבצים שהועלו אך לא חוברו לפריט. ניתן להסיר אותם מהרשימה."
+      >
+        {unusedDxfs.length === 0 ? (
+          <p style={{ color: "var(--ow-text-muted)" }}>
+            אין קבצים לא משויכים.
+          </p>
+        ) : (
+          <ul className="space-y-2 text-[13px]">
+            {unusedDxfs.map((d) => (
+              <li
+                key={d.id}
+                className="flex items-center justify-between gap-2 rounded-[var(--ow-radius-sm)] border px-2 py-1.5"
+                style={{ borderColor: "var(--ow-border)" }}
               >
-                סגור
-              </Button>
-            </div>
-            <ul className="max-h-72 space-y-2 overflow-auto text-sm">
-              {unusedDxfs.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between gap-2 rounded border px-2 py-1.5"
+                <span className="ow-ltr min-w-0 truncate" title={d.filename}>
+                  {d.filename}
+                  {d.widthMm != null && d.lengthMm != null
+                    ? ` · ${d.widthMm}×${d.lengthMm}`
+                    : ""}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`הסר ${d.filename}`}
+                  onClick={() => simpleIntakeActions.removeDxf(d.filename)}
                 >
-                  <span className="min-w-0 truncate">
-                    {d.filename}
-                    {d.widthMm != null && d.lengthMm != null
-                      ? ` · ${d.widthMm}×${d.lengthMm}`
-                      : ""}
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => simpleIntakeActions.removeDxf(d.filename)}
-                  >
-                    מחק
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
+                  מחק
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </OmegaSideDrawer>
     </div>
   );
 }

@@ -1,16 +1,20 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { FinalResultsSummary } from "../results/types";
 import {
-  categoryActionHe,
+  AttentionInbox,
+  MetricStrip,
+  ScreenHeader,
+  StickyActionBar,
+  type AttentionInboxItem,
+} from "../ui";
+import {
   categoryTitleHe,
   type ReadinessBreakdown,
   type ReadinessCategoryId,
 } from "./categorizeReadinessIssues";
 
-/** Primary DXF categories shown in the concise issues panel (non-zero only). */
 const PANEL_CATEGORIES: ReadinessCategoryId[] = [
   "MISSING_DXF",
   "MULTIPLE_DXF",
@@ -19,16 +23,9 @@ const PANEL_CATEGORIES: ReadinessCategoryId[] = [
   "MISSING_INFO",
 ];
 
-export function ReadinessIssueCards({
-  breakdown,
-  onOpenCategory,
-}: {
-  breakdown: ReadinessBreakdown;
-  onOpenCategory: (id: ReadinessCategoryId) => void;
-}) {
-  const cards = PANEL_CATEGORIES.map((id) => ({
-    id,
-    count:
+function inboxItems(breakdown: ReadinessBreakdown): AttentionInboxItem[] {
+  return PANEL_CATEGORIES.map((id) => {
+    const count =
       id === "MISSING_DXF"
         ? breakdown.missingDxf.length
         : id === "MULTIPLE_DXF"
@@ -37,42 +34,38 @@ export function ReadinessIssueCards({
             ? breakdown.invalidDxf.length
             : id === "DIMENSION_MISMATCH"
               ? breakdown.dimensionMismatch.length
-              : breakdown.missingInfo.length,
-  })).filter((c) => c.count > 0);
+              : breakdown.missingInfo.length;
+    return {
+      id,
+      count,
+      label: categoryTitleHe(
+        id,
+        id === "MISSING_DXF" ? breakdown.missingDxf : undefined
+      ),
+    };
+  }).filter((c) => c.count > 0);
+}
 
-  if (cards.length === 0) return null;
+export function ReadinessIssueCards({
+  breakdown,
+  onOpenCategory,
+}: {
+  breakdown: ReadinessBreakdown;
+  onOpenCategory: (id: ReadinessCategoryId) => void;
+}) {
+  const items = inboxItems(breakdown);
+  if (items.length === 0) return null;
 
   return (
-    <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
-      <h3 className="text-base font-semibold">
-        נשארו {breakdown.criticalRowCount} פריטים שדורשים טיפול
-      </h3>
-      <ul className="space-y-2">
-        {cards.map((card) => (
-          <li
-            key={card.id}
-            className="flex flex-wrap items-center justify-between gap-2"
-          >
-            <span className="text-sm">
-              {categoryTitleHe(
-                card.id,
-                card.id === "MISSING_DXF" ? breakdown.missingDxf : undefined
-              )}{" "}
-              ·{" "}
-              <span className="font-semibold tabular-nums">{card.count}</span>
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenCategory(card.id)}
-            >
-              {categoryActionHe(card.id)}
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <AttentionInbox
+      remainingCount={breakdown.criticalRowCount}
+      items={items}
+      primaryLabel="התחל בדיקה"
+      onPrimary={() => {
+        const first = items[0];
+        if (first) onOpenCategory(first.id as ReadinessCategoryId);
+      }}
+    />
   );
 }
 
@@ -86,6 +79,7 @@ export function ReadinessSummary({
   onContinueToTable,
   onShowUnusedDxfs,
   onOpenCompletionRequest,
+  matchMetrics,
 }: {
   summary: FinalResultsSummary;
   breakdown: ReadinessBreakdown;
@@ -96,120 +90,129 @@ export function ReadinessSummary({
   onContinueToTable: () => void;
   onShowUnusedDxfs?: () => void;
   onOpenCompletionRequest?: () => void;
+  matchMetrics?: {
+    certain: number;
+    suggested: number;
+    unassigned: number;
+    explicitMissing: number;
+  };
 }) {
   const needs = breakdown.criticalRowCount;
   const allReady = summary.totalRowCount > 0 && needs === 0;
-  const readyItems = summary.ready;
-  const needsCompletion = summary.needsReview + summary.blocked;
+
+  const metricItems = [
+    matchMetrics && matchMetrics.certain > 0
+      ? {
+          id: "certain",
+          label: "התאמות ודאיות",
+          value: matchMetrics.certain,
+          highlight: "success" as const,
+        }
+      : null,
+    matchMetrics && matchMetrics.suggested > 0
+      ? {
+          id: "suggested",
+          label: "התאמות מוצעות",
+          value: matchMetrics.suggested,
+          highlight: "attention" as const,
+        }
+      : null,
+    matchMetrics && matchMetrics.unassigned > 0
+      ? {
+          id: "unassigned",
+          label: "לא שויכו",
+          value: matchMetrics.unassigned,
+        }
+      : null,
+    matchMetrics && matchMetrics.explicitMissing > 0
+      ? {
+          id: "missing-upload",
+          label: "קבצים שלא הועלו",
+          value: matchMetrics.explicitMissing,
+          highlight: "attention" as const,
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    id: string;
+    label: string;
+    value: number;
+    highlight?: "attention" | "success" | "none";
+  }>;
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6" dir="rtl">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">התאמת DXF הושלמה</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            בדקנו את רשימת החומר ואת קובצי ה-DXF. מוצגות רק בעיות שדורשות החלטה.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <div className="text-2xl font-semibold tabular-nums">
-                {summary.totalRowCount}
-              </div>
-              <div className="text-xs text-muted-foreground">פריטים</div>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <div className="text-2xl font-semibold tabular-nums">
-                {summary.totalUnitCount.toLocaleString("he-IL")}
-              </div>
-              <div className="text-xs text-muted-foreground">יחידות</div>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <div className="text-2xl font-semibold tabular-nums">
-                {readyItems}
-              </div>
-              <div className="text-xs text-muted-foreground">פריטים תקינים</div>
-            </div>
-            <div
-              className={`rounded-lg border p-3 ${
-                needsCompletion > 0
-                  ? "border-amber-500/50 bg-amber-500/10"
-                  : "border-border bg-muted/30"
-              }`}
+    <div className="flex min-h-[calc(100vh-14rem)] flex-col">
+      <div className="flex-1 space-y-5 pb-4">
+        <ScreenHeader
+          title="בדיקת התאמות"
+          supportingText="OMEGA חיברה את קובצי ה-DXF לפריטים. נשאר לטפל רק במקרים שדורשים החלטה."
+        />
+
+        {metricItems.length > 0 && <MetricStrip items={metricItems} />}
+
+        <p className="text-[13px]" style={{ color: "var(--ow-text-muted)" }}>
+          {uploadedDxfCount.toLocaleString("he-IL")} קובצי DXF נקלטו
+          {unusedDxfCount > 0 ? (
+            <>
+              {" "}
+              · {unusedDxfCount.toLocaleString("he-IL")} קבצים לא שויכו
+              {onShowUnusedDxfs && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <button
+                    type="button"
+                    className="underline underline-offset-2"
+                    onClick={onShowUnusedDxfs}
+                  >
+                    הצג קבצים
+                  </button>
+                </>
+              )}
+            </>
+          ) : null}
+        </p>
+
+        {allReady ? (
+          <AttentionInbox remainingCount={0} items={[]} />
+        ) : (
+          <ReadinessIssueCards
+            breakdown={breakdown}
+            onOpenCategory={onOpenCategory}
+          />
+        )}
+
+        {onOpenCompletionRequest && needs > 0 && (
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onOpenCompletionRequest}
             >
-              <div className="text-2xl font-semibold tabular-nums">
-                {needsCompletion}
-              </div>
-              <div className="text-xs text-muted-foreground">נדרש השלמה</div>
-            </div>
+              הכן בקשת השלמה
+            </Button>
           </div>
+        )}
+      </div>
 
-          <p className="text-sm text-muted-foreground">
-            {uploadedDxfCount} קובצי DXF נקלטו
-            {unusedDxfCount > 0 ? (
-              <>
-                {" "}
-                · {unusedDxfCount} קבצים לא שויכו
-                {onShowUnusedDxfs && (
-                  <>
-                    {" "}
-                    ·{" "}
-                    <button
-                      type="button"
-                      className="underline underline-offset-2"
-                      onClick={onShowUnusedDxfs}
-                    >
-                      הצג קבצים
-                    </button>
-                  </>
-                )}
-              </>
-            ) : null}
-          </p>
-
-          {allReady ? (
-            <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm">
-              כל הפריטים מוכנים לתמחור.
-            </p>
-          ) : (
-            <ReadinessIssueCards
-              breakdown={breakdown}
-              onOpenCategory={onOpenCategory}
-            />
-          )}
-
-          <div className="flex flex-col gap-2">
-            {allReady ? (
-              <Button type="button" size="lg" onClick={onContinueToTable}>
-                המשך לטבלה
-              </Button>
-            ) : (
-              <>
-                <Button type="button" size="lg" onClick={onTreatAll}>
-                  טפל בפריטים
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onContinueToTable}
-                >
-                  המשך לטבלה
-                </Button>
-              </>
-            )}
-            {onOpenCompletionRequest && needs > 0 && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={onOpenCompletionRequest}
-              >
-                הכן בקשת השלמה
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <StickyActionBar
+        statusText={
+          allReady
+            ? "כל ההתאמות מוכנות"
+            : `${needs.toLocaleString("he-IL")} פריטים דורשים החלטה`
+        }
+        secondary={
+          allReady
+            ? undefined
+            : {
+                label: "המשך לטבלה",
+                onClick: onContinueToTable,
+              }
+        }
+        primary={{
+          label: allReady ? "המשך לאישור נתונים" : "התחל בדיקה",
+          onClick: allReady ? onContinueToTable : onTreatAll,
+        }}
+      />
     </div>
   );
 }

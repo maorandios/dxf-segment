@@ -1,0 +1,185 @@
+/* Scoped light-mode tokens for Simple Intake desktop workflow */
+
+.omega-workflow {
+  --ow-bg: #f7f8fa;
+  --ow-surface: #ffffff;
+  --ow-surface-muted: #f2f4f7;
+  --ow-border: #e4e7ec;
+  --ow-border-strong: #d0d5dd;
+  --ow-text: #101828;
+  --ow-text-secondary: #475467;
+  --ow-text-muted: #667085;
+  --ow-accent: #0f766e;
+  --ow-accent-hover: #115e59;
+  --ow-accent-soft: #e7f6f3;
+  --ow-accent-fg: #ffffff;
+  --ow-success: #15803d;
+  --ow-success-soft: #ecfdf3;
+  --ow-attention: #b45309;
+  --ow-attention-soft: #fff7e6;
+  --ow-error: #b42318;
+  --ow-error-soft: #fef3f2;
+  --ow-info: #175cd3;
+  --ow-info-soft: #eff8ff;
+  --ow-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --ow-shadow-md: 0 4px 16px -4px rgba(16, 24, 40, 0.08);
+  --ow-radius: 10px;
+  --ow-radius-sm: 6px;
+  --ow-radius-lg: 14px;
+
+  /* Override shadcn tokens inside the workflow shell */
+  --background: 210 14% 97%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 175 78% 26%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 175 40% 94%;
+  --accent-foreground: 175 78% 22%;
+  --destructive: 4 74% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 175 78% 26%;
+  --success: 142 72% 29%;
+  --warning: 32 95% 37%;
+
+  color-scheme: light;
+  direction: rtl;
+  background-color: var(--ow-bg);
+  color: var(--ow-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.omega-workflow * {
+  border-color: var(--ow-border);
+}
+
+.omega-workflow .ow-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.omega-workflow .ow-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stage enter */
+@keyframes ow-stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.omega-workflow .ow-stage-enter {
+  animation: ow-stage-in 300ms ease-out both;
+}
+
+/* Activity pulse */
+@keyframes ow-pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+}
+
+.omega-workflow .ow-pulse-dot {
+  animation: ow-pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* Progress line */
+@keyframes ow-progress-line {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.omega-workflow .ow-progress-line {
+  transform-origin: right center;
+  animation: ow-progress-line 280ms ease-out both;
+}
+
+/* Cell edit success */
+@keyframes ow-cell-pulse {
+  0% {
+    background-color: var(--ow-success-soft);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.omega-workflow .ow-cell-pulse {
+  animation: ow-cell-pulse 450ms ease-out;
+}
+
+/* Decision resolve */
+@keyframes ow-resolve-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.omega-workflow .ow-resolve-out {
+  animation: ow-resolve-out 220ms ease-out forwards;
+}
+
+/* Drawer */
+@keyframes ow-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes ow-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.omega-workflow .ow-drawer-panel {
+  animation: ow-drawer-in 260ms ease-out both;
+}
+
+.omega-workflow .ow-drawer-overlay {
+  animation: ow-overlay-in 200ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .omega-workflow .ow-stage-enter,
+  .omega-workflow .ow-pulse-dot,
+  .omega-workflow .ow-progress-line,
+  .omega-workflow .ow-cell-pulse,
+  .omega-workflow .ow-resolve-out,
+  .omega-workflow .ow-drawer-panel,
+  .omega-workflow .ow-drawer-overlay {
+    animation: none !important;
+  }
+}

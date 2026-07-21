@@ -245,7 +245,7 @@ export async function runLlamaExtractWorkbook(args: {
   let llamaExtractionMs = 0;
   let llamaPollingMs = 0;
   let llamaNormalizationMs: number | null = null;
-  let cleanupError: string | null = null;
+  const cleanupError: string | null = null;
   const chunkJobs: ChunkJobResult[] = [];
 
   try {

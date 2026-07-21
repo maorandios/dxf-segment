@@ -18,6 +18,27 @@ export type SimpleIntakeStatus =
   | "READY"
   | "FAILED";
 
+/** Presentation stages for the quote workspace (UI shell). */
+export type OmegaQuoteStage =
+  | "QUOTE_SETUP"
+  | "MATERIAL_LIST"
+  | "DXF_MATCHING"
+  | "DATA_APPROVAL"
+  | "QUOTE_PRICING"
+  | "COMPLETED";
+
+export type QuoteWorkspaceDetails = {
+  projectName: string;
+  customerName: string;
+  createdAt: string;
+};
+
+export type WorkflowStepState =
+  | "COMPLETED"
+  | "ACTIVE"
+  | "UPCOMING"
+  | "ATTENTION";
+
 export type SimpleIntakeError = {
   stage:
     | "WORKBOOK_READ"
@@ -295,6 +316,12 @@ export type SimpleTiming = {
 
 export type SimpleIntakeSession = {
   status: SimpleIntakeStatus;
+  /** Local quote workspace identity — null until setup completes. */
+  quoteDetails: QuoteWorkspaceDetails | null;
+  /** Active five-step presentation stage (QUOTE_SETUP when details are null). */
+  quoteStage: OmegaQuoteStage;
+  /** Stages the user has already entered (enables back navigation). */
+  enteredQuoteStages: OmegaQuoteStage[];
   runId: string | null;
   workbookFile: File | null;
   dxfFiles: File[];

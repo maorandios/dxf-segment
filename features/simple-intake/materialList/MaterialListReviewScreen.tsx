@@ -6,13 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -26,8 +19,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { simpleIntakeActions } from "../sessionStore";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
+import {
+  MetricStrip,
+  ScreenHeader,
+  StatusBadge,
+  StickyActionBar,
+  WorkflowNotice,
+} from "../ui";
 import { ApproveWithMissingDialog } from "./ApproveWithMissingDialog";
 import {
   displayLabel,
@@ -50,12 +51,19 @@ function statusLabelHe(row: MaterialListRow): string {
   if (row.approvalStatus === "COMPLETE") return "מלא";
   if (row.approvalStatus === "APPROVED_WITH_MISSING_DATA")
     return "אושר עם חוסרים";
-  return "דורש השלמה";
+  return "נדרש השלמה";
 }
 
 function CellMissing({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-800 dark:text-amber-200">
+    <span
+      className="inline-flex items-center rounded-[var(--ow-radius-sm)] border px-1.5 py-0.5 text-[12px]"
+      style={{
+        backgroundColor: "var(--ow-attention-soft)",
+        borderColor: "#F9DBAF",
+        color: "var(--ow-attention)",
+      }}
+    >
       {children}
     </span>
   );
@@ -63,7 +71,14 @@ function CellMissing({ children }: { children: React.ReactNode }) {
 
 function CellUnresolved() {
   return (
-    <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-rose-800 dark:text-rose-200">
+    <span
+      className="inline-flex items-center rounded-[var(--ow-radius-sm)] border px-1.5 py-0.5 text-[12px]"
+      style={{
+        backgroundColor: "var(--ow-error-soft)",
+        borderColor: "#FECDCA",
+        color: "var(--ow-error)",
+      }}
+    >
       לא פוענח
     </span>
   );
@@ -87,12 +102,16 @@ function EditableNumber({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value == null ? "" : String(value));
   const [error, setError] = useState<string | null>(null);
+  const [pulse, setPulse] = useState(false);
 
   if (!editing) {
     return (
       <button
         type="button"
-        className="text-start underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        className={cn(
+          "text-start underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
+          pulse && "ow-cell-pulse rounded-[var(--ow-radius-sm)] px-0.5"
+        )}
         onClick={() => {
           setDraft(value == null ? "" : String(value));
           setError(null);
@@ -105,7 +124,12 @@ function EditableNumber({
         ) : value == null || (typeof value === "number" && value <= 0) ? (
           <CellMissing>חסר</CellMissing>
         ) : (
-          <span className={missing ? "text-amber-800 dark:text-amber-200" : undefined}>
+          <span
+            className="ow-tabular ow-ltr inline-block"
+            style={
+              missing ? { color: "var(--ow-attention)" } : undefined
+            }
+          >
             {value}
           </span>
         )}
@@ -120,9 +144,13 @@ function EditableNumber({
         <Input
           value={draft}
           inputMode={integer ? "numeric" : "decimal"}
-          className="h-8"
+          className="h-8 ow-ltr"
+          dir="ltr"
           onChange={(e) => setDraft(e.target.value)}
           aria-invalid={Boolean(error)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setEditing(false);
+          }}
         />
         <Button
           type="button"
@@ -144,12 +172,18 @@ function EditableNumber({
             }
             onSave(n);
             setEditing(false);
+            setPulse(true);
+            window.setTimeout(() => setPulse(false), 450);
           }}
         >
           שמור
         </Button>
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        <p className="text-xs" style={{ color: "var(--ow-error)" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -170,12 +204,16 @@ function EditableText({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [pulse, setPulse] = useState(false);
 
   if (!editing) {
     return (
       <button
         type="button"
-        className="text-start underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        className={cn(
+          "text-start underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
+          pulse && "ow-cell-pulse rounded-[var(--ow-radius-sm)] px-0.5"
+        )}
         onClick={() => {
           setDraft(value ?? "");
           setError(null);
@@ -186,7 +224,11 @@ function EditableText({
         {unresolved ? (
           <CellUnresolved />
         ) : !value?.trim() ? (
-          missing ? <CellMissing>חסר</CellMissing> : <span>—</span>
+          missing ? (
+            <CellMissing>חסר</CellMissing>
+          ) : (
+            <span style={{ color: "var(--ow-text-muted)" }}>—</span>
+          )
         ) : (
           value
         )}
@@ -201,6 +243,9 @@ function EditableText({
           value={draft}
           className="h-8"
           onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setEditing(false);
+          }}
         />
         <Button
           type="button"
@@ -213,12 +258,18 @@ function EditableText({
             }
             onSave(t || null);
             setEditing(false);
+            setPulse(true);
+            window.setTimeout(() => setPulse(false), 450);
           }}
         >
           שמור
         </Button>
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        <p className="text-xs" style={{ color: "var(--ow-error)" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -260,7 +311,8 @@ function RowActionIcons({
             type="button"
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-destructive hover:text-destructive"
+            className="h-8 w-8"
+            style={{ color: "var(--ow-error)" }}
             aria-label="מחק פריט"
             onClick={onDelete}
           >
@@ -277,6 +329,7 @@ function getRowFieldEditors(row: MaterialListRow) {
   const e = effectiveMaterialFields(row);
   const derived = deriveMaterialListMetrics(row);
   const msg = missingFieldsMessageHe(row);
+  const incomplete = row.approvalStatus !== "COMPLETE";
 
   return {
     e,
@@ -284,9 +337,14 @@ function getRowFieldEditors(row: MaterialListRow) {
     msg,
     status: (
       <div className="space-y-1">
-        <span>{statusLabelHe(row)}</span>
+        <StatusBadge
+          label={statusLabelHe(row)}
+          variant={incomplete ? "incomplete" : "complete"}
+        />
         {msg && (
-          <p className="text-xs text-amber-800 dark:text-amber-200">{msg}</p>
+          <p className="text-[11px]" style={{ color: "var(--ow-attention)" }}>
+            {msg}
+          </p>
         )}
       </div>
     ),
@@ -373,94 +431,39 @@ function MaterialListTableRow({
   const editors = getRowFieldEditors(row);
 
   return (
-    <tr className="border-b align-top">
-      <td className="px-3 py-2 tabular-nums text-muted-foreground">
+    <tr
+      className="border-b transition-colors duration-150 hover:bg-[color:var(--ow-surface-muted)]"
+      style={{ borderColor: "var(--ow-border)" }}
+    >
+      <td
+        className="px-3 py-2.5 text-[13px] ow-tabular"
+        style={{ color: "var(--ow-text-muted)" }}
+      >
         {displayIndex}
       </td>
-      <td className="px-3 py-2">{editors.status}</td>
-      <td className="px-3 py-2">{editors.part}</td>
-      <td className="px-3 py-2">{editors.material}</td>
-      <td className="px-3 py-2">{editors.thickness}</td>
-      <td className="px-3 py-2">{editors.quantity}</td>
-      <td className="px-3 py-2">{editors.width}</td>
-      <td className="px-3 py-2">{editors.length}</td>
-      <td className="px-3 py-2 tabular-nums">{editors.unitArea}</td>
-      <td className="px-3 py-2 tabular-nums">{editors.totalArea}</td>
-      <td className="px-3 py-2 tabular-nums">{editors.unitWeight}</td>
-      <td className="px-3 py-2 tabular-nums">{editors.totalWeight}</td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2.5 text-[13px]">{editors.status}</td>
+      <td className="px-3 py-2.5 text-[13px]">{editors.part}</td>
+      <td className="px-3 py-2.5 text-[13px]">{editors.material}</td>
+      <td className="px-3 py-2.5 text-[13px]">{editors.thickness}</td>
+      <td className="px-3 py-2.5 text-[13px]">{editors.quantity}</td>
+      <td className="px-3 py-2.5 text-[13px]">{editors.width}</td>
+      <td className="px-3 py-2.5 text-[13px]">{editors.length}</td>
+      <td className="px-3 py-2.5 text-[13px] ow-tabular ow-ltr">
+        {editors.unitArea}
+      </td>
+      <td className="px-3 py-2.5 text-[13px] ow-tabular ow-ltr">
+        {editors.totalArea}
+      </td>
+      <td className="px-3 py-2.5 text-[13px] ow-tabular ow-ltr">
+        {editors.unitWeight}
+      </td>
+      <td className="px-3 py-2.5 text-[13px] ow-tabular ow-ltr">
+        {editors.totalWeight}
+      </td>
+      <td className="px-3 py-2.5">
         <RowActionIcons onDuplicate={onDuplicate} onDelete={onRequestDelete} />
       </td>
     </tr>
-  );
-}
-
-function MaterialListMobileCard({
-  row,
-  displayIndex,
-  onDuplicate,
-  onRequestDelete,
-}: {
-  row: MaterialListRow;
-  displayIndex: number;
-  onDuplicate: () => void;
-  onRequestDelete: () => void;
-}) {
-  const editors = getRowFieldEditors(row);
-
-  return (
-    <li className="rounded-lg border border-border bg-card p-3 shadow-sm">
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-start gap-2">
-          <span className="shrink-0 text-sm font-medium text-muted-foreground">
-            {displayIndex}
-          </span>
-          <div className="min-w-0 space-y-1">
-            {editors.status}
-            <div className="font-medium">{editors.part}</div>
-          </div>
-        </div>
-        <RowActionIcons onDuplicate={onDuplicate} onDelete={onRequestDelete} />
-      </div>
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <div className="text-muted-foreground">סוג חומר</div>
-          {editors.material}
-        </div>
-        <div>
-          <div className="text-muted-foreground">עובי</div>
-          {editors.thickness}
-        </div>
-        <div>
-          <div className="text-muted-foreground">כמות</div>
-          {editors.quantity}
-        </div>
-        <div>
-          <div className="text-muted-foreground">רוחב</div>
-          {editors.width}
-        </div>
-        <div>
-          <div className="text-muted-foreground">אורך</div>
-          {editors.length}
-        </div>
-        <div>
-          <div className="text-muted-foreground">שטח יחידה (מ&quot;ר)</div>
-          <div>{editors.unitArea}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">שטח כללי (מ&quot;ר)</div>
-          <div>{editors.totalArea}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">משקל יחידה (ק&quot;ג)</div>
-          <div>{editors.unitWeight}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">משקל כללי (ק&quot;ג)</div>
-          <div>{editors.totalWeight}</div>
-        </div>
-      </div>
-    </li>
   );
 }
 
@@ -503,121 +506,161 @@ export function MaterialListReviewScreen() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="space-y-4" dir="rtl">
-        <Card className="border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-2xl">רשימת החומר מוכנה</CardTitle>
-            <CardDescription>
-              סידרנו את הנתונים שמצאנו בקובץ. בדוק את הרשימה והשלם פרטים חסרים לפני
-              המעבר ל-DXF.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div>
-                <p className="text-2xl font-semibold">{summary.totalRows}</p>
-                <p className="text-sm text-muted-foreground">פריטים</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold">{summary.knownUnits}</p>
-                <p className="text-sm text-muted-foreground">יחידות</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold">{summary.completeRows}</p>
-                <p className="text-sm text-muted-foreground">פריטים תקינים</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold">{summary.incompleteRows}</p>
-                <p className="text-sm text-muted-foreground">נדרש השלמה</p>
-              </div>
-            </div>
+      <div className="flex min-h-[calc(100vh-11rem)] flex-col">
+        <div className="flex-1 space-y-4 pb-4">
+          <ScreenHeader
+            title="רשימת החומר מוכנה"
+            supportingText="סידרנו את הנתונים שמצאנו בקובץ. בדוק את הפריטים שדורשים השלמה לפני המעבר לקובצי DXF."
+          />
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    ["ALL", "הכול"],
-                    ["COMPLETE", "מלא"],
-                    ["INCOMPLETE", "דורש השלמה"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <Button
-                    key={id}
-                    type="button"
-                    size="sm"
-                    variant={filter === id ? "default" : "outline"}
-                    onClick={() => setFilter(id)}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-              <div className="w-full sm:max-w-xs">
-                <Label htmlFor="ml-search">חיפוש לפי חלק או פרופיל</Label>
-                <Input
-                  id="ml-search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="חיפוש…"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          <MetricStrip
+            items={[
+              { id: "items", label: "פריטים", value: summary.totalRows },
+              { id: "units", label: "יחידות", value: summary.knownUnits },
+              {
+                id: "ok",
+                label: "פריטים תקינים",
+                value: summary.completeRows,
+              },
+              {
+                id: "need",
+                label: "נדרש השלמה",
+                value: summary.incompleteRows,
+                highlight:
+                  summary.incompleteRows > 0 ? "attention" : "none",
+              },
+            ]}
+          />
 
-        <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
-          <table className="w-full min-w-[1100px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-start">
-                {MATERIAL_LIST_TABLE_HEADERS.map((h, i) => (
-                  <th key={`h-${i}`} className="px-3 py-2 font-medium">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row, index) => (
-                <MaterialListTableRow
-                  key={row.rowId}
-                  row={row}
-                  displayIndex={index + 1}
-                  onDuplicate={() =>
-                    simpleIntakeActions.duplicateMaterialListRow(row.rowId)
-                  }
-                  onRequestDelete={() => setDeleteRowId(row.rowId)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {summary.incompleteRows > 0 && (
+            <WorkflowNotice
+              severity="recommendation"
+              heading={`נמצאו ${summary.incompleteRows.toLocaleString("he-IL")} פריטים שדורשים השלמה`}
+              actionLabel="הצג רק פריטים להשלמה"
+              onAction={() => setFilter("INCOMPLETE")}
+            >
+              ניתן לתקן את הנתונים ישירות בטבלה או להמשיך ולרכז את החוסרים לאחר
+              חיבור קובצי ה-DXF.
+            </WorkflowNotice>
+          )}
 
-        <ul className="space-y-3 md:hidden">
-          {filtered.map((row, index) => (
-            <MaterialListMobileCard
-              key={row.rowId}
-              row={row}
-              displayIndex={index + 1}
-              onDuplicate={() =>
-                simpleIntakeActions.duplicateMaterialListRow(row.rowId)
-              }
-              onRequestDelete={() => setDeleteRowId(row.rowId)}
-            />
-          ))}
-        </ul>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => simpleIntakeActions.backToFiles()}
+          <div
+            className="flex flex-col gap-3 rounded-[var(--ow-radius)] border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+            style={{
+              backgroundColor: "var(--ow-surface)",
+              borderColor: "var(--ow-border)",
+            }}
           >
-            חזרה לקבצים
-          </Button>
-          <Button type="button" size="lg" onClick={requestApprove}>
-            אשר רשימה והמשך ל-DXF
-          </Button>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["ALL", "הכול"],
+                  ["COMPLETE", "מלא"],
+                  ["INCOMPLETE", "דורש השלמה"],
+                ] as const
+              ).map(([id, label]) => (
+                <Button
+                  key={id}
+                  type="button"
+                  size="sm"
+                  variant={filter === id ? "default" : "ghost"}
+                  className="h-8"
+                  style={
+                    filter === id
+                      ? {
+                          backgroundColor: "var(--ow-accent)",
+                          color: "var(--ow-accent-fg)",
+                        }
+                      : undefined
+                  }
+                  onClick={() => setFilter(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <div className="w-full sm:max-w-xs">
+              <Label htmlFor="ml-search" className="sr-only">
+                חיפוש לפי חלק או פרופיל
+              </Label>
+              <Input
+                id="ml-search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="חיפוש לפי חלק או פרופיל"
+                className="h-8"
+              />
+            </div>
+          </div>
+
+          <div
+            className="overflow-x-auto rounded-[var(--ow-radius)] border"
+            style={{
+              backgroundColor: "var(--ow-surface)",
+              borderColor: "var(--ow-border)",
+            }}
+          >
+            <table className="w-full min-w-[1100px] border-collapse text-[13px]">
+              <thead>
+                <tr
+                  className="sticky top-0 z-10 border-b text-start"
+                  style={{
+                    backgroundColor: "var(--ow-surface-muted)",
+                    borderColor: "var(--ow-border)",
+                  }}
+                >
+                  {MATERIAL_LIST_TABLE_HEADERS.map((h, i) => (
+                    <th
+                      key={`h-${i}`}
+                      className="px-3 py-2.5 text-[12px] font-medium"
+                      style={{ color: "var(--ow-text-secondary)" }}
+                      scope="col"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((row, index) => (
+                  <MaterialListTableRow
+                    key={row.rowId}
+                    row={row}
+                    displayIndex={index + 1}
+                    onDuplicate={() =>
+                      simpleIntakeActions.duplicateMaterialListRow(row.rowId)
+                    }
+                    onRequestDelete={() => setDeleteRowId(row.rowId)}
+                  />
+                ))}
+              </tbody>
+            </table>
+            {filtered.length === 0 && (
+              <p
+                className="px-4 py-10 text-center text-[13px]"
+                style={{ color: "var(--ow-text-muted)" }}
+              >
+                אין פריטים להצגה לפי הסינון הנוכחי.
+              </p>
+            )}
+          </div>
         </div>
+
+        <StickyActionBar
+          statusText={
+            summary.incompleteRows > 0
+              ? `${summary.incompleteRows.toLocaleString("he-IL")} פריטים דורשים השלמה`
+              : "כל הפריטים תקינים"
+          }
+          secondary={{
+            label: "חזרה",
+            onClick: () => simpleIntakeActions.backToFiles(),
+          }}
+          primary={{
+            label: "אשר רשימה והמשך ל-DXF",
+            onClick: requestApprove,
+          }}
+        />
 
         <ApproveWithMissingDialog
           open={confirmOpen}
@@ -635,7 +678,11 @@ export function MaterialListReviewScreen() {
             if (!next) setDeleteRowId(null);
           }}
         >
-          <DialogContent className="sm:max-w-md" dir="rtl" showCloseButton={false}>
+          <DialogContent
+            className="sm:max-w-md"
+            dir="rtl"
+            showCloseButton={false}
+          >
             <DialogHeader>
               <DialogTitle>מחיקת פריט</DialogTitle>
               <DialogDescription>

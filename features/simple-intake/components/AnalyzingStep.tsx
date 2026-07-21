@@ -1,20 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
+import {
+  AgentActivityPanel,
+  buildDxfActivitySteps,
+  buildWorkbookActivitySteps,
+} from "../ui";
 
 export function AnalyzingStep() {
   const session = useSimpleIntakeSession();
-  const label =
-    session.analyzingLabel ?? "מארגנים את הנתונים לטבלה אחידה...";
+  const isDxf = session.status === "DXF_PROCESSING";
   const [elapsedSec, setElapsedSec] = useState(0);
 
   useEffect(() => {
@@ -32,25 +28,48 @@ export function AnalyzingStep() {
     };
   }, [session.startedAt]);
 
+  const sheetCount = session.workbookSnapshot?.sheets.length ?? null;
+  const populatedRows =
+    session.workbookSnapshot?.sheets.reduce(
+      (sum, s) => sum + (s.populatedRowCount ?? 0),
+      0
+    ) ?? null;
+
+  const steps = useMemo(() => {
+    if (isDxf) {
+      return buildDxfActivitySteps({
+        analyzingLabel: session.analyzingLabel,
+        elapsedSec,
+        dxfFileCount: session.dxfFiles.length || session.dxfParts.length,
+      });
+    }
+    return buildWorkbookActivitySteps({
+      analyzingLabel: session.analyzingLabel,
+      elapsedSec,
+      sheetCount,
+      populatedRows,
+    });
+  }, [
+    isDxf,
+    session.analyzingLabel,
+    elapsedSec,
+    session.dxfFiles.length,
+    session.dxfParts.length,
+    sheetCount,
+    populatedRows,
+  ]);
+
   return (
-    <Card className="mx-auto w-full max-w-lg border-0 shadow-sm" dir="rtl">
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden />
-        </div>
-        <CardTitle className="text-xl">מסדרים את רשימת החומר</CardTitle>
-        <CardDescription>
-          אנחנו קוראים את כל הגיליונות ומארגנים את הנתונים לטבלה אחידה.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-center text-sm font-medium" aria-live="polite">
-          {label}
-        </p>
-        <p className="text-center text-xs text-muted-foreground">
-          {session.workbookFile?.name ?? "Excel"} · זמן שחלף: {elapsedSec}s
-        </p>
-      </CardContent>
-    </Card>
+    <div className="flex min-h-[calc(100vh-11rem)] items-center justify-center py-8">
+      <AgentActivityPanel
+        title={isDxf ? "מחברים את קובצי ה-DXF" : "מכינים את רשימת החומר"}
+        supportingText={
+          isDxf
+            ? "OMEGA קוראת את הקבצים, מחברת גאומטריה לפריטים ומכינה את נתוני התמחור."
+            : "OMEGA קוראת את הקובץ, מזהה את הפריטים ובודקת שהנתונים מוכנים להמשך."
+        }
+        steps={steps}
+      />
+    </div>
   );
 }
