@@ -11,12 +11,8 @@ export function OmegaAppShell({
   quoteStage,
   enteredQuoteStages,
   stepperStates,
-  statusText,
   children,
   actionBar,
-  onReplaceWorkbook,
-  onDownloadDebug,
-  canDownloadDebug,
   className,
   showStepper = true,
 }: {
@@ -41,13 +37,7 @@ export function OmegaAppShell({
       )}
       dir="rtl"
     >
-      <OmegaHeader
-        quoteDetails={quoteDetails}
-        statusText={statusText}
-        onReplaceWorkbook={onReplaceWorkbook}
-        onDownloadDebug={onDownloadDebug}
-        canDownloadDebug={canDownloadDebug}
-      />
+      <OmegaHeader quoteDetails={quoteDetails} />
       {showStepper && quoteDetails && (
         <FiveStepProgressBar
           states={stepperStates}
@@ -56,8 +46,10 @@ export function OmegaAppShell({
         />
       )}
       <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="ow-stage-enter min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+        <div className="ow-stage-enter flex min-h-0 flex-1 flex-col overflow-auto px-4 py-5 sm:px-6 lg:px-8">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col items-center">
+            {children}
+          </div>
         </div>
         {actionBar}
       </main>

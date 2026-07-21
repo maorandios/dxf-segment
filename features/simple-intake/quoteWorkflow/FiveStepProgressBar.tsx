@@ -21,24 +21,42 @@ export function FiveStepProgressBar({
 }) {
   return (
     <nav
-      className="shrink-0 border-b px-4 py-3 sm:px-6"
+      className="shrink-0 border-b px-4 py-4 sm:px-8 sm:py-5"
       style={{
         backgroundColor: "var(--ow-surface)",
         borderColor: "var(--ow-border)",
       }}
       aria-label="שלבי הצעת המחיר"
     >
-      <ol className="mx-auto flex max-w-[1180px] items-center justify-between gap-1">
+      <ol className="mx-auto grid w-full max-w-[920px] grid-cols-5 items-start">
         {QUOTE_STEPPER_ORDER.map((id, index) => {
           const state = states[id];
           const isLast = index === QUOTE_STEPPER_ORDER.length - 1;
           const canNavigate =
             enteredStages.includes(id) && id !== activeStage;
+          const fillLine = state === "COMPLETED";
+
           return (
             <li
               key={id}
-              className="flex min-w-0 flex-1 items-center sm:flex-none"
+              className="relative flex min-w-0 flex-col items-center"
             >
+              {!isLast && (
+                <div
+                  className="pointer-events-none absolute start-1/2 top-[18px] z-0 h-[3px] w-full overflow-hidden rounded-full"
+                  style={{ backgroundColor: "var(--ow-border)" }}
+                  aria-hidden
+                >
+                  <div
+                    className="h-full origin-right rounded-full transition-all duration-300"
+                    style={{
+                      width: fillLine ? "100%" : "0%",
+                      backgroundColor: "var(--ow-accent)",
+                    }}
+                  />
+                </div>
+              )}
+
               <button
                 type="button"
                 disabled={!canNavigate}
@@ -46,7 +64,7 @@ export function FiveStepProgressBar({
                   if (canNavigate) simpleIntakeActions.goToQuoteStage(id);
                 }}
                 className={cn(
-                  "flex min-w-0 items-center gap-2 rounded-md text-start transition-opacity duration-180",
+                  "relative z-[1] flex w-full flex-col items-center gap-2 rounded-md text-center transition-opacity duration-180",
                   canNavigate
                     ? "cursor-pointer hover:opacity-80"
                     : "cursor-default"
@@ -54,45 +72,36 @@ export function FiveStepProgressBar({
                 aria-current={state === "ACTIVE" ? "step" : undefined}
               >
                 <span
-                  className={cn(
-                    "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-medium transition-colors duration-200"
-                  )}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ring-4 ring-[var(--ow-surface)] transition-colors duration-200"
                   style={{
                     backgroundColor:
-                      state === "ACTIVE"
+                      state === "ACTIVE" || state === "COMPLETED"
                         ? "var(--ow-accent)"
-                        : state === "COMPLETED"
-                          ? "var(--ow-success-soft)"
-                          : state === "ATTENTION"
-                            ? "var(--ow-attention-soft)"
-                            : "var(--ow-surface-muted)",
+                        : state === "ATTENTION"
+                          ? "var(--ow-attention)"
+                          : "var(--ow-surface-muted)",
                     color:
+                      state === "ACTIVE" ||
+                      state === "COMPLETED" ||
+                      state === "ATTENTION"
+                        ? "#fff"
+                        : "var(--ow-text-muted)",
+                    boxShadow:
                       state === "ACTIVE"
-                        ? "var(--ow-accent-fg)"
-                        : state === "COMPLETED"
-                          ? "var(--ow-success)"
-                          : state === "ATTENTION"
-                            ? "var(--ow-attention)"
-                            : "var(--ow-text-muted)",
+                        ? "0 0 0 4px var(--ow-accent-soft)"
+                        : undefined,
                   }}
                 >
                   {state === "COMPLETED" ? (
-                    <Check className="h-3.5 w-3.5" aria-hidden />
+                    <Check className="h-4 w-4" aria-hidden />
                   ) : (
                     <span aria-hidden>{index + 1}</span>
-                  )}
-                  {state === "ATTENTION" && (
-                    <span
-                      className="absolute -start-0.5 -top-0.5 h-2 w-2 rounded-full"
-                      style={{ backgroundColor: "var(--ow-attention)" }}
-                      aria-label="דורש תשומת לב"
-                    />
                   )}
                 </span>
                 <span
                   className={cn(
-                    "hidden truncate text-[12px] md:inline lg:text-[13px]",
-                    state === "ACTIVE" && "font-medium"
+                    "w-full px-0.5 text-[11px] leading-snug sm:text-[12px]",
+                    state === "ACTIVE" && "font-semibold"
                   )}
                   style={{
                     color:
@@ -106,13 +115,6 @@ export function FiveStepProgressBar({
                   {QUOTE_STEPPER_LABELS[id]}
                 </span>
               </button>
-              {!isLast && (
-                <div
-                  className="mx-2 hidden h-px w-6 flex-none sm:block md:w-10"
-                  style={{ backgroundColor: "var(--ow-border)" }}
-                  aria-hidden
-                />
-              )}
             </li>
           );
         })}

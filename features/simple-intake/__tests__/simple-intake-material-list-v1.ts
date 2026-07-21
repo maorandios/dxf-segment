@@ -80,7 +80,7 @@ console.log("=== Excel to Approved Material List v1 ===\n");
   );
   assert(
     workspace.includes("צור רשימת חומר") ||
-      workspace.includes("בחר קובץ Excel"),
+      workspace.includes("בחר קובץ"),
     "analyze CTA"
   );
   assert(!workspace.includes("הוסף DXF"), "no DXF on stage 1 upload");

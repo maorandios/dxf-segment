@@ -45,12 +45,12 @@ export function WorkbookUploadWorkspace({
 
   return (
     <div
-      className="us-enter-delay-2 mx-auto w-full"
+      className="us-enter-delay-2 mx-auto flex w-full flex-col items-center"
       style={{ width: "min(900px, 100%)" }}
     >
       <div
         className={cn(
-          "us-workspace-card flex flex-col items-center justify-center px-8 py-10 sm:px-12 sm:py-12",
+          "us-workspace-card flex w-full flex-col items-center justify-center px-8 py-10 text-center sm:px-12 sm:py-12",
           dragging && "border-[color:var(--us-accent)]"
         )}
         style={{ minHeight: 420 }}
@@ -70,16 +70,19 @@ export function WorkbookUploadWorkspace({
           handleFiles(e.dataTransfer.files);
         }}
       >
-        <header className="mb-7 shrink-0 text-center">
+        <header
+          className="mb-7 flex w-full shrink-0 flex-col items-center"
+          style={{ textAlign: "center" }}
+        >
           <h2
-            className="text-[20px] font-semibold sm:text-[22px]"
-            style={{ color: "var(--us-text)" }}
+            className="w-full text-center text-[20px] font-semibold sm:text-[22px]"
+            style={{ color: "var(--us-text)", textAlign: "center" }}
           >
             נתחיל מרשימת החומר
           </h2>
           <p
-            className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed"
-            style={{ color: "var(--us-text-secondary)" }}
+            className="mx-auto mt-2 w-full max-w-md text-center text-[14px] leading-relaxed"
+            style={{ color: "var(--us-text-secondary)", textAlign: "center" }}
           >
             אזהה פריטים, אסדר טבלה אחידה ואסמן מה דורש השלמה
           </p>
@@ -149,15 +152,15 @@ export function WorkbookUploadWorkspace({
 
             <Button
               type="button"
-              className="mt-5 min-w-[12rem]"
+              className="mt-5 h-11 min-w-[12rem] rounded-2xl text-[14px] font-medium shadow-none hover:opacity-95"
               disabled={loading}
               onClick={openPicker}
               style={{
-                backgroundColor: "var(--us-accent)",
-                color: "#fff",
+                backgroundColor: "var(--ow-accent, var(--us-accent, #0f766e))",
+                color: "#ffffff",
               }}
             >
-              בחר קובץ Excel
+              בחר קובץ
             </Button>
           </div>
         ) : (

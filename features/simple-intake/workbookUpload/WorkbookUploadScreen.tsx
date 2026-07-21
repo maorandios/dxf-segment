@@ -46,17 +46,23 @@ export function WorkbookUploadScreen() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-[1040px] flex-col items-center gap-6 py-2">
-      <header className="w-full max-w-[720px] text-center">
+    <div className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col items-center justify-center gap-6 py-6">
+      <header
+        className="mx-auto flex w-full max-w-[720px] flex-col items-center"
+        style={{ textAlign: "center" }}
+      >
         <h2
-          className="text-[26px] font-semibold tracking-tight sm:text-[28px]"
-          style={{ color: "var(--ow-text, var(--us-text))" }}
+          className="w-full text-center text-[26px] font-semibold tracking-tight sm:text-[28px]"
+          style={{ color: "var(--ow-text, var(--us-text))", textAlign: "center" }}
         >
           הפקת רשימת חומר
         </h2>
         <p
-          className="mx-auto mt-2 max-w-[640px] text-[14px] leading-relaxed"
-          style={{ color: "var(--ow-text-secondary, var(--us-text-secondary))" }}
+          className="mx-auto mt-2 w-full max-w-[640px] text-center text-[14px] leading-relaxed"
+          style={{
+            color: "var(--ow-text-secondary, var(--us-text-secondary))",
+            textAlign: "center",
+          }}
         >
           העלה את קובץ האקסל שקיבלת מהלקוח. OMEGA תארגן את הנתונים לטבלה אחידה
           ותציג את הפריטים שדורשים טיפול.

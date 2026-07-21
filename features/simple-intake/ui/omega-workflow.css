@@ -27,6 +27,22 @@
   --ow-radius-sm: 6px;
   --ow-radius-lg: 14px;
 
+  /* Alias upload-screen tokens so embedded upload UI stays light */
+  --us-page: var(--ow-bg);
+  --us-surface: var(--ow-surface);
+  --us-surface-soft: #f5f8f9;
+  --us-surface-muted: var(--ow-surface-muted);
+  --us-border: var(--ow-border);
+  --us-border-strong: var(--ow-border-strong);
+  --us-text: var(--ow-text);
+  --us-text-secondary: var(--ow-text-secondary);
+  --us-text-muted: var(--ow-text-muted);
+  --us-accent: var(--ow-accent);
+  --us-accent-hover: var(--ow-accent-hover);
+  --us-accent-soft: var(--ow-accent-soft);
+  --us-success: var(--ow-success);
+  --us-error: var(--ow-error);
+
   /* Override shadcn tokens inside the workflow shell */
   --background: 210 14% 97%;
   --foreground: 222 47% 11%;
@@ -117,6 +133,22 @@
 .omega-workflow .ow-progress-line {
   transform-origin: right center;
   animation: ow-progress-line 280ms ease-out both;
+}
+
+@keyframes ow-cancel-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.omega-workflow .ow-cancel-toast,
+.ow-cancel-toast {
+  animation: ow-cancel-toast-in 240ms ease-out both;
 }
 
 /* Cell edit success */

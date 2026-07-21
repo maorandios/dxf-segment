@@ -112,9 +112,16 @@ console.log("=== Quote Setup and Five-Step Workflow v1 ===\n");
   );
   assert(header.includes("projectName"), "header shows project");
   assert(header.includes("customerName"), "header shows customer");
-  assert(header.includes("עריכת פרטי הצעה"), "edit quote action");
-  assert(!header.includes("הצעת מחיר חדשה") || header.includes("quoteDetails"), "no generic title when details exist");
-  console.log("✓ Header displays project/customer; edit details available");
+  assert(header.includes("ביטול הצעת מחיר"), "cancel quote action");
+  assert(header.includes("שמור הצעת מחיר"), "save quote action");
+  assert(header.includes("עריכת פרטי הצעה"), "edit quote via pencil");
+  assert(header.includes("Pencil"), "pencil icon near quote name");
+  assert(header.includes("simpleIntakeActions.reset"), "cancel resets workspace");
+  assert(header.includes("alertdialog") || header.includes("לבטל את הצעת המחיר"), "cancel toast");
+  assert(!header.includes("UserAccountMenu"), "no email menu on process screens");
+  assert(!header.includes("MoreHorizontal"), "no three-dot menu");
+  assert(!header.includes("DialogContent"), "cancel is not a modal dialog");
+  console.log("✓ Header shows project/customer with cancel/save; no email menu");
 }
 
 {
