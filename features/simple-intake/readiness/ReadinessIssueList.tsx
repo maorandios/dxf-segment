@@ -63,7 +63,9 @@ export function ReadinessIssueList({
   }, [rows, deferredIssueKeys]);
 
   const showTopUpload =
-    category === "DXF_COVERAGE" || category === "DXF_DECISION";
+    category === "MISSING_DXF" ||
+    category === "MULTIPLE_DXF" ||
+    category === "INVALID_DXF";
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4" dir="rtl">
@@ -83,7 +85,9 @@ export function ReadinessIssueList({
 
       <Card>
         <CardHeader className="space-y-3">
-          <CardTitle className="text-lg">{categoryTitleHe(category)}</CardTitle>
+          <CardTitle className="text-lg">
+            {categoryTitleHe(category, rows)}
+          </CardTitle>
           {showTopUpload && (
             <>
               <input

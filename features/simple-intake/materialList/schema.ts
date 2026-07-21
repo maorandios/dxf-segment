@@ -1,6 +1,6 @@
 /**
  * Material-list v1 Structured Output schema + extraction prompt.
- * Stage 1 only — no area, weight, confidence, DXF, or AI summary.
+ * Stage 1 pricing fields + optional explicit DXF filename (nullable, not required).
  */
 
 import { z } from "zod";
@@ -46,6 +46,9 @@ export const aiMaterialListRowSchema = z.object({
   ),
   lengthMm: nullableNumber.describe(
     "Explicit cut/plate length in mm. Do not calculate. Preserve explicit zero. Null when absent."
+  ),
+  dxfFileName: nullableString.describe(
+    "Explicit DXF filename associated with this material item, with or without .dxf extension. Null when absent. Do not infer from profile, dimensions, row number, quantity, material, description or unrelated nearby filenames."
   ),
 });
 
@@ -98,7 +101,11 @@ Preserve the source anchor cell whenever available.
 
 Never turn one source row with quantity 20 into 20 output rows.
 
-Do not include DXF-related information.
+Extract the DXF filename that is explicitly associated with the material item, when present.
+The value may appear with or without the .dxf extension.
+Do not infer a DXF filename from profile, part dimensions, row number, quantity, material, description or nearby unrelated filenames.
+Return null when no explicit DXF filename is provided for the item.
+
 Do not return source area, source weight, confidence, notes or summary text.`;
 
 export function getSimpleIntakeOpenAiModel(): string {

@@ -15,6 +15,8 @@ export {
   MATERIAL_LIST_TABLE_HEADERS,
   EXPECTED_BENCHMARK_MATERIAL_ROWS,
   EXPECTED_BENCHMARK_MATERIAL_UNITS,
+  EXPECTED_BENCHMARK_VALID_MATERIALS,
+  EXPECTED_BENCHMARK_MISSING_MATERIALS,
 } from "./types";
 export {
   aiMaterialListRowSchema,
@@ -57,6 +59,12 @@ export {
   mergeTargetedRepair,
   initializePrimaryFieldResolutions,
 } from "./mergeRepair";
+export { decideRepairPlan } from "./decideRepairPlan";
+export type { RepairTriggerType, RepairPlan } from "./decideRepairPlan";
+export {
+  isSemanticallyValidMaterial,
+  validateExactMaterialRepair,
+} from "./materialValidation";
 export {
   buildRepairSourcePayloads,
   selectRowsNeedingRepair,

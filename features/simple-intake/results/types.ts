@@ -5,6 +5,7 @@
 
 export type FinalIssueCode =
   | "NO_DXF_FOUND"
+  | "EXPLICIT_DXF_FILE_MISSING"
   | "DXF_ASSIGNED_TO_BETTER_ROW"
   | "DXF_INVALID"
   | "MULTIPLE_DXF_CANDIDATES"
@@ -108,7 +109,7 @@ export type FinalIntakeRow = FinalTableRow & {
   /** @deprecated Prefer part.displayName — kept as alias for search helpers. */
   match: {
     status: "MATCHED" | "AMBIGUOUS" | "UNMATCHED" | "INVALID_DXF";
-    method: "EXACT_ID" | "GEOMETRY" | "MANUAL" | null;
+    method: "EXACT_ID" | "GEOMETRY" | "MANUAL" | "EXPLICIT_FILENAME" | null;
     candidates: FinalDxfCandidate[];
     message: string | null;
   };

@@ -12,6 +12,9 @@ export type SimpleIntakeStatus =
   | "MATERIAL_LIST_REVIEW"
   | "MATERIAL_LIST_QUALITY_FAILED"
   | "DXF_UPLOAD"
+  | "DXF_PROCESSING"
+  | "DXF_REVIEW"
+  | "FINAL_PRICING_TABLE"
   | "READY"
   | "FAILED";
 
@@ -103,6 +106,8 @@ export type SimpleAiRow = {
   thicknessMm: number | null;
   widthMm: number | null;
   lengthMm: number | null;
+  /** Explicit DXF filename from workbook when present. */
+  dxfFileName: string | null;
   /** Explicit Area from workbook — never calculated. Zero is valid. */
   sourceAreaM2: number | null;
   /** Explicit Weight from workbook — never calculated. Zero is valid. */
@@ -136,7 +141,7 @@ export type SimpleMatchCandidate = {
 
 export type SimpleMatchResult = {
   status: "MATCHED" | "AMBIGUOUS" | "UNMATCHED" | "INVALID_DXF";
-  method: "EXACT_ID" | "GEOMETRY" | "MANUAL" | null;
+  method: "EXACT_ID" | "GEOMETRY" | "MANUAL" | "EXPLICIT_FILENAME" | null;
   matchedDxfId: string | null;
   candidates: SimpleMatchCandidate[];
   message: string | null;
@@ -340,4 +345,4 @@ export const COLLISION_MESSAGE_HE =
   "קובצי ה-DXF המתאימים הוקצו לשורות בעלות התאמת מידות קרובה יותר.";
 
 export const MANUAL_CONFLICT_CONFIRM_HE =
-  "ה-DXF כבר משויך לשורה אחרת. להעביר את השיוך לשורה הנוכחית?";
+  "חסר קובץ DXF מתאים לפריט הזה. להעביר שיוך מקובץ שכבר בשימוש?";

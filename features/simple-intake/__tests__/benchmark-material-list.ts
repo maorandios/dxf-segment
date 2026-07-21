@@ -15,9 +15,11 @@ import { runOpenAiMaterialListExtraction } from "../materialList/openaiMaterialL
 import {
   EXPECTED_BENCHMARK_MATERIAL_ROWS,
   EXPECTED_BENCHMARK_MATERIAL_UNITS,
+  EXPECTED_BENCHMARK_VALID_MATERIALS,
+  EXPECTED_BENCHMARK_MISSING_MATERIALS,
 } from "../materialList/types";
 import { effectiveMaterialFields } from "../materialList/completeness";
-import { countDuplicateSourceRows } from "../materialList/qualityGate";
+import { countDuplicateSourceRows, isFieldUsable } from "../materialList/qualityGate";
 import type { MaterialListRow } from "../materialList/types";
 
 function loadEnvLocal(): void {
@@ -100,9 +102,6 @@ async function main(): Promise<void> {
     const fps = out.rows.map(fingerprint).sort();
     fingerprints.push(fps);
     const units = totalUnits(out.rows);
-    const sourceRows = out.rows
-      .map((r) => r.sourceRow)
-      .filter((n): n is number => n != null && n > 0);
     const report = {
       run: i + 1,
       model: out.model,
@@ -114,8 +113,30 @@ async function main(): Promise<void> {
       lengthCoverageBefore: out.qualityGate.fieldCoverageBefore.lengthMm,
       lengthCoverageAfter: out.qualityGate.fieldCoverageAfter.lengthMm,
       repairTriggered: out.qualityGate.triggeredRepair,
+      targetedRepair: {
+        triggerType: out.targetedRepair.triggerType,
+        requestedRowCount: out.targetedRepair.requestedRowCount,
+        requestedFields: out.targetedRepair.requestedFields,
+        callCount: out.targetedRepair.callCount,
+        exactValuesReturned: out.targetedRepair.exactValuesReturned,
+        exactValuesMerged: out.targetedRepair.exactValuesMerged,
+        rejectedExactValues: out.targetedRepair.rejectedExactValues,
+        rejectedReasons: out.targetedRepair.rejectedReasons,
+        missingInSourceValues: out.targetedRepair.missingInSourceValues,
+        unresolvedValues: out.targetedRepair.unresolvedValues,
+      },
       duplicateSourceRows: countDuplicateSourceRows(out.rows),
       unresolvedValues: out.qualityGate.unresolvedFieldCount,
+      validMaterialCount: out.rows.filter((r) => isFieldUsable("material", r))
+        .length,
+      missingMaterialCount: out.rows.filter(
+        (r) => r.fieldResolutions?.material === "MISSING_IN_SOURCE"
+      ).length,
+      completeRowCount: out.rows.filter((r) => r.approvalStatus === "COMPLETE")
+        .length,
+      needsCompletionCount: out.rows.filter(
+        (r) => r.approvalStatus === "NEEDS_COMPLETION"
+      ).length,
       primaryTokens: out.primaryUsage,
       repairTokens: out.targetedRepair.usage,
       providerCallCount: out.providerCallCount,
@@ -127,12 +148,22 @@ async function main(): Promise<void> {
       reference: {
         expectedRows: EXPECTED_BENCHMARK_MATERIAL_ROWS,
         expectedUnits: EXPECTED_BENCHMARK_MATERIAL_UNITS,
+        expectedValidMaterials: EXPECTED_BENCHMARK_VALID_MATERIALS,
+        expectedMissingMaterials: EXPECTED_BENCHMARK_MISSING_MATERIALS,
       },
       matchesReference:
         out.rows.length === EXPECTED_BENCHMARK_MATERIAL_ROWS &&
         units === EXPECTED_BENCHMARK_MATERIAL_UNITS &&
         out.qualityGate.fieldCoverageAfter.lengthMm ===
-          EXPECTED_BENCHMARK_MATERIAL_ROWS,
+          EXPECTED_BENCHMARK_MATERIAL_ROWS &&
+        out.rows.filter((r) => isFieldUsable("material", r)).length ===
+          EXPECTED_BENCHMARK_VALID_MATERIALS &&
+        out.rows.filter((r) => !isFieldUsable("material", r)).length ===
+          EXPECTED_BENCHMARK_MISSING_MATERIALS &&
+        out.rows.filter((r) => r.approvalStatus === "COMPLETE").length ===
+          EXPECTED_BENCHMARK_VALID_MATERIALS &&
+        out.rows.filter((r) => r.approvalStatus === "NEEDS_COMPLETION")
+          .length === EXPECTED_BENCHMARK_MISSING_MATERIALS,
     };
     runReports.push(report);
     console.log(JSON.stringify(report, null, 2));

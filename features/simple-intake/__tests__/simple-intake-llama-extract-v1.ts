@@ -110,6 +110,7 @@ function run(): void {
           lengthMm: null,
           sourceAreaM2: null,
           sourceWeightKg: null,
+    dxfFileName: null,
         },
       ],
       null
@@ -174,6 +175,7 @@ function run(): void {
           lengthMm: 100,
           sourceAreaM2: null,
           sourceWeightKg: null,
+    dxfFileName: null,
         },
         {
           sheetName: "S",
@@ -189,6 +191,7 @@ function run(): void {
           lengthMm: 100,
           sourceAreaM2: null,
           sourceWeightKg: null,
+    dxfFileName: null,
         },
       ],
       null
@@ -213,6 +216,7 @@ function run(): void {
           lengthMm: 100,
           sourceAreaM2: null,
           sourceWeightKg: null,
+    dxfFileName: null,
         },
         {
           sheetName: "S",
@@ -228,6 +232,7 @@ function run(): void {
           lengthMm: 100,
           sourceAreaM2: null,
           sourceWeightKg: null,
+    dxfFileName: null,
         },
       ],
       null
@@ -255,6 +260,7 @@ function run(): void {
           lengthMm: 1,
           sourceAreaM2: null,
           sourceWeightKg: null,
+    dxfFileName: null,
         },
       ],
       null

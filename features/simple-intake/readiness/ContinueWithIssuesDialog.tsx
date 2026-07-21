@@ -24,11 +24,10 @@ export function ContinueWithIssuesDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onBack()}>
       <DialogContent className="max-w-md" dir="rtl" aria-describedby="cont-desc">
         <DialogHeader>
-          <DialogTitle>להמשיך לטבלה?</DialogTitle>
+          <DialogTitle>להמשיך עם פריטים שדורשים טיפול?</DialogTitle>
         </DialogHeader>
         <p id="cont-desc" className="text-sm text-muted-foreground">
-          נשארו {unresolvedCount} שורות שעדיין דורשות טיפול. הן יוצגו בטבלה ולא
-          ייכללו כתוצאות מוכנות עד להשלמתן.
+          נשארו {unresolvedCount} פריטים שעדיין אינם מוכנים לחלוטין לתמחור.
         </p>
         <DialogFooter className="gap-2 sm:justify-start">
           <Button type="button" onClick={onBack}>

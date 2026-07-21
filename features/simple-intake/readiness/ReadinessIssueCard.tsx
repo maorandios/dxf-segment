@@ -188,7 +188,7 @@ export function ReadinessIssueCard({
                     }}
                   >
                     {a === "EXCLUDE"
-                      ? "החרג מההצעה"
+                      ? "אל תכלול בהצעה"
                       : secondaryActionLabel(a)}
                   </DropdownMenuItem>
                 ))}

@@ -17,6 +17,7 @@ const row = (
   lengthMm: null,
   sourceAreaM2: null,
   sourceWeightKg: null,
+    dxfFileName: null,
   confidence: 0.9,
   note: null,
   warnings: [],

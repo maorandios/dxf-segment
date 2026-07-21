@@ -132,6 +132,7 @@ function baseAiRow(
     lengthMm: null,
     sourceAreaM2: null,
     sourceWeightKg: null,
+    dxfFileName: null,
     confidence: 0.9,
     note: null,
     ...partial,
@@ -174,6 +175,7 @@ function extracted(
     note: null,
     warnings: [],
     ...partial,
+    dxfFileName: partial.dxfFileName ?? null,
   };
 }
 
@@ -366,6 +368,7 @@ function run(): void {
           material: null,
           sourceAreaM2: null,
           sourceWeightKg: null,
+    dxfFileName: null,
           lengthMm: 100,
         }),
       ],
@@ -576,6 +579,7 @@ function run(): void {
         sourceRow: 2,
         lengthMm: null,
         sourceWeightKg: null,
+    dxfFileName: null,
         material: null,
       }),
     ];

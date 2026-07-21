@@ -8,6 +8,7 @@ import type {
   MaterialListSummary,
   MaterialListUserOverrides,
 } from "./types";
+import { isSemanticallyValidMaterial } from "./materialValidation";
 
 export type MaterialListEffective = {
   partId: string | null;
@@ -59,9 +60,11 @@ export function displayLabel(row: MaterialListRow): string {
 
 export function isFieldComplete(
   key: "material" | "thicknessMm" | "quantity" | "widthMm" | "lengthMm",
-  value: string | number | null
+  value: string | number | null,
+  row?: MaterialListRow
 ): boolean {
   if (key === "material") {
+    if (row) return isSemanticallyValidMaterial(value as string | null, row);
     return typeof value === "string" && value.trim().length > 0;
   }
   if (key === "quantity") {
@@ -95,7 +98,7 @@ export function missingCompletionFields(
     if (!complete) missing.push(key);
   };
 
-  pushIfNeeded("material", isFieldComplete("material", e.material));
+  pushIfNeeded("material", isFieldComplete("material", e.material, row));
   pushIfNeeded("thicknessMm", isFieldComplete("thicknessMm", e.thicknessMm));
   pushIfNeeded("quantity", isFieldComplete("quantity", e.quantity));
   pushIfNeeded("widthMm", isFieldComplete("widthMm", e.widthMm));
@@ -208,7 +211,10 @@ export function fieldDisplayKind(
 ): "value" | "missing" | "unresolved" {
   if (row.fieldResolutions?.[field] === "UNRESOLVED") return "unresolved";
   const e = effectiveMaterialFields(row);
-  const complete = isFieldComplete(field, e[field]);
+  const complete =
+    field === "material"
+      ? isFieldComplete("material", e.material, row)
+      : isFieldComplete(field, e[field]);
   if (!complete) return "missing";
   return "value";
 }

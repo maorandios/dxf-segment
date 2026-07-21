@@ -56,6 +56,7 @@ function extracted(
     note: null,
     warnings: [],
     ...partial,
+    dxfFileName: partial.dxfFileName ?? null,
   };
 }
 
@@ -206,6 +207,7 @@ function run(): void {
             quantity: null,
             sourceAreaM2: null,
             sourceWeightKg: null,
+    dxfFileName: null,
             description: null,
           }),
           match: {
@@ -321,7 +323,8 @@ function run(): void {
       "mismatch exists"
     );
     const b = categorizeReadinessIssues(rows);
-    assertEq(b.criticalRowCount, 0, "mismatch not critical pre-table");
+    assertEq(b.criticalRowCount, 1, "significant mismatch is reviewable");
+    assertEq(b.dimensionMismatch.length, 1, "dimension mismatch category");
     for (const c of STAGE_TWO_HIDDEN_CODES) {
       assert(
         !MISSING_INFO_CODES.includes(c) &&
@@ -330,7 +333,7 @@ function run(): void {
         `${c} not in readiness`
       );
     }
-    console.log("✓ Source/DXF mismatch hidden at readiness stage");
+    console.log("✓ Significant source/DXF mismatch is a secondary review issue");
   }
 
   // Coverage + decision categories
@@ -515,7 +518,7 @@ function run(): void {
       "utf8"
     );
     assert(
-      summaryUi.includes("לתשומת לב:") && summaryUi.includes("לא שויכו"),
+      summaryUi.includes("לא שויכו") && summaryUi.includes("הצג קבצים"),
       "unused notice"
     );
     assert(
@@ -554,7 +557,7 @@ function run(): void {
       path.join(root, "readiness/ContinueWithIssuesDialog.tsx"),
       "utf8"
     );
-    assert(cont.includes("להמשיך לטבלה"), "confirm title");
+    assert(cont.includes("להמשיך עם פריטים שדורשים טיפול"), "confirm title");
     assert(cont.includes("המשך בכל זאת"), "continue anyway");
 
     const store = fs.readFileSync(path.join(root, "sessionStore.ts"), "utf8");
@@ -567,7 +570,10 @@ function run(): void {
       path.join(root, "../../app/api/simple-intake/analyze/route.ts"),
       "utf8"
     );
-    assert(route.includes("providerCallCount: 1"), "one AI call");
+    assert(
+      route.includes("providerCallCount: out.providerCallCount"),
+      "provider call count from extraction"
+    );
 
     assertEq(FIXED_TABLE_COLUMN_HEADERS.length, 12, "12 cols");
     assertEq(FIXED_TABLE_COLUMN_HEADERS[0], "סטטוס", "status");
@@ -577,7 +583,7 @@ function run(): void {
       path.join(root, "readiness/ReadinessSummary.tsx"),
       "utf8"
     );
-    assert(cards.includes("הבדיקה הושלמה"), "opens summary");
+    assert(cards.includes("התאמת DXF הושלמה"), "opens summary");
     assert(cards.includes("ReadinessIssueCards"), "issue cards");
 
     const cat = fs.readFileSync(
@@ -585,10 +591,10 @@ function run(): void {
       "utf8"
     );
     assert(cat.includes("השלם פרטים"), "card action");
-    assert(cat.includes("טפל בקובצי DXF"), "coverage action");
-    assert(cat.includes("בחר DXF"), "decision action");
+    assert(cat.includes("בחר קובץ DXF"), "missing dxf action");
+    assert(cat.includes("השווה ובחר"), "decision action");
 
-    console.log("✓ Wiring, continue confirmation, single provider call");
+    console.log("✓ Wiring, continue confirmation, Stage-2 no extra AI");
   }
 
   console.log("\n=== All Pre-Table Readiness Review v1 tests passed ===");

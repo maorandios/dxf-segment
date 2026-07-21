@@ -5,6 +5,12 @@
 
 import { deriveApprovalStatus } from "./completeness";
 import { isFieldUsable, normalizeSheetName, provenanceKey } from "./qualityGate";
+import {
+  isSemanticallyValidMaterial,
+  validateExactMaterialRepair,
+  type MaterialExactRejectReason,
+  type MaterialRepairSourceContext,
+} from "./materialValidation";
 import type {
   MaterialFieldResolution,
   MaterialListFieldResolutions,
@@ -14,8 +20,19 @@ import type {
 import type { TargetedMaterialRepairResult } from "./repairSchema";
 import { REPAIRABLE_MATERIAL_FIELDS } from "./qualityGateConfig";
 
+export type MaterialRejectReasonDebug = {
+  sheetName: string;
+  sourceRow: number;
+  field: "material";
+  value: string | null;
+  reason: MaterialExactRejectReason;
+};
+
 export type MergeRepairStats = {
+  exactValuesReturned: number;
   exactValuesMerged: number;
+  rejectedExactValues: number;
+  rejectedReasons: MaterialRejectReasonDebug[];
   unresolvedValues: number;
   missingInSourceValues: number;
   skippedNoMatch: number;
@@ -54,22 +71,51 @@ function primaryResolutions(row: MaterialListRow): MaterialListFieldResolutions 
   return fr;
 }
 
+/**
+ * Clear semantically invalid primary materials (e.g. profile copies) so they
+ * do not count as complete grades. Does not invent replacements.
+ */
 export function initializePrimaryFieldResolutions(
   rows: MaterialListRow[]
 ): MaterialListRow[] {
-  return rows.map((row) => ({
-    ...row,
-    fieldResolutions: primaryResolutions(row),
-  }));
+  return rows.map((row) => {
+    let next = row;
+    if (
+      row.material != null &&
+      row.material.trim() !== "" &&
+      !isSemanticallyValidMaterial(row.material, row)
+    ) {
+      next = { ...row, material: null };
+    }
+    const withResolutions = {
+      ...next,
+      fieldResolutions: primaryResolutions(next),
+    };
+    return {
+      ...withResolutions,
+      approvalStatus: deriveApprovalStatus(withResolutions),
+    };
+  });
+}
+
+function sourceContextKey(
+  sheetName: string | null,
+  sourceRow: number
+): string | null {
+  return provenanceKey(sheetName, sourceRow);
 }
 
 export function mergeTargetedRepair(args: {
   rows: MaterialListRow[];
   repair: TargetedMaterialRepairResult;
   repairFields: RepairableMaterialField[];
+  sourceContexts?: MaterialRepairSourceContext[];
 }): { rows: MaterialListRow[]; stats: MergeRepairStats } {
   const stats: MergeRepairStats = {
+    exactValuesReturned: 0,
     exactValuesMerged: 0,
+    rejectedExactValues: 0,
+    rejectedReasons: [],
     unresolvedValues: 0,
     missingInSourceValues: 0,
     skippedNoMatch: 0,
@@ -77,6 +123,12 @@ export function mergeTargetedRepair(args: {
     skippedInvalidValue: 0,
     skippedWouldOverwriteValid: 0,
   };
+
+  const contextByKey = new Map<string, MaterialRepairSourceContext>();
+  for (const ctx of args.sourceContexts ?? []) {
+    const key = sourceContextKey(ctx.sheetName, ctx.sourceRow);
+    if (key) contextByKey.set(key, ctx);
+  }
 
   const byKey = new Map<string, MaterialListRow[]>();
   for (const row of args.rows) {
@@ -105,13 +157,13 @@ export function mergeTargetedRepair(args: {
       continue;
     }
     const primary = matches[0]!;
+    const sourceContext = contextByKey.get(key) ?? null;
 
     if (
       repaired.sourceCell &&
       primary.sourceCell &&
       repaired.sourceCell.trim() !== primary.sourceCell.trim()
     ) {
-      // Consistency check failed — do not merge this row's fields.
       stats.skippedNoMatch++;
       continue;
     }
@@ -124,11 +176,16 @@ export function mergeTargetedRepair(args: {
 
     for (const field of args.repairFields) {
       const entry = repaired.fields[field];
-      if (!entry) continue;
+      if (entry == null) continue;
+
+      if (entry.status === "EXACT") {
+        stats.exactValuesReturned++;
+      }
 
       if (entry.status === "UNRESOLVED") {
         next = {
           ...next,
+          ...(field === "material" ? { material: null } : {}),
           fieldResolutions: {
             ...next.fieldResolutions,
             [field]: "UNRESOLVED" as MaterialFieldResolution,
@@ -146,6 +203,7 @@ export function mergeTargetedRepair(args: {
         }
         next = {
           ...next,
+          ...(field === "material" ? { material: null } : {}),
           fieldResolutions: {
             ...next.fieldResolutions,
             [field]: "MISSING_IN_SOURCE",
@@ -158,16 +216,83 @@ export function mergeTargetedRepair(args: {
 
       // EXACT
       if (field === "material") {
-        const v = validateRepairString(
-          typeof entry.value === "string" || entry.value == null
-            ? entry.value
-            : String(entry.value)
-        );
-        if (v == null) {
-          stats.skippedInvalidValue++;
+        const materialEntry = entry as {
+          value: string | null;
+          status: "EXACT";
+          evidenceText: string | null;
+          evidenceSourceRow: number | null;
+        };
+        const rejectReason = validateExactMaterialRepair({
+          value: materialEntry.value,
+          evidenceText: materialEntry.evidenceText,
+          evidenceSourceRow: materialEntry.evidenceSourceRow,
+          row: next,
+          sourceContext,
+        });
+        if (rejectReason) {
+          stats.rejectedExactValues++;
+          stats.rejectedReasons.push({
+            sheetName: next.sheetName ?? "",
+            sourceRow: next.sourceRow ?? repaired.sourceRow,
+            field: "material",
+            value: materialEntry.value,
+            reason: rejectReason,
+          });
+          if (isFieldUsable("material", next)) {
+            stats.skippedWouldOverwriteValid++;
+            continue;
+          }
+          // Blank own-row with rejected EXACT → genuine missing, not unresolved guess.
+          const ownText = sourceContext?.sourceRowText ?? "";
+          const treatAsMissing =
+            !/\b(S\d{2,4}[A-Z]?|A\d{2,3}|ST\d+|Q\d+)\b/i.test(ownText);
+          const resolution: MaterialFieldResolution = treatAsMissing
+            ? "MISSING_IN_SOURCE"
+            : "UNRESOLVED";
+          next = {
+            ...next,
+            material: null,
+            fieldResolutions: {
+              ...next.fieldResolutions,
+              material: resolution,
+            },
+          };
+          if (treatAsMissing) stats.missingInSourceValues++;
+          else stats.unresolvedValues++;
+          changed = true;
           continue;
         }
-        if (isFieldUsable(field, next)) {
+
+        const v = validateRepairString(materialEntry.value);
+        if (v == null || !isSemanticallyValidMaterial(v, next)) {
+          stats.rejectedExactValues++;
+          stats.rejectedReasons.push({
+            sheetName: next.sheetName ?? "",
+            sourceRow: next.sourceRow ?? repaired.sourceRow,
+            field: "material",
+            value: materialEntry.value,
+            reason: "INVALID_VALUE",
+          });
+          const ownText = sourceContext?.sourceRowText ?? "";
+          const treatAsMissing =
+            !/\b(S\d{2,4}[A-Z]?|A\d{2,3}|ST\d+|Q\d+)\b/i.test(ownText);
+          const resolution: MaterialFieldResolution = treatAsMissing
+            ? "MISSING_IN_SOURCE"
+            : "UNRESOLVED";
+          next = {
+            ...next,
+            material: null,
+            fieldResolutions: {
+              ...next.fieldResolutions,
+              material: resolution,
+            },
+          };
+          if (treatAsMissing) stats.missingInSourceValues++;
+          else stats.unresolvedValues++;
+          changed = true;
+          continue;
+        }
+        if (isFieldUsable("material", next)) {
           stats.skippedWouldOverwriteValid++;
           continue;
         }

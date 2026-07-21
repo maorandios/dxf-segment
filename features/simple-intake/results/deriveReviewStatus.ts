@@ -6,6 +6,7 @@ import type { FinalIssueCode, FinalReviewStatus } from "./types";
 
 const BLOCKING: FinalIssueCode[] = [
   "NO_DXF_FOUND",
+  "EXPLICIT_DXF_FILE_MISSING",
   "DXF_ASSIGNED_TO_BETTER_ROW",
   "DXF_INVALID",
   "MISSING_QUANTITY",
@@ -17,7 +18,6 @@ const BLOCKING: FinalIssueCode[] = [
 const REVIEW: FinalIssueCode[] = [
   "MULTIPLE_DXF_CANDIDATES",
   "PART_ID_DIMENSION_MISMATCH",
-  "DUPLICATE_DXF_USAGE",
   "MANUAL_MATCH_NOT_CONFIRMED",
 ];
 

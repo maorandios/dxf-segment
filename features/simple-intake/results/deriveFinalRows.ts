@@ -15,6 +15,7 @@ import {
   calcCommercialUnitWeightKg,
   resolvePlateDensityKgPerM3,
 } from "./commercialCalculations";
+import { normalizeDimensionPair } from "../dxfLink/dimensionMismatch";
 import { deriveIssueCodes } from "./deriveIssueCodes";
 import { deriveReviewStatus } from "./deriveReviewStatus";
 import { issueMessageHe, primaryActionLabelHe } from "./issueMessages";
@@ -152,8 +153,16 @@ export function deriveFinalRows(args: {
       dxf != null &&
       dxf.geometryStatus === "VALID";
 
-    const commercialWidth = hasValidMatchedDxf ? dxf!.widthMm : null;
-    const commercialLength = hasValidMatchedDxf ? dxf!.lengthMm : null;
+    const normalizedDxf =
+      hasValidMatchedDxf &&
+      dxf!.widthMm != null &&
+      dxf!.lengthMm != null &&
+      dxf!.widthMm > 0 &&
+      dxf!.lengthMm > 0
+        ? normalizeDimensionPair(dxf!.widthMm, dxf!.lengthMm)
+        : null;
+    const commercialWidth = normalizedDxf?.widthMm ?? null;
+    const commercialLength = normalizedDxf?.lengthMm ?? null;
     const commercialAreaM2 = hasValidMatchedDxf
       ? calcCommercialAreaM2(commercialWidth, commercialLength)
       : null;

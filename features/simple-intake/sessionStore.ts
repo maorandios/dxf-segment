@@ -9,14 +9,18 @@ import {
   deriveResultRowStatus,
   deriveSimpleDxfAvailability,
   buildSimpleIntakeResultSummary,
-  matchSimpleRows,
 } from "./matchSimpleRows";
+import { matchWithFilenamePriority } from "./matchWithFilenamePriority";
 import {
   effectiveMaterialFields,
   refreshRowCompleteness,
   summarizeMaterialList,
 } from "./materialList/completeness";
 import { materialListToExtractedRows } from "./materialList/toExtractedRows";
+import {
+  buildDxfLinkedMaterialItems,
+  buildDxfLinkStageDebug,
+} from "./dxfLink";
 import type {
   MaterialListRow,
   MaterialListUserOverrides,
@@ -235,7 +239,7 @@ export const simpleIntakeActions = {
     const { parts: newParts } = await parseSimpleDxfFiles(newcomers);
     const dxfParts = [...session.dxfParts, ...newParts];
     const extractedRows = session.extractedRows;
-    const matched = matchSimpleRows({
+    const matched = matchWithFilenamePriority({
       extractedRows,
       dxfParts,
       extractedRowCount: extractedRows.length,
@@ -316,7 +320,7 @@ export const simpleIntakeActions = {
       }
       return e;
     });
-    const matched = matchSimpleRows({
+    const matched = matchWithFilenamePriority({
       extractedRows,
       dxfParts: session.dxfParts,
       extractedRowCount: extractedRows.length,
@@ -493,6 +497,7 @@ export const simpleIntakeActions = {
       quantity: null,
       widthMm: null,
       lengthMm: null,
+      dxfFileName: source.dxfFileName,
       userOverrides: {
         partId: e.partId,
         profile: e.profile,
@@ -563,6 +568,8 @@ export const simpleIntakeActions = {
   backToMaterialList(): void {
     if (
       session.status !== "DXF_UPLOAD" &&
+      session.status !== "DXF_REVIEW" &&
+      session.status !== "FINAL_PRICING_TABLE" &&
       session.status !== "READY" &&
       session.status !== "MATERIAL_LIST_REVIEW"
     ) {
@@ -571,10 +578,8 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       status: "MATERIAL_LIST_REVIEW",
-      // Keep DXF files/parts and resultRows when returning is safe; clear match
-      // results so Stage 2 can be re-run after further edits.
+      // Keep DXF files; clear match results so Stage 2 can be re-run after edits.
       resultRows: [],
-      dxfParts: session.status === "READY" ? session.dxfParts : session.dxfParts,
       unmatchedDxfIds: [],
       dxfAvailability: [],
       localSummary: null,
@@ -585,7 +590,14 @@ export const simpleIntakeActions = {
   async runDxfStageFromApprovedList(): Promise<void> {
     if (!session.materialListApproved) return;
     if (session.dxfFiles.length === 0) return;
-    if (session.status !== "DXF_UPLOAD" && session.status !== "READY") return;
+    if (
+      session.status !== "DXF_UPLOAD" &&
+      session.status !== "DXF_REVIEW" &&
+      session.status !== "FINAL_PRICING_TABLE" &&
+      session.status !== "READY"
+    ) {
+      return;
+    }
 
     const dxfFiles = [...session.dxfFiles];
     const materialListRows = session.materialListRows;
@@ -597,7 +609,7 @@ export const simpleIntakeActions = {
 
     setSession({
       ...session,
-      status: "ANALYZING",
+      status: "DXF_PROCESSING",
       analyzingLabel: "קורא קובצי DXF",
       extractedRows,
     });
@@ -615,7 +627,7 @@ export const simpleIntakeActions = {
       });
 
       const tMatch = Date.now();
-      const matched = matchSimpleRows({
+      const matched = matchWithFilenamePriority({
         extractedRows,
         dxfParts,
         extractedRowCount: extractedRows.length,
@@ -704,9 +716,28 @@ export const simpleIntakeActions = {
           prevDebug.materialListStage;
       }
 
+      const linkedItems = buildDxfLinkedMaterialItems({
+        materialListRows,
+        resultRows: matched.resultRows,
+        dxfParts,
+        diagnostics,
+      });
+      (debug as Record<string, unknown>).dxfLinkStage = buildDxfLinkStageDebug({
+        items: linkedItems,
+        dxfParts,
+        unmatchedDxfCount: unmatchedDxfIds.length,
+        resultRows: matched.resultRows,
+        filenameMatching: matched.filenameMatchingDebug,
+      });
+      (debug as Record<string, unknown>).dxfFilenameMatching =
+        matched.filenameMatchingDebug;
+      (debug as Record<string, unknown>).itemFilenameMatchDebug =
+        matched.itemFilenameDebug;
+      (debug as Record<string, unknown>).aiCallCountStage2 = 0;
+
       setSession({
         ...getSimpleIntakeSession(),
-        status: "READY",
+        status: "DXF_REVIEW",
         analyzingLabel: null,
         materialListRows,
         materialListApproved: true,
@@ -738,6 +769,20 @@ export const simpleIntakeActions = {
         error,
       });
     }
+  },
+
+  enterFinalPricingTable(): void {
+    if (
+      session.status !== "DXF_REVIEW" &&
+      session.status !== "READY" &&
+      session.status !== "FINAL_PRICING_TABLE"
+    ) {
+      return;
+    }
+    setSession({
+      ...session,
+      status: "FINAL_PRICING_TABLE",
+    });
   },
 
   async analyze(): Promise<void> {
@@ -1190,6 +1235,7 @@ export const simpleIntakeActions = {
       thicknessMm: fields.thicknessMm ?? null,
       widthMm: fields.widthMm ?? null,
       lengthMm: fields.lengthMm ?? null,
+      dxfFileName: null,
       sourceAreaM2: null,
       sourceWeightKg: null,
       confidence: 1,

@@ -9,40 +9,26 @@ export function issueMessageHe(
   ctx?: {
     sourceWidthMm?: number | null;
     sourceLengthMm?: number | null;
+    dxfWidthMm?: number | null;
+    dxfLengthMm?: number | null;
     noDxfFilesUploaded?: boolean;
   }
 ): string {
+  void ctx;
   switch (code) {
-    case "NO_DXF_FOUND": {
-      if (ctx?.noDxfFilesUploaded) {
-        return "לא הועלו קובצי DXF.";
-      }
-      const w = ctx?.sourceWidthMm;
-      const l = ctx?.sourceLengthMm;
-      if (
-        w != null &&
-        l != null &&
-        Number.isFinite(w) &&
-        Number.isFinite(l) &&
-        w > 0 &&
-        l > 0
-      ) {
-        const ws = Number.isInteger(w) ? String(w) : w.toFixed(1);
-        const ls = Number.isInteger(l) ? String(l) : l.toFixed(1);
-        return `לא נמצא קובץ DXF מתאים למידות ${ws}×${ls} מ״מ.`;
-      }
-      return "לא נמצא קובץ DXF מתאים למידות המקור.";
-    }
+    case "NO_DXF_FOUND":
     case "DXF_ASSIGNED_TO_BETTER_ROW":
-      return "קובץ ה-DXF המתאים הוקצה לשורה אחרת בעלת התאמה מדויקת יותר.";
+      return "לא ניתן לשייך DXF באופן אוטומטי";
+    case "EXPLICIT_DXF_FILE_MISSING":
+      return "קובץ DXF חסר";
     case "DXF_INVALID":
-      return "קובץ ה-DXF אינו מכיל גאומטריה תקינה.";
+      return "לא ניתן להשתמש בקובץ ה-DXF לצורך חישוב.";
     case "MULTIPLE_DXF_CANDIDATES":
-      return "נמצאו מספר קובצי DXF מתאימים. נדרשת בחירה.";
+      return "נמצאו כמה קובצי DXF אפשריים לפריט.";
     case "PART_ID_DIMENSION_MISMATCH":
-      return "שם החלק תואם, אך מידות המקור שונות ממידות קובץ ה-DXF.";
+      return "קיים פער משמעותי בין המידות ברשימה למידות בקובץ ה-DXF.";
     case "DUPLICATE_DXF_USAGE":
-      return "מספר שורות מתייחסות לאותו קובץ DXF.";
+      return "לא ניתן לשייך DXF באופן אוטומטי";
     case "MISSING_QUANTITY":
       return "חסרה כמות.";
     case "MISSING_MATERIAL":
@@ -67,6 +53,7 @@ export function primaryActionLabelHe(codes: FinalIssueCode[]): string | null {
   if (codes.includes("MISSING_REQUIRED_DIMENSIONS")) return "הזן מידות";
   if (
     codes.includes("NO_DXF_FOUND") ||
+    codes.includes("EXPLICIT_DXF_FILE_MISSING") ||
     codes.includes("DXF_ASSIGNED_TO_BETTER_ROW") ||
     codes.includes("PART_ID_DIMENSION_MISMATCH") ||
     codes.includes("DUPLICATE_DXF_USAGE")
@@ -84,5 +71,5 @@ export const REVIEW_STATUS_HE: Record<
   READY: "מוכן",
   NEEDS_REVIEW: "לבדיקה",
   BLOCKED: "חסום",
-  EXCLUDED: "מוחרג",
+  EXCLUDED: "לא נכלל",
 };

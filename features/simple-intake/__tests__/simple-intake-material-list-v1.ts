@@ -52,6 +52,7 @@ function baseRow(
     quantity: partial.quantity ?? null,
     widthMm: partial.widthMm ?? null,
     lengthMm: partial.lengthMm ?? null,
+    dxfFileName: "dxfFileName" in partial ? (partial.dxfFileName ?? null) : null,
     userOverrides: partial.userOverrides ?? {},
     fieldResolutions: partial.fieldResolutions ?? {},
     approvalStatus: "NEEDS_COMPLETION",

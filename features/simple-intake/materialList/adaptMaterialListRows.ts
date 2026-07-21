@@ -6,6 +6,7 @@
  */
 
 import { deriveApprovalStatus } from "./completeness";
+import { isFieldUsable } from "./qualityGate";
 import { aiMaterialListRowSchema } from "./schema";
 import type {
   AiMaterialListRow,
@@ -65,6 +66,7 @@ function fingerprint(row: AiMaterialListRow): string {
     quantity: row.quantity,
     widthMm: row.widthMm,
     lengthMm: row.lengthMm,
+    dxfFileName: row.dxfFileName,
   });
 }
 
@@ -105,6 +107,7 @@ export function adaptMaterialListRows(result: unknown): {
       quantity: asFiniteNumber(candidate.quantity),
       widthMm: asFiniteNumber(candidate.widthMm),
       lengthMm: asFiniteNumber(candidate.lengthMm),
+      dxfFileName: trimStr(candidate.dxfFileName),
     };
     const sourceRow =
       shaped.sourceRow != null &&
@@ -184,6 +187,7 @@ export function adaptMaterialListRows(result: unknown): {
       quantity: r.quantity,
       widthMm: r.widthMm,
       lengthMm: r.lengthMm,
+      dxfFileName: r.dxfFileName,
       userOverrides: {},
       fieldResolutions: {},
       approvalStatus: "NEEDS_COMPLETION",
@@ -226,7 +230,7 @@ export function buildMaterialListStageDebug(args: {
   for (const r of rows) {
     if (r.approvalStatus === "COMPLETE") completeRowCount++;
     else incompleteRowCount++;
-    if (r.material) rowsWithMaterial++;
+    if (isFieldUsable("material", r)) rowsWithMaterial++;
     if (r.thicknessMm != null && r.thicknessMm > 0) rowsWithThickness++;
     if (r.quantity != null && r.quantity > 0) rowsWithQuantity++;
     if (r.widthMm != null && r.widthMm > 0) rowsWithWidth++;

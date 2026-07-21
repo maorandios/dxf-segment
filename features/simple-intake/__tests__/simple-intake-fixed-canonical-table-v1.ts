@@ -56,6 +56,7 @@ function extracted(
     note: null,
     warnings: [],
     ...partial,
+    dxfFileName: partial.dxfFileName ?? null,
   };
 }
 

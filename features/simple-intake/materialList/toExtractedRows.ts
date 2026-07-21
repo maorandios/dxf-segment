@@ -42,6 +42,7 @@ export function materialListToExtractedRows(
       thicknessMm: e.thicknessMm,
       widthMm: e.widthMm,
       lengthMm: e.lengthMm,
+      dxfFileName: row.dxfFileName,
       sourceAreaM2: null,
       sourceWeightKg: null,
       confidence: 1,

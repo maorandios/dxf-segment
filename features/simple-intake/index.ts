@@ -11,6 +11,13 @@ export {
   buildSimpleIntakeResultSummary,
 } from "./matchSimpleRows";
 export {
+  matchWithFilenamePriority,
+  buildFilenameCoverageNotice,
+  resolveMatchLevel,
+  DXF_MATCH_LEVEL_HE,
+} from "./matchWithFilenamePriority";
+export { normalizeDxfFileKey, hasExplicitDxfFileName } from "./normalizeDxfFileKey";
+export {
   buildSimpleWorkbookSnapshot,
   assertSnapshotCoverageComplete,
 } from "./buildSimpleWorkbookSnapshot";

@@ -62,6 +62,7 @@ export type TargetedRepairCallResult = {
   };
   estimatedCostUsd: number | null;
   repairedSourceRowCount: number;
+  sourceContexts: ReturnType<typeof buildRepairSourcePayloads>;
   /** Payload sent to the model — for tests (no DXF). */
   requestPayload: {
     repairFields: RepairableMaterialField[];
@@ -81,6 +82,7 @@ export async function runTargetedMaterialRepair(args: {
   if (!apiKey) {
     throw Object.assign(new Error("MISSING_API_KEY"), {
       code: "MISSING_API_KEY",
+      retryable: false,
     });
   }
 
@@ -98,6 +100,7 @@ export async function runTargetedMaterialRepair(args: {
       usage: { inputTokens: null, outputTokens: null, totalTokens: null },
       estimatedCostUsd: null,
       repairedSourceRowCount: 0,
+      sourceContexts: [],
       requestPayload: {
         repairFields: args.repairFields,
         sourceRowCount: 0,
@@ -116,35 +119,86 @@ export async function runTargetedMaterialRepair(args: {
   if (/"entities"|"dxfBytes"|"dxfContent"/i.test(userText)) {
     throw Object.assign(new Error("REPAIR_PAYLOAD_CONTAINS_DXF"), {
       code: "REPAIR_PAYLOAD_CONTAINS_DXF",
+      retryable: false,
     });
   }
 
-  const response = await withTimeout(
-    client.responses.parse({
-      model,
-      reasoning: { effort: "none" },
-      input: [
-        { role: "system", content: TARGETED_MATERIAL_REPAIR_SYSTEM_PROMPT },
-        { role: "user", content: userText },
-      ],
-      text: {
-        format: zodTextFormat(
-          targetedMaterialRepairResultSchema,
-          "omega_material_list_targeted_repair_v1"
-        ),
-      },
-    }),
-    SIMPLE_INTAKE_TIMEOUT_MS
-  );
+  let textFormat: ReturnType<typeof zodTextFormat>;
+  try {
+    textFormat = zodTextFormat(
+      targetedMaterialRepairResultSchema,
+      "omega_material_list_targeted_repair_v1"
+    );
+  } catch (err) {
+    throw Object.assign(
+      new Error(
+        err instanceof Error
+          ? err.message
+          : "Invalid strict Structured Output schema"
+      ),
+      {
+        code: "INVALID_STRICT_SCHEMA",
+        retryable: false,
+      }
+    );
+  }
+
+  let response: Awaited<ReturnType<typeof client.responses.parse>>;
+  try {
+    response = await withTimeout(
+      client.responses.parse({
+        model,
+        reasoning: { effort: "none" },
+        input: [
+          { role: "system", content: TARGETED_MATERIAL_REPAIR_SYSTEM_PROMPT },
+          { role: "user", content: userText },
+        ],
+        text: {
+          format: textFormat,
+        },
+      }),
+      SIMPLE_INTAKE_TIMEOUT_MS
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const lower = msg.toLowerCase();
+    if (
+      lower.includes("optional") ||
+      (lower.includes("required") && lower.includes("schema")) ||
+      (lower.includes("strict") && lower.includes("schema")) ||
+      lower.includes("invalid schema") ||
+      lower.includes("unsupported")
+    ) {
+      throw Object.assign(new Error(msg), {
+        code: "INVALID_STRICT_SCHEMA",
+        retryable: false,
+      });
+    }
+    throw err;
+  }
 
   const parsed = response.output_parsed;
   if (!parsed) {
     throw Object.assign(new Error("Empty repair structured output"), {
       code: "EMPTY_REPAIR_OUTPUT",
+      retryable: false,
     });
   }
 
-  const repair = targetedMaterialRepairResultSchema.parse(parsed);
+  let repair: ReturnType<typeof targetedMaterialRepairResultSchema.parse>;
+  try {
+    repair = targetedMaterialRepairResultSchema.parse(parsed);
+  } catch (err) {
+    throw Object.assign(
+      new Error(
+        err instanceof Error ? err.message : "Repair schema validation failed"
+      ),
+      {
+        code: "SCHEMA_VALIDATION_FAILED",
+        retryable: false,
+      }
+    );
+  }
   const inputTokens = response.usage?.input_tokens ?? null;
   const outputTokens = response.usage?.output_tokens ?? null;
   const totalTokens =
@@ -159,6 +213,7 @@ export async function runTargetedMaterialRepair(args: {
     usage: { inputTokens, outputTokens, totalTokens },
     estimatedCostUsd: estimateOpenAiCostUsd(inputTokens, outputTokens),
     repairedSourceRowCount: payloads.length,
+    sourceContexts: payloads,
     requestPayload: {
       repairFields: args.repairFields,
       sourceRowCount: payloads.length,

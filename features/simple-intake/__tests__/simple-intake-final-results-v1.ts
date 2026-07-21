@@ -64,6 +64,7 @@ function extracted(
     note: null,
     warnings: [],
     ...partial,
+    dxfFileName: partial.dxfFileName ?? null,
   };
 }
 
@@ -436,6 +437,7 @@ function run(): void {
             rowId: "e1",
             sourceAreaM2: 99,
             sourceWeightKg: 99,
+    dxfFileName: null,
             widthMm: 50,
             lengthMm: 50,
           }),

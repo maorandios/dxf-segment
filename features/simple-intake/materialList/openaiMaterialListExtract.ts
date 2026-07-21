@@ -11,6 +11,7 @@ import {
   adaptMaterialListRows,
   buildMaterialListStageDebug,
 } from "./adaptMaterialListRows";
+import { decideRepairPlan } from "./decideRepairPlan";
 import {
   countDuplicateSourceRows,
   evaluateFinalValidationGate,
@@ -106,6 +107,7 @@ export async function runOpenAiMaterialListExtraction(args: {
   if (!apiKey) {
     throw Object.assign(new Error("MISSING_API_KEY"), {
       code: "MISSING_API_KEY",
+      retryable: false,
     });
   }
   const client = new OpenAI({ apiKey });
@@ -133,6 +135,7 @@ export async function runOpenAiMaterialListExtraction(args: {
   if (!parsed) {
     throw Object.assign(new Error("Empty structured output"), {
       code: "EMPTY_STRUCTURED_OUTPUT",
+      retryable: false,
     });
   }
 
@@ -168,12 +171,19 @@ export async function runOpenAiMaterialListExtraction(args: {
 
   let providerCallCount: 1 | 2 = 1;
   let repairEstimatedCostUsd: number | null = null;
+  const repairPlan = decideRepairPlan(rows);
   let targetedRepair: TargetedRepairDebug = {
     provider: "openai",
     model,
     callCount: 0,
+    triggerType: repairPlan.triggerType,
+    requestedRowCount: repairPlan.affectedRows.length,
+    requestedFields: [...repairPlan.repairFields],
     repairedSourceRowCount: 0,
+    exactValuesReturned: 0,
     exactValuesMerged: 0,
+    rejectedExactValues: 0,
+    rejectedReasons: [],
     unresolvedValues: 0,
     missingInSourceValues: 0,
     durationMs: null,
@@ -181,19 +191,24 @@ export async function runOpenAiMaterialListExtraction(args: {
     estimatedCostUsd: null,
   };
 
-  if (gateBefore.shouldRepair && gateBefore.repairFields.length > 0) {
+  if (
+    repairPlan.triggerType !== "NONE" &&
+    repairPlan.repairFields.length > 0 &&
+    repairPlan.affectedRows.length > 0
+  ) {
     const tRepair = Date.now();
     const repairOut = await runTargetedMaterialRepair({
       snapshot: args.snapshot,
-      rows,
-      repairFields: gateBefore.repairFields,
+      rows: repairPlan.affectedRows,
+      repairFields: repairPlan.repairFields,
     });
     validationMs += Date.now() - tRepair;
 
     const merged = mergeTargetedRepair({
       rows,
       repair: repairOut.repair,
-      repairFields: gateBefore.repairFields,
+      repairFields: repairPlan.repairFields,
+      sourceContexts: repairOut.sourceContexts,
     });
     rows = merged.rows;
     providerCallCount = 2;
@@ -202,8 +217,14 @@ export async function runOpenAiMaterialListExtraction(args: {
       provider: "openai",
       model: repairOut.model,
       callCount: 1,
+      triggerType: repairPlan.triggerType,
+      requestedRowCount: repairPlan.affectedRows.length,
+      requestedFields: [...repairPlan.repairFields],
       repairedSourceRowCount: repairOut.repairedSourceRowCount,
+      exactValuesReturned: merged.stats.exactValuesReturned,
       exactValuesMerged: merged.stats.exactValuesMerged,
+      rejectedExactValues: merged.stats.rejectedExactValues,
+      rejectedReasons: merged.stats.rejectedReasons,
       unresolvedValues: merged.stats.unresolvedValues,
       missingInSourceValues: merged.stats.missingInSourceValues,
       durationMs: repairOut.durationMs,
@@ -222,8 +243,11 @@ export async function runOpenAiMaterialListExtraction(args: {
     fieldCoverageBefore: coverageCountsBefore,
     fieldCoverageAfter: coverageCountsAfter,
     triggeredRepair: targetedRepair.callCount === 1,
-    repairFields: gateBefore.repairFields,
-    triggerReasons: gateBefore.triggerReasons,
+    repairFields: repairPlan.repairFields,
+    triggerReasons:
+      repairPlan.reasons.length > 0
+        ? repairPlan.reasons
+        : gateBefore.triggerReasons,
     duplicateSourceRowsBefore: duplicateBefore,
     duplicateSourceRowsAfter: duplicateAfter,
     unresolvedFieldCount: finalGate.unresolvedFieldCount,

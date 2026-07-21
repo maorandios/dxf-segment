@@ -56,7 +56,12 @@ export function selectRowsNeedingRepair(
     ) {
       return false;
     }
-    return repairFields.some((f) => !isFieldUsable(f, row));
+    return repairFields.some((f) => {
+      if (isFieldUsable(f, row)) return false;
+      // Already classified as genuinely empty — do not re-request.
+      if (row.fieldResolutions?.[f] === "MISSING_IN_SOURCE") return false;
+      return true;
+    });
   });
 }
 

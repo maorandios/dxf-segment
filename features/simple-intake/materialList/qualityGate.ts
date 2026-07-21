@@ -14,10 +14,7 @@ import type {
   RepairableMaterialField,
 } from "./types";
 import { effectiveMaterialFields } from "./completeness";
-
-function isUsableString(v: string | null | undefined): boolean {
-  return typeof v === "string" && v.trim().length > 0;
-}
+import { isSemanticallyValidMaterial } from "./materialValidation";
 
 function isUsablePositiveNumber(v: number | null | undefined): boolean {
   return typeof v === "number" && Number.isFinite(v) && v > 0;
@@ -39,7 +36,7 @@ export function isFieldUsable(
   const e = effectiveMaterialFields(row);
   switch (field) {
     case "material":
-      return isUsableString(e.material);
+      return isSemanticallyValidMaterial(e.material, row);
     case "thicknessMm":
       return isUsablePositiveNumber(e.thicknessMm);
     case "quantity":

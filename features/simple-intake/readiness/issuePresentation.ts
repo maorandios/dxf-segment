@@ -12,7 +12,8 @@ export type CriticalReadinessIssueCode =
   | "NO_DXF_FOUND"
   | "MULTIPLE_DXF_CANDIDATES"
   | "DXF_INVALID"
-  | "DXF_ASSIGNMENT_CONFLICT";
+  | "DXF_ASSIGNMENT_CONFLICT"
+  | "PART_ID_DIMENSION_MISMATCH";
 
 export type ReadinessIssueAction =
   | "EDIT_QUANTITY"
@@ -23,7 +24,9 @@ export type ReadinessIssueAction =
   | "COMPARE_DXF"
   | "REPLACE_DXF"
   | "UPLOAD_DXF"
-  | "EXCLUDE";
+  | "EXCLUDE"
+  | "USE_DXF_DIMS"
+  | "REQUEST_CUSTOMER_CONFIRM";
 
 export type ReadinessIssuePresentation = {
   title: string;
@@ -45,6 +48,7 @@ export const CRITICAL_ISSUE_PRIORITY: CriticalReadinessIssueCode[] = [
   "NO_DXF_FOUND",
   "DXF_INVALID",
   "DXF_ASSIGNMENT_CONFLICT",
+  "PART_ID_DIMENSION_MISMATCH",
 ];
 
 export const ISSUE_PRESENTATIONS: Record<
@@ -89,17 +93,17 @@ export const ISSUE_PRESENTATIONS: Record<
     allowExclude: false,
   },
   NO_DXF_FOUND: {
-    title: "חסר DXF לשורה הזו",
-    explanation: "לא נמצא כרגע קובץ DXF זמין שמתאים למידות השורה.",
+    title: "לא נמצא קובץ DXF מתאים לפריט.",
+    explanation: "לא נמצא קובץ DXF מתאים לפריט.",
     primaryAction: "SELECT_DXF",
-    primaryLabel: "בחר DXF",
+    primaryLabel: "בחר קובץ DXF",
     secondaryActions: ["UPLOAD_DXF"],
     allowDefer: true,
     allowExclude: true,
   },
   MULTIPLE_DXF_CANDIDATES: {
-    title: "צריך לבחור קובץ DXF",
-    explanation: "נמצאו כמה קבצים עם מידות דומות. בחר את הקובץ הנכון.",
+    title: "נמצאו כמה קובצי DXF אפשריים לפריט.",
+    explanation: "נמצאו כמה קובצי DXF אפשריים לפריט.",
     primaryAction: "COMPARE_DXF",
     primaryLabel: "השווה ובחר",
     secondaryActions: [],
@@ -107,23 +111,32 @@ export const ISSUE_PRESENTATIONS: Record<
     allowExclude: true,
   },
   DXF_INVALID: {
-    title: "לא ניתן להשתמש בקובץ ה-DXF",
-    explanation: "לא ניתן לקרוא מהקובץ גאומטריה תקינה לחישוב.",
+    title: "לא ניתן להשתמש בקובץ ה-DXF לצורך חישוב.",
+    explanation: "לא ניתן להשתמש בקובץ ה-DXF לצורך חישוב.",
     primaryAction: "REPLACE_DXF",
-    primaryLabel: "העלה קובץ חלופי",
+    primaryLabel: "החלף קובץ",
     secondaryActions: ["SELECT_DXF"],
     allowDefer: true,
     allowExclude: true,
   },
   DXF_ASSIGNMENT_CONFLICT: {
-    title: "חסר DXF לשורה הזו",
-    explanation:
-      "לא נמצא כרגע קובץ DXF זמין שמתאים מספיק למידות השורה.",
+    title: "לא נמצא קובץ DXF מתאים לפריט.",
+    explanation: "חסר קובץ DXF מתאים לפריט הזה.",
     primaryAction: "SELECT_DXF",
-    primaryLabel: "בחר DXF אחר",
+    primaryLabel: "בחר קובץ DXF",
     secondaryActions: ["UPLOAD_DXF"],
     allowDefer: true,
     allowExclude: true,
+  },
+  PART_ID_DIMENSION_MISMATCH: {
+    title: "קיים פער משמעותי בין המידות ברשימה למידות בקובץ ה-DXF.",
+    explanation:
+      "קיים פער משמעותי בין המידות ברשימה למידות בקובץ ה-DXF.",
+    primaryAction: "USE_DXF_DIMS",
+    primaryLabel: "השתמש במידות DXF",
+    secondaryActions: ["REQUEST_CUSTOMER_CONFIRM"],
+    allowDefer: true,
+    allowExclude: false,
   },
 };
 
@@ -139,6 +152,7 @@ export function toCriticalIssueCode(
     case "NO_DXF_FOUND":
     case "MULTIPLE_DXF_CANDIDATES":
     case "DXF_INVALID":
+    case "PART_ID_DIMENSION_MISMATCH":
       return code;
     case "DXF_ASSIGNED_TO_BETTER_ROW":
     case "DUPLICATE_DXF_USAGE":
@@ -159,15 +173,19 @@ export function presentationForCode(
 export function secondaryActionLabel(action: ReadinessIssueAction): string {
   switch (action) {
     case "UPLOAD_DXF":
-      return "העלה DXF נוסף";
+      return "העלה קבצים נוספים";
     case "SELECT_DXF":
-      return "בחר DXF אחר";
+      return "בחר קובץ אחר";
     case "EXCLUDE":
-      return "החרג מההצעה";
+      return "אל תכלול בהצעה";
     case "COMPARE_DXF":
       return "השווה ובחר";
     case "REPLACE_DXF":
-      return "העלה קובץ חלופי";
+      return "החלף קובץ";
+    case "USE_DXF_DIMS":
+      return "השתמש במידות DXF";
+    case "REQUEST_CUSTOMER_CONFIRM":
+      return "דרוש אישור מהלקוח";
     default:
       return "פעולה";
   }

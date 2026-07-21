@@ -303,15 +303,18 @@ function getRowFieldEditors(row: MaterialListRow) {
         }}
       />
     ),
-    material: (
-      <EditableText
-        label="סוג חומר"
-        value={e.material}
-        missing
-        unresolved={fieldDisplayKind(row, "material") === "unresolved"}
-        onSave={(v) => applyOverride(row.rowId, { material: v })}
-      />
-    ),
+    material: (() => {
+      const kind = fieldDisplayKind(row, "material");
+      return (
+        <EditableText
+          label="סוג חומר"
+          value={kind === "value" ? e.material : null}
+          missing={kind === "missing"}
+          unresolved={kind === "unresolved"}
+          onSave={(v) => applyOverride(row.rowId, { material: v })}
+        />
+      );
+    })(),
     thickness: (
       <EditableNumber
         label="עובי"

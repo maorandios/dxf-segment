@@ -232,10 +232,26 @@ export async function POST(req: Request): Promise<Response> {
       err && typeof err === "object" && "code" in err
         ? String((err as { code?: string }).code)
         : "AI_REQUEST_FAILED";
+    const explicitRetryable =
+      err && typeof err === "object" && "retryable" in err
+        ? Boolean((err as { retryable?: boolean }).retryable)
+        : null;
+    const nonRetryableCodes = new Set([
+      "MISSING_API_KEY",
+      "MISSING_MODEL_ENV",
+      "EMPTY_STRUCTURED_OUTPUT",
+      "EMPTY_REPAIR_OUTPUT",
+      "EMPTY_MATERIAL_LIST",
+      "INVALID_STRICT_SCHEMA",
+      "SCHEMA_VALIDATION_FAILED",
+      "REPAIR_PAYLOAD_CONTAINS_DXF",
+    ]);
     const retryable =
-      code === "PROVIDER_TIMEOUT"
-        ? true
-        : code !== "MISSING_API_KEY" && code !== "MISSING_MODEL_ENV";
+      explicitRetryable != null
+        ? explicitRetryable
+        : code === "PROVIDER_TIMEOUT"
+          ? true
+          : !nonRetryableCodes.has(code);
     const message =
       code === "PROVIDER_TIMEOUT"
         ? "תם הזמן המוקצב לבקשת ה-AI"

@@ -5,27 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { FinalResultsSummary } from "../results/types";
 import {
   categoryActionHe,
-  categoryDescriptionHe,
   categoryTitleHe,
   type ReadinessBreakdown,
   type ReadinessCategoryId,
 } from "./categorizeReadinessIssues";
 
-function unitsLine(summary: FinalResultsSummary): {
-  main: string;
-  secondary: string | null;
-} {
-  if (summary.isTotalUnitCountComplete) {
-    return {
-      main: `${summary.totalUnitCount.toLocaleString("he-IL")} יחידות`,
-      secondary: null,
-    };
-  }
-  return {
-    main: `לפחות ${summary.totalUnitCount.toLocaleString("he-IL")} יחידות`,
-    secondary: `חסרה כמות ב-${summary.rowsWithMissingQuantity} שורות`,
-  };
-}
+/** Primary DXF categories shown in the concise issues panel (non-zero only). */
+const PANEL_CATEGORIES: ReadinessCategoryId[] = [
+  "MISSING_DXF",
+  "MULTIPLE_DXF",
+  "INVALID_DXF",
+  "DIMENSION_MISMATCH",
+  "MISSING_INFO",
+];
 
 export function ReadinessIssueCards({
   breakdown,
@@ -34,45 +26,52 @@ export function ReadinessIssueCards({
   breakdown: ReadinessBreakdown;
   onOpenCategory: (id: ReadinessCategoryId) => void;
 }) {
-  const cards = (
-    [
-      { id: "MISSING_INFO" as ReadinessCategoryId, count: breakdown.missingInfo.length },
-      { id: "DXF_COVERAGE" as ReadinessCategoryId, count: breakdown.dxfCoverage.length },
-      { id: "DXF_DECISION" as ReadinessCategoryId, count: breakdown.dxfDecision.length },
-    ]
-  ).filter((c) => c.count > 0);
+  const cards = PANEL_CATEGORIES.map((id) => ({
+    id,
+    count:
+      id === "MISSING_DXF"
+        ? breakdown.missingDxf.length
+        : id === "MULTIPLE_DXF"
+          ? breakdown.multipleDxf.length
+          : id === "INVALID_DXF"
+            ? breakdown.invalidDxf.length
+            : id === "DIMENSION_MISMATCH"
+              ? breakdown.dimensionMismatch.length
+              : breakdown.missingInfo.length,
+  })).filter((c) => c.count > 0);
 
   if (cards.length === 0) return null;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {cards.map((card) => (
-        <Card key={card.id} className="border-amber-500/40 bg-amber-500/5">
-          <CardHeader className="space-y-1 pb-2">
-            <CardTitle className="text-base">
-              {categoryTitleHe(card.id)}
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {categoryDescriptionHe(card.id)}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm">
-              <span className="text-xl font-semibold tabular-nums">
-                {card.count}
-              </span>{" "}
-              שורות
-            </p>
+    <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+      <h3 className="text-base font-semibold">
+        נשארו {breakdown.criticalRowCount} פריטים שדורשים טיפול
+      </h3>
+      <ul className="space-y-2">
+        {cards.map((card) => (
+          <li
+            key={card.id}
+            className="flex flex-wrap items-center justify-between gap-2"
+          >
+            <span className="text-sm">
+              {categoryTitleHe(
+                card.id,
+                card.id === "MISSING_DXF" ? breakdown.missingDxf : undefined
+              )}{" "}
+              ·{" "}
+              <span className="font-semibold tabular-nums">{card.count}</span>
+            </span>
             <Button
               type="button"
-              className="w-full"
+              size="sm"
+              variant="outline"
               onClick={() => onOpenCategory(card.id)}
             >
               {categoryActionHe(card.id)}
             </Button>
-          </CardContent>
-        </Card>
-      ))}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -80,80 +79,94 @@ export function ReadinessIssueCards({
 export function ReadinessSummary({
   summary,
   breakdown,
+  uploadedDxfCount,
   unusedDxfCount,
   onOpenCategory,
   onTreatAll,
   onContinueToTable,
+  onShowUnusedDxfs,
+  onOpenCompletionRequest,
 }: {
   summary: FinalResultsSummary;
   breakdown: ReadinessBreakdown;
+  uploadedDxfCount: number;
   unusedDxfCount: number;
   onOpenCategory: (id: ReadinessCategoryId) => void;
   onTreatAll: () => void;
   onContinueToTable: () => void;
+  onShowUnusedDxfs?: () => void;
+  onOpenCompletionRequest?: () => void;
 }) {
-  const units = unitsLine(summary);
   const needs = breakdown.criticalRowCount;
   const allReady = summary.totalRowCount > 0 && needs === 0;
-  const readyForPricing = summary.ready;
+  const readyItems = summary.ready;
+  const needsCompletion = summary.needsReview + summary.blocked;
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6" dir="rtl">
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">הבדיקה הושלמה</CardTitle>
+          <CardTitle className="text-xl">התאמת DXF הושלמה</CardTitle>
           <p className="text-sm text-muted-foreground">
-            בדקנו את קובץ החומרים ואת קובצי ה-DXF שהעלית.
+            בדקנו את רשימת החומר ואת קובצי ה-DXF. מוצגות רק בעיות שדורשות החלטה.
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="text-2xl font-semibold tabular-nums">
                 {summary.totalRowCount}
               </div>
-              <div className="text-xs text-muted-foreground">שורות חומר</div>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <div className="text-lg font-semibold leading-tight">
-                {units.main}
-              </div>
-              {units.secondary && (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {units.secondary}
-                </div>
-              )}
+              <div className="text-xs text-muted-foreground">פריטים</div>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="text-2xl font-semibold tabular-nums">
-                {readyForPricing}
+                {summary.totalUnitCount.toLocaleString("he-IL")}
               </div>
-              <div className="text-xs text-muted-foreground">
-                שורות מוכנות לתמחור
+              <div className="text-xs text-muted-foreground">יחידות</div>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="text-2xl font-semibold tabular-nums">
+                {readyItems}
               </div>
+              <div className="text-xs text-muted-foreground">פריטים תקינים</div>
             </div>
             <div
               className={`rounded-lg border p-3 ${
-                needs > 0
+                needsCompletion > 0
                   ? "border-amber-500/50 bg-amber-500/10"
                   : "border-border bg-muted/30"
               }`}
             >
-              <div className="text-2xl font-semibold tabular-nums">{needs}</div>
-              <div className="text-xs text-muted-foreground">
-                שורות דורשות טיפול
+              <div className="text-2xl font-semibold tabular-nums">
+                {needsCompletion}
               </div>
+              <div className="text-xs text-muted-foreground">נדרש השלמה</div>
             </div>
           </div>
 
-          {unusedDxfCount > 0 && (
-            <p
-              className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
-              role="note"
-            >
-              לתשומת לב: {unusedDxfCount} קובצי DXF לא שויכו לשורת חומר.
-            </p>
-          )}
+          <p className="text-sm text-muted-foreground">
+            {uploadedDxfCount} קובצי DXF נקלטו
+            {unusedDxfCount > 0 ? (
+              <>
+                {" "}
+                · {unusedDxfCount} קבצים לא שויכו
+                {onShowUnusedDxfs && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <button
+                      type="button"
+                      className="underline underline-offset-2"
+                      onClick={onShowUnusedDxfs}
+                    >
+                      הצג קבצים
+                    </button>
+                  </>
+                )}
+              </>
+            ) : null}
+          </p>
 
           {allReady ? (
             <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm">
@@ -169,12 +182,12 @@ export function ReadinessSummary({
           <div className="flex flex-col gap-2">
             {allReady ? (
               <Button type="button" size="lg" onClick={onContinueToTable}>
-                הצג את טבלת התמחור
+                המשך לטבלה
               </Button>
             ) : (
               <>
                 <Button type="button" size="lg" onClick={onTreatAll}>
-                  טפל ב-{needs} שורות
+                  טפל בפריטים
                 </Button>
                 <Button
                   type="button"
@@ -184,6 +197,15 @@ export function ReadinessSummary({
                   המשך לטבלה
                 </Button>
               </>
+            )}
+            {onOpenCompletionRequest && needs > 0 && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onOpenCompletionRequest}
+              >
+                הכן בקשת השלמה
+              </Button>
             )}
           </div>
         </CardContent>

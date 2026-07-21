@@ -50,6 +50,8 @@ export type MaterialListRow = {
   quantity: number | null;
   widthMm: number | null;
   lengthMm: number | null;
+  /** Explicit DXF filename from workbook when present — not required for Stage 1 completeness. */
+  dxfFileName: string | null;
   userOverrides: MaterialListUserOverrides;
   approvalStatus: MaterialListApprovalStatus;
   /** Internal field provenance — never shown as raw enum to end users. */
@@ -69,6 +71,7 @@ export type AiMaterialListRow = {
   quantity: number | null;
   widthMm: number | null;
   lengthMm: number | null;
+  dxfFileName: string | null;
 };
 
 export type AiMaterialListResult = {
@@ -119,8 +122,26 @@ export type TargetedRepairDebug = {
   provider: "openai";
   model: string;
   callCount: 0 | 1;
+  triggerType: "NONE" | "SYSTEMATIC_COLLAPSE" | "SELECTIVE_MISSING_FIELDS";
+  requestedRowCount: number;
+  requestedFields: string[];
   repairedSourceRowCount: number;
+  exactValuesReturned: number;
   exactValuesMerged: number;
+  rejectedExactValues: number;
+  rejectedReasons: Array<{
+    sheetName: string;
+    sourceRow: number;
+    field: "material";
+    value: string | null;
+    reason:
+      | "EQUALS_PROFILE"
+      | "EQUALS_PART_ID"
+      | "EQUALS_DESCRIPTION"
+      | "MISSING_EVIDENCE"
+      | "EVIDENCE_NOT_IN_SOURCE"
+      | "INVALID_VALUE";
+  }>;
   unresolvedValues: number;
   missingInSourceValues: number;
   durationMs: number | null;
@@ -169,3 +190,7 @@ export const MATERIAL_LIST_TABLE_HEADERS = [
 
 export const EXPECTED_BENCHMARK_MATERIAL_ROWS = 158;
 export const EXPECTED_BENCHMARK_MATERIAL_UNITS = 1902;
+/** Manual reference only — valid material grades in the known workbook. */
+export const EXPECTED_BENCHMARK_VALID_MATERIALS = 152;
+/** Manual reference only — genuinely blank material grades. */
+export const EXPECTED_BENCHMARK_MISSING_MATERIALS = 6;

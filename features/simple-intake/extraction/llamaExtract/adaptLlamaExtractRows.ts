@@ -311,6 +311,7 @@ export function adaptLlamaExtractRows(
       thicknessMm: r.thicknessMm,
       widthMm: r.widthMm,
       lengthMm: r.lengthMm,
+      dxfFileName: null,
       sourceAreaM2: r.sourceAreaM2,
       sourceWeightKg: r.sourceWeightKg,
       confidence,

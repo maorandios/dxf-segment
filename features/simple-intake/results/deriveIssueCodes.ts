@@ -2,40 +2,9 @@
  * Deterministic issue-code derivation for final review rows.
  */
 
-import { GEOMETRY_TOLERANCE } from "../types";
+import { isSignificantDimensionMismatch } from "../dxfLink/dimensionMismatch";
 import type { SimpleDxfPart, SimpleResultRow, SimpleUnmatchedReason } from "../types";
 import type { FinalIssueCode } from "./types";
-
-function withinTol(a: number, b: number): boolean {
-  const tol = Math.max(
-    GEOMETRY_TOLERANCE.absoluteMm,
-    Math.abs(b) * GEOMETRY_TOLERANCE.relative
-  );
-  return Math.abs(a - b) <= tol;
-}
-
-function dimsMismatch(
-  sourceW: number | null,
-  sourceL: number | null,
-  dxfW: number | null,
-  dxfL: number | null
-): boolean {
-  if (
-    sourceW == null ||
-    sourceL == null ||
-    dxfW == null ||
-    dxfL == null ||
-    !(sourceW > 0) ||
-    !(sourceL > 0) ||
-    !(dxfW > 0) ||
-    !(dxfL > 0)
-  ) {
-    return false;
-  }
-  const direct = withinTol(sourceW, dxfW) && withinTol(sourceL, dxfL);
-  const rotated = withinTol(sourceW, dxfL) && withinTol(sourceL, dxfW);
-  return !direct && !rotated;
-}
 
 export function deriveIssueCodes(args: {
   row: SimpleResultRow;
@@ -68,8 +37,12 @@ export function deriveIssueCodes(args: {
   }
 
   if (row.match.status === "UNMATCHED") {
-    if (args.unmatchedReason === "CANDIDATES_ASSIGNED_TO_BETTER_ROWS") {
-      codes.push("DXF_ASSIGNED_TO_BETTER_ROW");
+    if (
+      row.match.method === "EXPLICIT_FILENAME" ||
+      (typeof row.match.message === "string" &&
+        row.match.message.startsWith("MISSING_EXPLICIT_DXF"))
+    ) {
+      codes.push("EXPLICIT_DXF_FILE_MISSING");
     } else {
       codes.push("NO_DXF_FOUND");
     }
@@ -77,21 +50,20 @@ export function deriveIssueCodes(args: {
 
   if (
     row.match.status === "MATCHED" &&
-    row.match.method === "EXACT_ID" &&
     args.dxf &&
-    dimsMismatch(
-      args.sourceWidthMm,
-      args.sourceLengthMm,
-      args.dxf.widthMm,
-      args.dxf.lengthMm
-    )
+    args.dxf.geometryStatus === "VALID" &&
+    isSignificantDimensionMismatch({
+      workbookWidthMm: args.sourceWidthMm,
+      workbookLengthMm: args.sourceLengthMm,
+      dxfWidthMm: args.dxf.widthMm,
+      dxfLengthMm: args.dxf.lengthMm,
+    })
   ) {
     codes.push("PART_ID_DIMENSION_MISMATCH");
   }
 
-  if (args.duplicateDxf && row.match.matchedDxfId) {
-    codes.push("DUPLICATE_DXF_USAGE");
-  }
+  // Duplicate DXF usage is diagnostics-only for the normal user (not a primary category).
+  void args.duplicateDxf;
 
   if (!(args.quantity != null && args.quantity > 0)) {
     codes.push("MISSING_QUANTITY");
@@ -103,7 +75,6 @@ export function deriveIssueCodes(args: {
     codes.push("MISSING_THICKNESS");
   }
 
-  // Source dims are critical only when still needed to find/verify a usable DXF.
   const hasSourceDims =
     args.sourceWidthMm != null &&
     args.sourceLengthMm != null &&

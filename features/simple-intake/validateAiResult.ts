@@ -127,6 +127,7 @@ export function validateSimpleAiResult(args: {
       thicknessMm: clampPositive(r.thicknessMm, "THICKNESS", warnings),
       widthMm: clampPositive(r.widthMm, "WIDTH", warnings),
       lengthMm: clampPositive(r.lengthMm, "LENGTH", warnings),
+      dxfFileName: null,
       sourceAreaM2,
       sourceWeightKg,
       confidence,

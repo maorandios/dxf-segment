@@ -29,13 +29,12 @@ export function DxfUploadStage() {
       <CardHeader>
         <CardTitle className="text-2xl">העלאת קובצי DXF</CardTitle>
         <CardDescription>
-          רשימת החומר אושרה. עכשיו העלה את קובצי ה-DXF כדי להתאים גאומטריה ולחשב
-          שטח ומשקל.
+          העלה את קובצי ה-DXF כדי להתאים גאומטריה לפריטים ולחשב שטח ומשקל.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <p className="text-sm text-muted-foreground">
-          {session.materialListRows.length} שורות חומר מאושרות ·{" "}
+          {session.materialListRows.length} פריטים מאושרים ·{" "}
           {session.dxfFiles.length} קובצי DXF
         </p>
 
@@ -128,7 +127,7 @@ export function DxfUploadStage() {
                 .finally(() => setBusy(false));
             }}
           >
-            {busy ? "מתאים DXF…" : "התאם DXF והמשך"}
+            {busy ? "מעבד קבצים…" : "נתח והתאם קבצים"}
           </Button>
         </div>
       </CardContent>

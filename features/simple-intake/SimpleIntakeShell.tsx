@@ -16,7 +16,7 @@ export function SimpleIntakeShell() {
   const session = useSimpleIntakeSession();
 
   let body: React.ReactNode;
-  if (session.status === "ANALYZING") {
+  if (session.status === "ANALYZING" || session.status === "DXF_PROCESSING") {
     body = <AnalyzingStep />;
   } else if (session.status === "MATERIAL_LIST_QUALITY_FAILED") {
     body = <MaterialListQualityFailedScreen />;
@@ -24,7 +24,11 @@ export function SimpleIntakeShell() {
     body = <MaterialListReviewScreen />;
   } else if (session.status === "DXF_UPLOAD") {
     body = <DxfUploadStage />;
-  } else if (session.status === "READY") {
+  } else if (
+    session.status === "DXF_REVIEW" ||
+    session.status === "FINAL_PRICING_TABLE" ||
+    session.status === "READY"
+  ) {
     body = <ReadyStep />;
   } else if (session.status === "FAILED") {
     body = <FailedStep />;
