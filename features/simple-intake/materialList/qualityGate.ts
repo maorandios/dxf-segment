@@ -96,14 +96,40 @@ export function measureFieldCoverageCounts(rows: MaterialListRow[]): {
   return counts;
 }
 
+export function rowSourceType(
+  row: MaterialListRow
+): "EXCEL" | "PDF" {
+  return row.sourceType === "PDF" ? "PDF" : "EXCEL";
+}
+
+export function hasExactProvenance(row: MaterialListRow): boolean {
+  if (rowSourceType(row) === "PDF") {
+    return row.sourcePage != null && Number.isInteger(row.sourcePage) && row.sourcePage > 0;
+  }
+  return (
+    row.sheetName != null &&
+    row.sourceRow != null &&
+    Number.isInteger(row.sourceRow) &&
+    row.sourceRow > 0
+  );
+}
+
 export function countDuplicateSourceRows(rows: MaterialListRow[]): number {
   const seen = new Map<string, number>();
   let dupes = 0;
   for (const row of rows) {
-    if (row.sheetName == null || row.sourceRow == null || row.sourceRow <= 0) {
-      continue;
+    let key: string | null = null;
+    if (rowSourceType(row) === "PDF") {
+      if (row.sourcePage == null || row.sourcePage <= 0) continue;
+      key = `pdf::${row.sourcePage}::${(row.sourceAnchorText ?? "")
+        .trim()
+        .toLowerCase()}`;
+    } else {
+      if (row.sheetName == null || row.sourceRow == null || row.sourceRow <= 0) {
+        continue;
+      }
+      key = `${normalizeSheetName(row.sheetName)}::${row.sourceRow}`;
     }
-    const key = `${normalizeSheetName(row.sheetName)}::${row.sourceRow}`;
     const n = (seen.get(key) ?? 0) + 1;
     seen.set(key, n);
     if (n === 2) dupes++;
@@ -112,13 +138,7 @@ export function countDuplicateSourceRows(rows: MaterialListRow[]): number {
 }
 
 export function countMissingProvenance(rows: MaterialListRow[]): number {
-  return rows.filter(
-    (r) =>
-      r.sheetName == null ||
-      r.sourceRow == null ||
-      !Number.isInteger(r.sourceRow) ||
-      r.sourceRow <= 0
-  ).length;
+  return rows.filter((r) => !hasExactProvenance(r)).length;
 }
 
 export function countInvalidNumericValues(rows: MaterialListRow[]): number {
@@ -210,9 +230,7 @@ export function evaluateQualityGate(
     fieldCoverage: coverage,
     fieldCoverageCounts: coverageCounts,
     itemCount: rows.length,
-    exactSourceRowCount: rows.filter(
-      (r) => r.sourceRow != null && r.sourceRow > 0
-    ).length,
+    exactSourceRowCount: rows.filter((r) => hasExactProvenance(r)).length,
     duplicateSourceRows,
     missingProvenance,
     invalidNumeric,

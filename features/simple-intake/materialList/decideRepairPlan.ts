@@ -4,7 +4,11 @@
  */
 
 import { selectRowsNeedingRepair } from "./buildRepairContext";
-import { evaluateQualityGate, isFieldUsable } from "./qualityGate";
+import {
+  evaluateQualityGate,
+  hasExactProvenance,
+  isFieldUsable,
+} from "./qualityGate";
 import { REPAIRABLE_MATERIAL_FIELDS } from "./qualityGateConfig";
 import type { MaterialListRow, RepairableMaterialField } from "./types";
 
@@ -54,13 +58,7 @@ export function decideRepairPlan(rows: MaterialListRow[]): RepairPlan {
   const fieldSet = new Set<RepairableMaterialField>();
   const affected: MaterialListRow[] = [];
   for (const row of rows) {
-    if (
-      row.sheetName == null ||
-      row.sourceRow == null ||
-      row.sourceRow <= 0
-    ) {
-      continue;
-    }
+    if (!hasExactProvenance(row)) continue;
     const missing = missingRepairableFields(row);
     if (missing.length === 0) continue;
     affected.push(row);

@@ -1,11 +1,33 @@
 /**
- * Stage 1 — Canonical approved material list (Excel → review → approve).
+ * Stage 1 — Canonical approved material list (Excel/PDF → review → approve).
  */
+
+import type { MaterialSourceType } from "./materialSourceTypes";
 
 export type MaterialListApprovalStatus =
   | "COMPLETE"
   | "NEEDS_COMPLETION"
   | "APPROVED_WITH_MISSING_DATA";
+
+export type MaterialSourceReference =
+  | {
+      sourceType: "EXCEL";
+      sourceFileName: string;
+      sheetName: string;
+      sourceRow: number | null;
+      sourceCell: string | null;
+      sourcePage: null;
+      sourceAnchorText: string | null;
+    }
+  | {
+      sourceType: "PDF";
+      sourceFileName: string;
+      sheetName: null;
+      sourceRow: null;
+      sourceCell: null;
+      sourcePage: number | null;
+      sourceAnchorText: string | null;
+    };
 
 export type RepairableMaterialField =
   | "material"
@@ -39,9 +61,14 @@ export type MaterialListFieldResolutions = Partial<
 /** Local canonical row — rowId / overrides / approvalStatus are never from the AI. */
 export type MaterialListRow = {
   rowId: string;
+  /** Defaults to EXCEL when omitted (legacy rows / tests). */
+  sourceType?: MaterialSourceType;
+  sourceFileName?: string | null;
   sheetName: string | null;
   sourceRow: number | null;
   sourceCell: string | null;
+  sourcePage?: number | null;
+  sourceAnchorText?: string | null;
   partId: string | null;
   profile: string | null;
   description: string | null;
@@ -50,7 +77,7 @@ export type MaterialListRow = {
   quantity: number | null;
   widthMm: number | null;
   lengthMm: number | null;
-  /** Explicit DXF filename from workbook when present — not required for Stage 1 completeness. */
+  /** Explicit DXF filename from source when present — not required for Stage 1 completeness. */
   dxfFileName: string | null;
   userOverrides: MaterialListUserOverrides;
   approvalStatus: MaterialListApprovalStatus;
@@ -60,9 +87,13 @@ export type MaterialListRow = {
 
 /** Strict Structured Output from the workbook model (no local fields). */
 export type AiMaterialListRow = {
+  sourceType?: MaterialSourceType | null;
+  sourceFileName?: string | null;
   sheetName: string | null;
   sourceRow: number | null;
   sourceCell: string | null;
+  sourcePage?: number | null;
+  sourceAnchorText?: string | null;
   partId: string | null;
   profile: string | null;
   description: string | null;

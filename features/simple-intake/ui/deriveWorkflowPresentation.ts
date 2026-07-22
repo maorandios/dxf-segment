@@ -155,17 +155,34 @@ export function buildWorkbookActivitySteps(args: {
   elapsedSec: number;
   sheetCount?: number | null;
   populatedRows?: number | null;
+  sourceType?: "EXCEL" | "PDF" | null;
+  pdfPageCount?: number | null;
 }): ActivityStepModel[] {
+  const isPdf = args.sourceType === "PDF";
   const label = (args.analyzingLabel ?? "").toLowerCase();
   const reading =
-    label.includes("קורא") || label.includes("קובץ האקסל") || args.elapsedSec < 2;
+    label.includes("קורא") ||
+    label.includes("קובץ האקסל") ||
+    label.includes("מסמך ה-pdf") ||
+    label.includes("pdf") ||
+    args.elapsedSec < 2;
+  const scanning =
+    isPdf &&
+    (label.includes("סורק") || label.includes("עמוד") || args.elapsedSec >= 2);
   const organizing =
     label.includes("מארגנ") ||
     label.includes("טבלה") ||
-    (!reading && args.elapsedSec >= 2);
+    label.includes("מכינים") ||
+    (!reading && !scanning && args.elapsedSec >= 4);
 
   let activeIndex = 0;
-  if (organizing && !reading) activeIndex = 4;
+  if (isPdf) {
+    if (organizing) activeIndex = 4;
+    else if (args.elapsedSec >= 12) activeIndex = 3;
+    else if (args.elapsedSec >= 8) activeIndex = 2;
+    else if (scanning || args.elapsedSec >= 3) activeIndex = 1;
+    else activeIndex = 0;
+  } else if (organizing && !reading) activeIndex = 4;
   else if (args.elapsedSec >= 12) activeIndex = 3;
   else if (args.elapsedSec >= 8) activeIndex = 2;
   else if (args.elapsedSec >= 4) activeIndex = 1;
@@ -176,33 +193,66 @@ export function buildWorkbookActivitySteps(args: {
       ? `${args.sheetCount === 1 ? "גיליון אחד" : `${args.sheetCount} גיליונות`} ו-${args.populatedRows.toLocaleString("he-IL")} שורות מאוכלסות נקלטו`
       : "קוראים את מבנה הקובץ והגיליונות";
 
-  const defs = [
-    {
-      id: "read",
-      label: "קוראים את הקובץ",
-      detail: sheetHint,
-    },
-    {
-      id: "identify",
-      label: "מזהים פריטים ונתוני תמחור",
-      detail: "מאתרים חלקים, כמויות, חומרים ומידות",
-    },
-    {
-      id: "missing",
-      label: "בודקים נתונים חסרים",
-      detail: "בודקים סוג חומר, עובי, כמות ומידות",
-    },
-    {
-      id: "verify",
-      label: "מאמתים ערכים לא חד-משמעיים",
-      detail: "נמצאו מספר נתונים שדורשים בדיקה נוספת",
-    },
-    {
-      id: "prepare",
-      label: "מכינים את הטבלה",
-      detail: "מארגנים את הנתונים לטבלה אחידה",
-    },
-  ];
+  const pageHint =
+    args.pdfPageCount != null && args.pdfPageCount > 0
+      ? `${args.pdfPageCount.toLocaleString("he-IL")} עמודים במסמך`
+      : "סורקים את עמודי המסמך";
+
+  const defs = isPdf
+    ? [
+        {
+          id: "read",
+          label: "קוראים את מסמך ה-PDF",
+          detail: "מעלים את המסמך לניתוח",
+        },
+        {
+          id: "scan",
+          label: "סורקים את כל העמודים",
+          detail: pageHint,
+        },
+        {
+          id: "identify",
+          label: "מזהים פריטים ונתוני תמחור",
+          detail: "מאתרים חלקים, כמויות, חומרים ומידות",
+        },
+        {
+          id: "missing",
+          label: "בודקים נתונים חסרים",
+          detail: "בודקים סוג חומר, עובי, כמות ומידות",
+        },
+        {
+          id: "prepare",
+          label: "מכינים את הטבלה",
+          detail: "מארגנים את הפריטים לטבלה אחידה",
+        },
+      ]
+    : [
+        {
+          id: "read",
+          label: "קוראים את קובץ האקסל",
+          detail: sheetHint,
+        },
+        {
+          id: "identify",
+          label: "מזהים פריטים ונתוני תמחור",
+          detail: "מאתרים חלקים, כמויות, חומרים ומידות",
+        },
+        {
+          id: "missing",
+          label: "בודקים נתונים חסרים",
+          detail: "בודקים סוג חומר, עובי, כמות ומידות",
+        },
+        {
+          id: "verify",
+          label: "מאמתים ערכים לא חד-משמעיים",
+          detail: "נמצאו מספר נתונים שדורשים בדיקה נוספת",
+        },
+        {
+          id: "prepare",
+          label: "מכינים את הטבלה",
+          detail: "מארגנים את הפריטים לטבלה אחידה",
+        },
+      ];
 
   return defs.map((d, i) => ({
     ...d,

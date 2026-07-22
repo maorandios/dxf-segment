@@ -93,6 +93,10 @@ export type FinalTableRow = {
     sourceLengthMm: number | null;
     sourceAreaM2: number | null;
     sourceWeightKg: number | null;
+    /** Optional PDF provenance for material-list intake. */
+    sourceType?: "EXCEL" | "PDF" | null;
+    sourcePage?: number | null;
+    sourceAnchorText?: string | null;
   };
   issueCodes: FinalIssueCode[];
   primaryMessage: string | null;

@@ -18,22 +18,45 @@ function syntheticSourceRow(rowId: string): number {
   return n === 0 ? -1 : -n;
 }
 
+function buildNote(row: MaterialListRow): string | null {
+  const parts: string[] = [];
+  if (row.approvalStatus === "APPROVED_WITH_MISSING_DATA") {
+    parts.push("APPROVED_WITH_MISSING_DATA");
+  }
+  if (row.sourceType === "PDF") {
+    parts.push("SOURCE_TYPE:PDF");
+    if (row.sourcePage != null && row.sourcePage > 0) {
+      parts.push(`PDF_PAGE:${row.sourcePage}`);
+    }
+    if (row.sourceAnchorText?.trim()) {
+      parts.push(`PDF_ANCHOR:${row.sourceAnchorText.trim().slice(0, 160)}`);
+    }
+  }
+  return parts.length > 0 ? parts.join("|") : null;
+}
+
 export function materialListToExtractedRows(
   rows: MaterialListRow[]
 ): SimpleExtractedRow[] {
   return rows.map((row) => {
     const e = effectiveMaterialFields(row);
+    const isPdf = row.sourceType === "PDF";
     const sourceRow =
+      !isPdf &&
       row.sourceRow != null &&
       Number.isFinite(row.sourceRow) &&
       row.sourceRow > 0
         ? row.sourceRow
-        : syntheticSourceRow(row.rowId);
+        : isPdf && row.sourcePage != null && row.sourcePage > 0
+          ? row.sourcePage
+          : syntheticSourceRow(row.rowId);
     return {
       rowId: row.rowId,
-      sheetName: row.sheetName?.trim() || "UNKNOWN",
+      sheetName: isPdf
+        ? row.sourceFileName?.trim() || "PDF"
+        : row.sheetName?.trim() || "UNKNOWN",
       sourceRow,
-      sourceCell: row.sourceCell,
+      sourceCell: isPdf ? null : row.sourceCell,
       partId: e.partId,
       profile: e.profile,
       description: e.description,
@@ -46,10 +69,7 @@ export function materialListToExtractedRows(
       sourceAreaM2: null,
       sourceWeightKg: null,
       confidence: 1,
-      note:
-        row.approvalStatus === "APPROVED_WITH_MISSING_DATA"
-          ? "APPROVED_WITH_MISSING_DATA"
-          : null,
+      note: buildNote(row),
       warnings: [],
     };
   });

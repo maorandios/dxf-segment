@@ -16,6 +16,9 @@ import {
   refreshRowCompleteness,
   summarizeMaterialList,
 } from "./materialList/completeness";
+import {
+  detectMaterialSourceTypeFromName,
+} from "./materialList/materialSourceTypes";
 import { materialListToExtractedRows } from "./materialList/toExtractedRows";
 import {
   buildDxfLinkedMaterialItems,
@@ -929,6 +932,8 @@ export const simpleIntakeActions = {
     if (session.status === "ANALYZING") return;
 
     const workbookFile = session.workbookFile;
+    const sourceType =
+      detectMaterialSourceTypeFromName(workbookFile.name) ?? "EXCEL";
     const runId = newRunId();
     const startedAt = new Date().toISOString();
     const t0 = Date.now();
@@ -941,7 +946,10 @@ export const simpleIntakeActions = {
       startedAt,
       completedAt: null,
       error: null,
-      analyzingLabel: "קוראים את קובץ האקסל...",
+      analyzingLabel:
+        sourceType === "PDF"
+          ? "קוראים את מסמך ה-PDF..."
+          : "קוראים את קובץ האקסל...",
       resultRows: [],
       extractedRows: [],
       materialListRows: [],
@@ -962,43 +970,57 @@ export const simpleIntakeActions = {
 
     try {
       const tWb = Date.now();
-      const snapResult = await buildSimpleWorkbookSnapshot({
-        file: workbookFile,
-        workbookId: `wb_${runId}`,
-      });
-      timing.workbookSnapshotMs = Date.now() - tWb;
-      if (!snapResult.ok) {
-        const incomplete = snapResult.message.includes(
-          "WORKBOOK_SNAPSHOT_INCOMPLETE"
-        );
-        const error: SimpleIntakeError = {
-          stage: incomplete
-            ? "WORKBOOK_SNAPSHOT_INCOMPLETE"
-            : "WORKBOOK_READ",
-          message: snapResult.message,
-          retryable: true,
-        };
-        timing.totalMs = Date.now() - t0;
-        fail(
-          error,
-          timing,
-          runId,
-          startedAt,
-          [],
-          null,
-          null,
-          0,
-          snapResult.coverage
-        );
-        return;
-      }
+      let snapResult: Awaited<
+        ReturnType<typeof buildSimpleWorkbookSnapshot>
+      > | null = null;
 
-      setSession({
-        ...getSimpleIntakeSession(),
-        workbookSnapshot: snapResult.snapshot,
-        analyzingLabel: "מארגנים את הנתונים לטבלה אחידה...",
-        timing: { ...timing },
-      });
+      if (sourceType === "EXCEL") {
+        snapResult = await buildSimpleWorkbookSnapshot({
+          file: workbookFile,
+          workbookId: `wb_${runId}`,
+        });
+        timing.workbookSnapshotMs = Date.now() - tWb;
+        if (!snapResult.ok) {
+          const incomplete = snapResult.message.includes(
+            "WORKBOOK_SNAPSHOT_INCOMPLETE"
+          );
+          const error: SimpleIntakeError = {
+            stage: incomplete
+              ? "WORKBOOK_SNAPSHOT_INCOMPLETE"
+              : "WORKBOOK_READ",
+            message: snapResult.message,
+            retryable: true,
+          };
+          timing.totalMs = Date.now() - t0;
+          fail(
+            error,
+            timing,
+            runId,
+            startedAt,
+            [],
+            null,
+            null,
+            0,
+            snapResult.coverage
+          );
+          return;
+        }
+
+        setSession({
+          ...getSimpleIntakeSession(),
+          workbookSnapshot: snapResult.snapshot,
+          analyzingLabel: "מארגנים את הנתונים לטבלה אחידה...",
+          timing: { ...timing },
+        });
+      } else {
+        timing.workbookSnapshotMs = 0;
+        setSession({
+          ...getSimpleIntakeSession(),
+          workbookSnapshot: null,
+          analyzingLabel: "סורקים את כל העמודים...",
+          timing: { ...timing },
+        });
+      }
 
       const tAi = Date.now();
       let aiJson: {
@@ -1019,15 +1041,25 @@ export const simpleIntakeActions = {
         costs?: Record<string, unknown>;
         extractionProviderDebug?: Record<string, unknown>;
         extractionProvider?: string;
+        sourceDocument?: Record<string, unknown>;
+        pdfExtraction?: Record<string, unknown>;
       };
       try {
         const form = new FormData();
-        form.append("snapshot", JSON.stringify(snapResult.snapshot));
+        form.append("sourceType", sourceType);
         form.append(
-          "workbook",
+          "source",
           workbookFile,
-          workbookFile.name || snapResult.snapshot.filename
+          workbookFile.name || (sourceType === "PDF" ? "source.pdf" : "workbook.xlsx")
         );
+        if (sourceType === "EXCEL" && snapResult?.ok) {
+          form.append("snapshot", JSON.stringify(snapResult.snapshot));
+          form.append(
+            "workbook",
+            workbookFile,
+            workbookFile.name || snapResult.snapshot.filename
+          );
+        }
         const res = await fetch("/api/simple-intake/analyze", {
           method: "POST",
           body: form,
@@ -1048,13 +1080,13 @@ export const simpleIntakeActions = {
             runId,
             startedAt,
             [],
-            snapResult.snapshot,
+            snapResult && snapResult.ok ? snapResult.snapshot : null,
             {
               ...aiJson,
               extractionProviderDebug: aiJson.extractionProviderDebug,
             },
             aiJson.providerCallCount ?? 0,
-            snapResult.coverage
+            snapResult && snapResult.ok ? snapResult.coverage : undefined
           );
           return;
         }
@@ -1072,10 +1104,10 @@ export const simpleIntakeActions = {
           runId,
           startedAt,
           [],
-          snapResult.snapshot,
+          snapResult && snapResult.ok ? snapResult.snapshot : null,
           null,
           0,
-          snapResult.coverage
+          snapResult && snapResult.ok ? snapResult.coverage : undefined
         );
         return;
       }
@@ -1087,6 +1119,29 @@ export const simpleIntakeActions = {
 
       if (materialListRows.length === 0) {
         // Legacy OpenAI / Llama path: adapt via validateSimpleAiResult
+        if (!snapResult?.ok) {
+          const error: SimpleIntakeError = {
+            stage: "VALIDATION",
+            message:
+              sourceType === "PDF"
+                ? "הקובץ נקלט, אך לא ניתן היה לפענח ממנו רשימת חומר בצורה אמינה."
+                : "לא נמצאו שורות חומר בקובץ",
+            retryable: false,
+          };
+          timing.totalMs = Date.now() - t0;
+          fail(
+            error,
+            timing,
+            runId,
+            startedAt,
+            [],
+            null,
+            aiJson,
+            providerCallCount,
+            undefined
+          );
+          return;
+        }
         const aiResult = aiJson.result as Parameters<
           typeof validateSimpleAiResult
         >[0]["ai"];
@@ -1129,7 +1184,7 @@ export const simpleIntakeActions = {
           startedAt,
           [],
           snapResult.snapshot,
-          aiJson,
+          aiResult,
           providerCallCount,
           snapResult.coverage
         );
@@ -1140,6 +1195,9 @@ export const simpleIntakeActions = {
       const completedAt = new Date().toISOString();
       const mlSummary = summarizeMaterialList(materialListRows);
       const qualityGatePassed = aiJson.qualityGatePassed !== false;
+      const snapshot = snapResult && snapResult.ok ? snapResult.snapshot : null;
+      const coverage =
+        snapResult && snapResult.ok ? snapResult.coverage : null;
 
       const debug = buildSimpleIntakeDebug({
         runId,
@@ -1148,7 +1206,7 @@ export const simpleIntakeActions = {
         timing,
         workbookFileName: workbookFile.name,
         dxfFileNames: [],
-        snapshot: snapResult.snapshot,
+        snapshot,
         providerCallCount,
         aiRawResult: {
           ok: true,
@@ -1156,13 +1214,14 @@ export const simpleIntakeActions = {
           usage: aiJson.usage ?? null,
           model: aiJson.model ?? null,
           costs: aiJson.costs ?? null,
+          sourceType,
         },
         validatedRows: materialListToExtractedRows(materialListRows),
         dxfParts: [],
         resultRows: [],
         unmatchedDxfIds: [],
         diagnostics: null,
-        snapshotCoverage: snapResult.coverage,
+        snapshotCoverage: coverage,
         error: qualityGatePassed
           ? null
           : {
@@ -1188,6 +1247,19 @@ export const simpleIntakeActions = {
       (debug as Record<string, unknown>).targetedRepair =
         aiJson.targetedRepair ?? null;
       (debug as Record<string, unknown>).costs = aiJson.costs ?? null;
+      (debug as Record<string, unknown>).sourceDocument =
+        aiJson.sourceDocument ?? {
+          sourceType,
+          fileName: workbookFile.name,
+          mimeType: workbookFile.type,
+          fileSizeBytes: workbookFile.size,
+          excelSheetCount: snapshot?.sheets.length ?? null,
+          pdfPageCount: null,
+          pdfDetail: null,
+        };
+      if (aiJson.pdfExtraction) {
+        (debug as Record<string, unknown>).pdfExtraction = aiJson.pdfExtraction;
+      }
       (debug as Record<string, unknown>).providerCall = {
         provider: "openai",
         count: providerCallCount,
@@ -1216,7 +1288,7 @@ export const simpleIntakeActions = {
         hasCoverageWarnings: false,
         localSummary: null,
         matchingDiagnostics: null,
-        workbookSnapshot: snapResult.snapshot,
+        workbookSnapshot: snapshot,
         timing,
         completedAt,
         lastDebug: debug,

@@ -220,6 +220,13 @@ export function fieldDisplayKind(
 }
 
 export function provenanceLabelHe(row: MaterialListRow): string {
+  if (row.sourceType === "PDF") {
+    const file = (row.sourceFileName ?? "PDF").trim() || "PDF";
+    if (row.sourcePage != null && Number.isFinite(row.sourcePage)) {
+      return `${file} · עמוד ${row.sourcePage}`;
+    }
+    return file;
+  }
   const sheet = (row.sheetName ?? "Material List").trim() || "Material List";
   if (row.sourceRow != null && Number.isFinite(row.sourceRow)) {
     return `${sheet} · שורה ${row.sourceRow}`;

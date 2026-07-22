@@ -2,17 +2,16 @@
 
 /**
  * Material-list stage upload content (embedded in quote workspace shell).
+ * Accepts Excel (.xlsx/.xls) or PDF (.pdf).
  */
 
 import { useCallback, useRef, useState } from "react";
 import { simpleIntakeActions } from "../sessionStore";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
+import {
+  validateMaterialSourceFile,
+} from "../materialList/materialSourceTypes";
 import { WorkbookUploadWorkspace } from "./WorkbookUploadWorkspace";
-
-function isWorkbookName(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower.endsWith(".xlsx") || lower.endsWith(".xls");
-}
 
 export function WorkbookUploadScreen() {
   const session = useSimpleIntakeSession();
@@ -29,8 +28,9 @@ export function WorkbookUploadScreen() {
       setNotice(null);
       return;
     }
-    if (!isWorkbookName(f.name)) {
-      setNotice(`קובץ לא נתמך: ${f.name}`);
+    const validated = validateMaterialSourceFile(f);
+    if (!validated.ok) {
+      setNotice(validated.message);
       return;
     }
     simpleIntakeActions.setWorkbook(f);
@@ -55,7 +55,7 @@ export function WorkbookUploadScreen() {
           className="w-full text-center text-[26px] font-semibold tracking-tight sm:text-[28px]"
           style={{ color: "var(--ow-text, var(--us-text))", textAlign: "center" }}
         >
-          הפקת רשימת חומר
+          העלאת רשימת חומר
         </h2>
         <p
           className="mx-auto mt-2 w-full max-w-[640px] text-center text-[14px] leading-relaxed"
@@ -64,8 +64,8 @@ export function WorkbookUploadScreen() {
             textAlign: "center",
           }}
         >
-          העלה את קובץ האקסל שקיבלת מהלקוח. OMEGA תארגן את הנתונים לטבלה אחידה
-          ותציג את הפריטים שדורשים טיפול.
+          העלה קובץ Excel או PDF שקיבלת מהלקוח. OMEGA תארגן את הנתונים לטבלה
+          אחידה ומוכנה לבדיקה.
         </p>
       </header>
 
@@ -86,7 +86,7 @@ export function WorkbookUploadScreen() {
       <input
         ref={replaceInputRef}
         type="file"
-        accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".xlsx,.xls,.pdf,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0] ?? null;

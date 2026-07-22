@@ -34,6 +34,17 @@ export function AnalyzingStep() {
       (sum, s) => sum + (s.populatedRowCount ?? 0),
       0
     ) ?? null;
+  const sourceType =
+    session.workbookFile?.name?.toLowerCase().endsWith(".pdf")
+      ? ("PDF" as const)
+      : ("EXCEL" as const);
+  const pdfPageCount =
+    typeof session.lastDebug?.sourceDocument === "object" &&
+    session.lastDebug?.sourceDocument &&
+    "pdfPageCount" in (session.lastDebug.sourceDocument as object)
+      ? ((session.lastDebug.sourceDocument as { pdfPageCount?: number | null })
+          .pdfPageCount ?? null)
+      : null;
 
   const steps = useMemo(() => {
     if (isDxf) {
@@ -48,6 +59,8 @@ export function AnalyzingStep() {
       elapsedSec,
       sheetCount,
       populatedRows,
+      sourceType,
+      pdfPageCount,
     });
   }, [
     isDxf,
@@ -57,6 +70,8 @@ export function AnalyzingStep() {
     session.dxfParts.length,
     sheetCount,
     populatedRows,
+    sourceType,
+    pdfPageCount,
   ]);
 
   return (

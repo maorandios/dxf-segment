@@ -7,6 +7,7 @@
 
 import { LlamaCloud, toFile } from "@llamaindex/llama-cloud";
 import type { ExtractionProviderResult } from "../types";
+import { MATERIAL_SOURCE_MAX_BYTES } from "../../materialList/materialSourceTypes";
 import { adaptLlamaExtractRows } from "./adaptLlamaExtractRows";
 import {
   isTabularMaxItemsError,
@@ -261,7 +262,7 @@ export async function runLlamaExtractWorkbook(args: {
         reason: "EMPTY_FILE",
       });
     }
-    const maxBytes = 25 * 1024 * 1024;
+    const maxBytes = MATERIAL_SOURCE_MAX_BYTES;
     if (args.workbookBytes.length > maxBytes) {
       throw new LlamaExtractError("WORKBOOK_TOO_LARGE", HEBREW_FAIL, {
         reason: "FILE_TOO_LARGE",

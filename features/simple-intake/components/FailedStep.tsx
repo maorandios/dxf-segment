@@ -2,6 +2,7 @@
 
 import { simpleIntakeActions } from "../sessionStore";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
+import { detectMaterialSourceTypeFromName } from "../materialList/materialSourceTypes";
 import { FailureState } from "../ui";
 
 function downloadDebug(debug: Record<string, unknown> | null): void {
@@ -20,15 +21,25 @@ function downloadDebug(debug: Record<string, unknown> | null): void {
 export function FailedStep() {
   const session = useSimpleIntakeSession();
   const err = session.error;
+  const isPdf =
+    detectMaterialSourceTypeFromName(session.workbookFile?.name ?? "") ===
+      "PDF" ||
+    /pdf/i.test(err?.message ?? "");
 
   return (
     <div className="flex min-h-[calc(100vh-11rem)] items-center justify-center py-8">
       <FailureState
-        title="לא הצלחנו להשלים את הניתוח"
+        title={
+          isPdf
+            ? "לא הצלחנו לקרוא את קובץ ה-PDF"
+            : "לא הצלחנו להשלים את הניתוח"
+        }
         description={
-          err?.message
-            ? "הקובץ נקלט, אך חלק מהנתונים לא פוענחו בצורה אמינה."
-            : "אירעה שגיאה בעיבוד הקובץ. ניתן לנסות שוב או להחליף קובץ."
+          isPdf
+            ? "הקובץ נקלט, אך לא ניתן היה לפענח ממנו רשימת חומר בצורה אמינה."
+            : err?.message
+              ? "הקובץ נקלט, אך חלק מהנתונים לא פוענחו בצורה אמינה."
+              : "אירעה שגיאה בעיבוד הקובץ. ניתן לנסות שוב או להחליף קובץ."
         }
         canRetry={Boolean(err?.retryable)}
         onRetry={() => void simpleIntakeActions.analyze()}

@@ -4,7 +4,7 @@
 
 import type { RepairableMaterialField } from "./types";
 import type { MaterialListRow } from "./types";
-import { isFieldUsable, normalizeSheetName } from "./qualityGate";
+import { hasExactProvenance, isFieldUsable, normalizeSheetName } from "./qualityGate";
 
 export type SnapshotLike = {
   sheets: Array<{
@@ -49,13 +49,7 @@ export function selectRowsNeedingRepair(
   repairFields: RepairableMaterialField[]
 ): MaterialListRow[] {
   return rows.filter((row) => {
-    if (
-      row.sheetName == null ||
-      row.sourceRow == null ||
-      row.sourceRow <= 0
-    ) {
-      return false;
-    }
+    if (!hasExactProvenance(row)) return false;
     return repairFields.some((f) => {
       if (isFieldUsable(f, row)) return false;
       // Already classified as genuinely empty — do not re-request.
@@ -76,8 +70,9 @@ export function buildRepairSourcePayloads(args: {
   const out: RepairSourceRowPayload[] = [];
 
   for (const row of selected) {
+    if (row.sourceType === "PDF" || row.sourceRow == null) continue;
     const sheet = findSheet(args.snapshot, row.sheetName);
-    const sourceRow = row.sourceRow!;
+    const sourceRow = row.sourceRow;
     const snapRow = sheet?.rows.find((r) => r.rowNumber === sourceRow);
     const cells = snapRow?.cells ?? [];
     const sourceRowText = cells.length > 0 ? sheetRowText(cells) : "";

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { SelectedWorkbookSummary } from "./SelectedWorkbookSummary";
 
 const ACCEPT =
-  ".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  ".xlsx,.xls,.pdf,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export function WorkbookUploadWorkspace({
   file,
@@ -70,24 +70,6 @@ export function WorkbookUploadWorkspace({
           handleFiles(e.dataTransfer.files);
         }}
       >
-        <header
-          className="mb-7 flex w-full shrink-0 flex-col items-center"
-          style={{ textAlign: "center" }}
-        >
-          <h2
-            className="w-full text-center text-[20px] font-semibold sm:text-[22px]"
-            style={{ color: "var(--us-text)", textAlign: "center" }}
-          >
-            נתחיל מרשימת החומר
-          </h2>
-          <p
-            className="mx-auto mt-2 w-full max-w-md text-center text-[14px] leading-relaxed"
-            style={{ color: "var(--us-text-secondary)", textAlign: "center" }}
-          >
-            אזהה פריטים, אסדר טבלה אחידה ואסמן מה דורש השלמה
-          </p>
-        </header>
-
         <input
           ref={inputRef}
           type="file"
@@ -117,7 +99,7 @@ export function WorkbookUploadWorkspace({
               }}
               disabled={loading}
               onClick={openPicker}
-              aria-label="בחר קובץ Excel מהמחשב"
+              aria-label="בחר קובץ Excel או PDF מהמחשב"
             >
               <span
                 className="mb-3.5 flex h-12 w-12 items-center justify-center rounded-full"
@@ -133,7 +115,7 @@ export function WorkbookUploadWorkspace({
                 className="text-[15px] font-medium"
                 style={{ color: "var(--us-text)" }}
               >
-                גרור לכאן קובץ Excel
+                גרור לכאן קובץ Excel או PDF
               </span>
               <span
                 className="mt-1 text-[13px]"
@@ -146,7 +128,7 @@ export function WorkbookUploadWorkspace({
                 style={{ color: "var(--us-text-muted)" }}
                 dir="ltr"
               >
-                XLSX, XLS
+                XLSX, XLS, PDF
               </span>
             </button>
 

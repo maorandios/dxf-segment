@@ -73,7 +73,8 @@ console.log("=== Excel to Approved Material List v1 ===\n");
     "utf8"
   );
   assert(
-    upload.includes("הפקת רשימת חומר") ||
+    upload.includes("העלאת רשימת חומר") ||
+      upload.includes("הפקת רשימת חומר") ||
       upload.includes("PersonalizedGreeting") ||
       upload.includes("בוא נכין את רשימת החומר"),
     "upload heading"
@@ -86,9 +87,13 @@ console.log("=== Excel to Approved Material List v1 ===\n");
   assert(!workspace.includes("הוסף DXF"), "no DXF on stage 1 upload");
   assert(
     upload.includes("setWorkbook") || workspace.includes("onPickFiles"),
-    "excel only"
+    "material source upload wired"
   );
-  console.log("✓ First screen asks for Excel only; DXF not required");
+  assert(
+    workspace.includes(".pdf") || upload.includes(".pdf"),
+    "pdf accepted alongside excel"
+  );
+  console.log("✓ First screen accepts Excel/PDF; DXF not required");
 }
 
 {

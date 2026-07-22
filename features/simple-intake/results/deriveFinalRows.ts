@@ -274,15 +274,30 @@ export function deriveFinalRows(args: {
         sheetName: extracted.sheetName,
         sourceRow: extracted.sourceRow,
         sourceCell: extracted.sourceCell ?? "—",
-        sourceText: sourceTextForRow(
-          args.snapshot,
-          extracted.sheetName,
-          extracted.sourceRow
-        ),
+        sourceText: (() => {
+          const note = extracted.note ?? "";
+          const anchor = note.match(/PDF_ANCHOR:([^|]*)/)?.[1]?.trim();
+          if (anchor) return anchor;
+          return sourceTextForRow(
+            args.snapshot,
+            extracted.sheetName,
+            extracted.sourceRow
+          );
+        })(),
         sourceWidthMm,
         sourceLengthMm,
         sourceAreaM2: extracted.sourceAreaM2,
         sourceWeightKg: extracted.sourceWeightKg,
+        sourceType: /SOURCE_TYPE:PDF/.test(extracted.note ?? "")
+          ? "PDF"
+          : "EXCEL",
+        sourcePage: (() => {
+          const m = (extracted.note ?? "").match(/PDF_PAGE:(\d+)/);
+          return m ? Number(m[1]) : null;
+        })(),
+        sourceAnchorText:
+          (extracted.note ?? "").match(/PDF_ANCHOR:([^|]*)/)?.[1]?.trim() ??
+          null,
       },
       issueCodes,
       primaryMessage,

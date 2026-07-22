@@ -76,6 +76,16 @@ export {
 } from "./repairSchema";
 export { materialListToExtractedRows } from "./toExtractedRows";
 export { runOpenAiMaterialListExtraction } from "./openaiMaterialListExtract";
+export { runOpenAiPdfMaterialListExtraction } from "./openaiPdfMaterialListExtract";
+export {
+  validateMaterialSourceFile,
+  validateMaterialSourceBytes,
+  detectMaterialSourceTypeFromName,
+  MATERIAL_SOURCE_MIME_TYPES,
+  MATERIAL_SOURCE_MAX_BYTES,
+} from "./materialSourceTypes";
+export type { MaterialSourceType, PdfInputDetail } from "./materialSourceTypes";
+export { getSimpleIntakePdfDetail } from "./pdfConfig";
 export { MaterialListReviewScreen } from "./MaterialListReviewScreen";
 export { MaterialListQualityFailedScreen } from "./MaterialListQualityFailedScreen";
 export { DxfUploadStage } from "./DxfUploadStage";

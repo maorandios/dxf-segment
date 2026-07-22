@@ -1,7 +1,8 @@
 "use client";
 
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { detectMaterialSourceTypeFromName } from "../materialList/materialSourceTypes";
 import { formatFileSize } from "../ui/deriveWorkflowPresentation";
 
 export function SelectedWorkbookSummary({
@@ -19,13 +20,16 @@ export function SelectedWorkbookSummary({
   onCreate: () => void;
   loading: boolean;
 }) {
+  const sourceType = detectMaterialSourceTypeFromName(file.name) ?? "EXCEL";
+  const Icon = sourceType === "PDF" ? FileText : FileSpreadsheet;
+
   return (
     <div className="us-state-swap flex flex-col items-center px-2 text-center">
       <div
         className="mb-3 flex h-11 w-11 items-center justify-center rounded-full"
         style={{ backgroundColor: "var(--us-success-soft)" }}
       >
-        <FileSpreadsheet
+        <Icon
           className="h-5 w-5"
           style={{ color: "var(--us-success)" }}
           aria-hidden
@@ -44,9 +48,11 @@ export function SelectedWorkbookSummary({
         <span className="us-ltr inline-block" dir="ltr">
           {formatFileSize(file.size)}
         </span>
-        {sheetCount != null
+        {sourceType === "EXCEL" && sheetCount != null
           ? ` · ${sheetCount === 1 ? "גיליון אחד" : `${sheetCount} גיליונות`}`
-          : null}
+          : sourceType === "PDF"
+            ? " · PDF"
+            : null}
         <span className="mx-1.5" style={{ color: "var(--us-success)" }}>
           · הקובץ מוכן
         </span>
@@ -63,7 +69,7 @@ export function SelectedWorkbookSummary({
 
       <Button
         type="button"
-        className="mt-4 min-w-[11rem]"
+        className="mt-4 min-w-[11rem] rounded-2xl"
         disabled={loading}
         onClick={onCreate}
         style={{

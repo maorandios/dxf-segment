@@ -214,20 +214,45 @@ export function SimpleItemDetailsDrawer({
 
           <section>
             <h3 className="mb-2 font-medium">מקור</h3>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-              <dt className="text-muted-foreground">קובץ</dt>
-              <dd className="break-all">{row.source.workbookFilename}</dd>
-              <dt className="text-muted-foreground">גיליון</dt>
-              <dd>{row.source.sheetName}</dd>
-              <dt className="text-muted-foreground">שורה</dt>
-              <dd>{row.source.sourceRow}</dd>
-              <dt className="text-muted-foreground">תא</dt>
-              <dd>{row.source.sourceCell}</dd>
-            </dl>
-            {row.source.sourceText && (
-              <p className="mt-2 rounded-md bg-muted/40 p-2 text-xs leading-relaxed">
-                {row.source.sourceText}
-              </p>
+            {row.source.sourceType === "PDF" ? (
+              <div className="space-y-2 text-[13px]">
+                <p>
+                  מקור:{" "}
+                  <span className="us-ltr inline-block" dir="ltr">
+                    {row.source.workbookFilename}
+                  </span>
+                  {row.source.sourcePage != null
+                    ? ` · עמוד ${row.source.sourcePage}`
+                    : null}
+                </p>
+                {row.source.sourceAnchorText || row.source.sourceText ? (
+                  <p className="rounded-md bg-muted/40 p-2 text-xs leading-relaxed">
+                    {row.source.sourceAnchorText || row.source.sourceText}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                  <dt className="text-muted-foreground">קובץ</dt>
+                  <dd className="break-all">
+                    <span className="us-ltr inline-block" dir="ltr">
+                      {row.source.workbookFilename}
+                    </span>
+                  </dd>
+                  <dt className="text-muted-foreground">גיליון</dt>
+                  <dd>{row.source.sheetName}</dd>
+                  <dt className="text-muted-foreground">שורה</dt>
+                  <dd>{row.source.sourceRow}</dd>
+                  <dt className="text-muted-foreground">תא</dt>
+                  <dd>{row.source.sourceCell}</dd>
+                </dl>
+                {row.source.sourceText && (
+                  <p className="mt-2 rounded-md bg-muted/40 p-2 text-xs leading-relaxed">
+                    {row.source.sourceText}
+                  </p>
+                )}
+              </>
             )}
           </section>
         </div>

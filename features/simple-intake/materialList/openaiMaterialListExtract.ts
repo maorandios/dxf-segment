@@ -141,7 +141,9 @@ export async function runOpenAiMaterialListExtraction(args: {
 
   const tVal = Date.now();
   const validated = aiMaterialListResultSchema.parse(parsed);
-  const adapted = adaptMaterialListRows(validated);
+  const adapted = adaptMaterialListRows(validated, {
+    sourceFileName: args.snapshot.filename,
+  });
   let validationMs = Date.now() - tVal;
 
   if (adapted.rows.length === 0) {

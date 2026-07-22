@@ -80,7 +80,10 @@ function extractEntities(result: unknown): unknown[] {
   return [];
 }
 
-export function adaptMaterialListRows(result: unknown): {
+export function adaptMaterialListRows(
+  result: unknown,
+  options?: { sourceFileName?: string | null }
+): {
   rows: MaterialListRow[];
   diagnostics: MaterialListAdaptDiagnostics;
 } {
@@ -176,9 +179,13 @@ export function adaptMaterialListRows(result: unknown): {
     const rowId = `${normalizeSheetKey(r.sheetName!)}-${r.sourceRow!}`;
     const base: MaterialListRow = {
       rowId,
+      sourceType: "EXCEL",
+      sourceFileName: options?.sourceFileName ?? null,
       sheetName: r.sheetName,
       sourceRow: r.sourceRow,
       sourceCell: r.sourceCell,
+      sourcePage: null,
+      sourceAnchorText: null,
       partId: r.partId,
       profile: r.profile,
       description: r.description,
