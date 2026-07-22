@@ -73,11 +73,10 @@ console.log("=== Excel to Approved Material List v1 ===\n");
     "utf8"
   );
   assert(
-    upload.includes("העלאת רשימת חומר") ||
-      upload.includes("הפקת רשימת חומר") ||
-      upload.includes("PersonalizedGreeting") ||
-      upload.includes("בוא נכין את רשימת החומר"),
-    "upload heading"
+    workspace.includes("העלאת קובץ רשימת חומר") ||
+      workspace.includes("בחר קובץ") ||
+      upload.includes("WorkbookUploadWorkspace"),
+    "upload screen present"
   );
   assert(
     workspace.includes("צור רשימת חומר") ||

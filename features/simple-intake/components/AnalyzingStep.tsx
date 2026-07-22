@@ -20,7 +20,7 @@ export function AnalyzingStep() {
     const tick = () => {
       setElapsedSec(Math.max(0, Math.floor((Date.now() - startedMs) / 1000)));
     };
-    const intervalId = window.setInterval(tick, 1000);
+    const intervalId = window.setInterval(tick, 250);
     const timeoutId = window.setTimeout(tick, 0);
     return () => {
       window.clearInterval(intervalId);
@@ -75,14 +75,9 @@ export function AnalyzingStep() {
   ]);
 
   return (
-    <div className="flex min-h-[calc(100vh-11rem)] items-center justify-center py-8">
+    <div className="flex min-h-[calc(100vh-11rem)] items-center justify-center py-10">
       <AgentActivityPanel
-        title={isDxf ? "מחברים את קובצי ה-DXF" : "מכינים את רשימת החומר"}
-        supportingText={
-          isDxf
-            ? "OMEGA קוראת את הקבצים, מחברת גאומטריה לפריטים ומכינה את נתוני התמחור."
-            : "OMEGA קוראת את הקובץ, מזהה את הפריטים ובודקת שהנתונים מוכנים להמשך."
-        }
+        title={isDxf ? "מחברים את קובצי ה-DXF" : "הפקת רשימת חומר מותאמת"}
         steps={steps}
       />
     </div>

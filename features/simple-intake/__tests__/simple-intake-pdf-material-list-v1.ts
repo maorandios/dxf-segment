@@ -339,15 +339,22 @@ console.log("=== Excel and PDF Material List Intake v1 ===\n");
     path.join(root, "workbookUpload/WorkbookUploadWorkspace.tsx"),
     "utf8"
   );
-  assert(upload.includes("העלאת רשימת חומר"), "heading");
+  assert(
+    workspace.includes("העלאת קובץ רשימת חומר") ||
+      workspace.includes("EXCEL"),
+    "upload copy"
+  );
   assert(upload.includes(".pdf"), "accept pdf");
-  assert(workspace.includes("Excel או PDF"), "dropzone");
-  assert(workspace.includes("XLSX, XLS, PDF"), "formats");
+  assert(workspace.includes("בחר קובץ"), "pick file cta");
+  assert(
+    workspace.includes("PDF") && workspace.includes("EXCEL"),
+    "formats mentioned"
+  );
   const summary = fs.readFileSync(
     path.join(root, "workbookUpload/SelectedWorkbookSummary.tsx"),
     "utf8"
   );
-  assert(summary.includes("FileText") || summary.includes("PDF"), "pdf icon");
+  assert(summary.includes("PDF") || summary.includes("XLS"), "source badge");
   assert(summary.includes("צור רשימת חומר"), "create cta");
   const drawer = fs.readFileSync(
     path.join(root, "results/SimpleItemDetailsDrawer.tsx"),

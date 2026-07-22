@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { MaterialSourceUploadArt } from "./MaterialSourceUploadArt";
 import { SelectedWorkbookSummary } from "./SelectedWorkbookSummary";
 
 const ACCEPT =
@@ -15,7 +15,6 @@ export function WorkbookUploadWorkspace({
   loading,
   notice,
   onPickFiles,
-  onReplaceClick,
   onRemove,
   onCreate,
 }: {
@@ -24,7 +23,6 @@ export function WorkbookUploadWorkspace({
   loading: boolean;
   notice: string | null;
   onPickFiles: (files: File[]) => void;
-  onReplaceClick: () => void;
   onRemove: () => void;
   onCreate: () => void;
 }) {
@@ -46,14 +44,14 @@ export function WorkbookUploadWorkspace({
   return (
     <div
       className="us-enter-delay-2 mx-auto flex w-full flex-col items-center"
-      style={{ width: "min(900px, 100%)" }}
+      style={{ width: "min(1100px, 100%)" }}
     >
       <div
         className={cn(
-          "us-workspace-card flex w-full flex-col items-center justify-center px-8 py-10 text-center sm:px-12 sm:py-12",
-          dragging && "border-[color:var(--us-accent)]"
+          "flex w-full flex-col items-center justify-center px-6 py-6 text-center",
+          dragging && "opacity-95"
         )}
-        style={{ minHeight: 420 }}
+        style={{ minHeight: 520 }}
         onDragEnter={(e) => {
           e.preventDefault();
           if (!file && !loading) setDragging(true);
@@ -83,62 +81,54 @@ export function WorkbookUploadWorkspace({
         />
 
         {!file ? (
-          <div className="us-state-swap flex flex-col items-center">
+          <div className="us-state-swap flex w-full flex-col items-center">
             <button
               type="button"
-              className="us-upload-zone group flex w-full flex-col items-center rounded-[20px] border border-dashed px-6 py-7 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{
-                width: "min(460px, 100%)",
-                minHeight: 170,
-                borderColor: dragging
-                  ? "var(--us-accent)"
-                  : "var(--us-border-strong)",
-                backgroundColor: dragging
-                  ? "var(--us-accent-soft)"
-                  : "var(--us-surface-soft)",
-              }}
+              className="group flex w-full max-w-[560px] flex-col items-center border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--ow-accent)]"
               disabled={loading}
               onClick={openPicker}
               aria-label="בחר קובץ Excel או PDF מהמחשב"
             >
-              <span
-                className="mb-3.5 flex h-12 w-12 items-center justify-center rounded-full"
-                style={{ backgroundColor: "var(--us-accent-soft)" }}
-              >
-                <Upload
-                  className="h-5 w-5"
-                  style={{ color: "var(--us-accent)" }}
-                  aria-hidden
-                />
-              </span>
-              <span
-                className="text-[15px] font-medium"
-                style={{ color: "var(--us-text)" }}
-              >
-                גרור לכאן קובץ Excel או PDF
-              </span>
-              <span
-                className="mt-1 text-[13px]"
-                style={{ color: "var(--us-text-muted)" }}
-              >
-                או בחר קובץ מהמחשב
-              </span>
-              <span
-                className="us-ltr mt-3 text-[12px]"
-                style={{ color: "var(--us-text-muted)" }}
-                dir="ltr"
-              >
-                XLSX, XLS, PDF
-              </span>
+              <MaterialSourceUploadArt active={dragging} />
             </button>
+
+            <p
+              className="mx-auto mt-10 whitespace-nowrap text-center text-[22px] font-medium leading-none sm:text-[24px]"
+              style={{ color: "var(--ow-text-muted, #667085)" }}
+            >
+              העלאת קובץ רשימת חומר, ניתן לצרף קבצים בפורמט{" "}
+              <span className="us-ltr" dir="ltr">
+                EXCEL
+              </span>{" "}
+              ו{" "}
+              <span className="us-ltr" dir="ltr">
+                PDF
+              </span>
+            </p>
+
+            <p
+              className="mx-auto mt-3 max-w-[42rem] text-center text-[14px] leading-relaxed sm:text-[15px]"
+              style={{ color: "var(--ow-text-muted, #667085)" }}
+            >
+              צרפו את רשימת החומר לתמחור שקיבלתם מהלקוח, ניתן לצרף קובץ אחד
+              בפורמט{" "}
+              <span className="us-ltr" dir="ltr">
+                PDF
+              </span>{" "}
+              או{" "}
+              <span className="us-ltr" dir="ltr">
+                EXCEL
+              </span>
+              .
+            </p>
 
             <Button
               type="button"
-              className="mt-5 h-11 min-w-[12rem] rounded-2xl text-[14px] font-medium shadow-none hover:opacity-95"
+              className="mt-8 h-12 min-w-[11.5rem] rounded-2xl px-8 text-[15px] font-medium shadow-none transition-opacity hover:opacity-95"
               disabled={loading}
               onClick={openPicker}
               style={{
-                backgroundColor: "var(--ow-accent, var(--us-accent, #0f766e))",
+                backgroundColor: "var(--ow-accent, #0f766e)",
                 color: "#ffffff",
               }}
             >
@@ -149,7 +139,6 @@ export function WorkbookUploadWorkspace({
           <SelectedWorkbookSummary
             file={file}
             sheetCount={sheetCount}
-            onReplace={onReplaceClick}
             onRemove={onRemove}
             onCreate={onCreate}
             loading={loading}
@@ -158,7 +147,7 @@ export function WorkbookUploadWorkspace({
 
         {notice && (
           <p
-            className="mt-4 text-center text-[13px]"
+            className="mt-5 text-center text-[13px]"
             style={{ color: "var(--us-error)" }}
             role="status"
           >

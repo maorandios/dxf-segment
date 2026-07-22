@@ -43,6 +43,7 @@ import type {
   SnapshotSheetCoverage,
 } from "./types";
 import { validateSimpleAiResult } from "./validateAiResult";
+import { workbookActivityMinDurationMs } from "./ui/deriveWorkflowPresentation";
 
 type Listener = () => void;
 
@@ -1268,6 +1269,13 @@ export const simpleIntakeActions = {
             ? "MATERIAL_LIST_EXTRACTION_PLUS_REPAIR"
             : "MATERIAL_LIST_EXTRACTION",
       };
+
+      // Keep ANALYZING visible long enough for each timeline phase (≥2s).
+      const minMs = workbookActivityMinDurationMs(5);
+      const remaining = minMs - (Date.now() - t0);
+      if (remaining > 0) {
+        await new Promise((r) => setTimeout(r, remaining));
+      }
 
       setSession({
         ...getSimpleIntakeSession(),

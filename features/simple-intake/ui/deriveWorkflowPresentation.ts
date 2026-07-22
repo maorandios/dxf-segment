@@ -150,6 +150,9 @@ export type ActivityStepModel = {
   status: ActivityStepStatus;
 };
 
+/** Minimum visible duration per analysis timeline phase (ms). */
+export const ACTIVITY_PHASE_MIN_MS = 2000;
+
 export function buildWorkbookActivitySteps(args: {
   analyzingLabel: string | null;
   elapsedSec: number;
@@ -159,34 +162,6 @@ export function buildWorkbookActivitySteps(args: {
   pdfPageCount?: number | null;
 }): ActivityStepModel[] {
   const isPdf = args.sourceType === "PDF";
-  const label = (args.analyzingLabel ?? "").toLowerCase();
-  const reading =
-    label.includes("קורא") ||
-    label.includes("קובץ האקסל") ||
-    label.includes("מסמך ה-pdf") ||
-    label.includes("pdf") ||
-    args.elapsedSec < 2;
-  const scanning =
-    isPdf &&
-    (label.includes("סורק") || label.includes("עמוד") || args.elapsedSec >= 2);
-  const organizing =
-    label.includes("מארגנ") ||
-    label.includes("טבלה") ||
-    label.includes("מכינים") ||
-    (!reading && !scanning && args.elapsedSec >= 4);
-
-  let activeIndex = 0;
-  if (isPdf) {
-    if (organizing) activeIndex = 4;
-    else if (args.elapsedSec >= 12) activeIndex = 3;
-    else if (args.elapsedSec >= 8) activeIndex = 2;
-    else if (scanning || args.elapsedSec >= 3) activeIndex = 1;
-    else activeIndex = 0;
-  } else if (organizing && !reading) activeIndex = 4;
-  else if (args.elapsedSec >= 12) activeIndex = 3;
-  else if (args.elapsedSec >= 8) activeIndex = 2;
-  else if (args.elapsedSec >= 4) activeIndex = 1;
-  else activeIndex = 0;
 
   const sheetHint =
     args.sheetCount != null && args.populatedRows != null
@@ -254,6 +229,14 @@ export function buildWorkbookActivitySteps(args: {
         },
       ];
 
+  // Pace strictly by elapsed time — at least 2s per phase so fast AI calls
+  // still show a readable animated progression.
+  const phaseSec = ACTIVITY_PHASE_MIN_MS / 1000;
+  const activeIndex = Math.min(
+    Math.floor(args.elapsedSec / phaseSec),
+    defs.length - 1
+  );
+
   return defs.map((d, i) => ({
     ...d,
     status:
@@ -262,11 +245,12 @@ export function buildWorkbookActivitySteps(args: {
         : i === activeIndex
           ? ("ACTIVE" as const)
           : ("PENDING" as const),
-    detail:
-      i < activeIndex || i === activeIndex
-        ? d.detail
-        : null,
+    detail: i < activeIndex || i === activeIndex ? d.detail : null,
   }));
+}
+
+export function workbookActivityMinDurationMs(phaseCount = 5): number {
+  return phaseCount * ACTIVITY_PHASE_MIN_MS;
 }
 
 export function buildDxfActivitySteps(args: {
@@ -277,26 +261,14 @@ export function buildDxfActivitySteps(args: {
   suggested?: number | null;
   checking?: number | null;
 }): ActivityStepModel[] {
-  const label = (args.analyzingLabel ?? "").toLowerCase();
-  const matching =
-    label.includes("מתאים") || label.includes("התאם") || args.elapsedSec >= 3;
-
-  let activeIndex = matching ? 2 : 0;
-  if (args.elapsedSec >= 10) activeIndex = 4;
-  else if (args.elapsedSec >= 7) activeIndex = 3;
-  else if (args.elapsedSec >= 4) activeIndex = 2;
-  else if (args.elapsedSec >= 2) activeIndex = 1;
-
-  const readDetail =
-    args.dxfFileCount > 0
-      ? `${args.dxfFileCount.toLocaleString("he-IL")} מתוך ${args.dxfFileCount.toLocaleString("he-IL")} קבצים נקראו בהצלחה`
-      : "קוראים את קובצי ה-DXF";
-
   const defs = [
     {
       id: "read",
       label: "קוראים את קובצי ה-DXF",
-      detail: readDetail,
+      detail:
+        args.dxfFileCount > 0
+          ? `${args.dxfFileCount.toLocaleString("he-IL")} מתוך ${args.dxfFileCount.toLocaleString("he-IL")} קבצים נקראו בהצלחה`
+          : "קוראים את קובצי ה-DXF",
     },
     {
       id: "geometry",
@@ -319,6 +291,12 @@ export function buildDxfActivitySteps(args: {
       detail: "מכינים את נתוני התמחור",
     },
   ];
+
+  const phaseSec = ACTIVITY_PHASE_MIN_MS / 1000;
+  const activeIndex = Math.min(
+    Math.floor(args.elapsedSec / phaseSec),
+    defs.length - 1
+  );
 
   return defs.map((d, i) => ({
     ...d,

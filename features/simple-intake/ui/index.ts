@@ -5,6 +5,8 @@ export {
   deriveHeaderStatus,
   buildWorkbookActivitySteps,
   buildDxfActivitySteps,
+  workbookActivityMinDurationMs,
+  ACTIVITY_PHASE_MIN_MS,
   formatFileSize,
   STEPPER_LABELS,
 } from "./deriveWorkflowPresentation";

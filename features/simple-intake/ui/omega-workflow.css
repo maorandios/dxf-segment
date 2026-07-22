@@ -120,6 +120,51 @@
   animation: ow-pulse-dot 1.4s ease-in-out infinite;
 }
 
+@keyframes ow-step-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.omega-workflow .ow-step-check {
+  animation: ow-step-check-in 280ms ease-out both;
+}
+
+@keyframes ow-activity-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.omega-workflow .ow-activity-detail {
+  animation: ow-activity-detail-in 260ms ease-out both;
+}
+
+@keyframes ow-progress-indeterminate {
+  0% {
+    transform: translateX(110%);
+  }
+  100% {
+    transform: translateX(-220%);
+  }
+}
+
+.omega-workflow .ow-progress-indeterminate {
+  width: 42%;
+  transform-origin: right center;
+  animation: ow-progress-indeterminate 1.35s ease-in-out infinite;
+}
+
 /* Progress line */
 @keyframes ow-progress-line {
   from {
