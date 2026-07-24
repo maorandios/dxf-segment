@@ -4,6 +4,7 @@
 
 import { parseDxfFile } from "@/lib/parsers/dxfParser";
 import { fingerprintFile, partIdFromDxfFilename } from "./normalizePartId";
+import { normalizeDxfFileKey } from "./normalizeDxfFileKey";
 import type { SimpleDxfPart } from "./types";
 
 function newId(): string {
@@ -24,23 +25,24 @@ export async function parseSimpleDxfFiles(
 ): Promise<{ parts: SimpleDxfPart[]; warnings: string[] }> {
   const parts: SimpleDxfPart[] = [];
   const warnings: string[] = [];
-  const seenFingerprints = new Map<string, string>();
+  const seenContentHashes = new Map<string, string>();
   const seenPartIds = new Map<string, string>();
 
   for (const file of files) {
     const id = newId();
     const partId = partIdFromDxfFilename(file.name);
-    let fingerprint: string | null = null;
+    const normalizedFilenameKey = normalizeDxfFileKey(file.name);
+    let contentHash: string | null = null;
     try {
-      fingerprint = await fingerprintFile(file);
-      const prevFp = seenFingerprints.get(fingerprint);
+      contentHash = await fingerprintFile(file);
+      const prevFp = seenContentHashes.get(contentHash);
       if (prevFp) {
         warnings.push(`DUPLICATE_FILE:${file.name}~${prevFp}`);
       } else {
-        seenFingerprints.set(fingerprint, file.name);
+        seenContentHashes.set(contentHash, file.name);
       }
     } catch {
-      fingerprint = null;
+      contentHash = null;
     }
 
     const normId = partId.trim().toUpperCase();
@@ -78,7 +80,9 @@ export async function parseSimpleDxfFiles(
         error: valid
           ? null
           : parsed.warnings.join("; ") || "INVALID_GEOMETRY",
-        fingerprint,
+        fingerprint: contentHash,
+        contentHash,
+        normalizedFilenameKey,
       });
       if (parsed.warnings.length > 0 && !valid) {
         warnings.push(`DXF_WARN:${file.name}:${parsed.warnings[0]}`);
@@ -93,7 +97,9 @@ export async function parseSimpleDxfFiles(
         areaMm2: null,
         geometryStatus: "INVALID",
         error: err instanceof Error ? err.message : String(err),
-        fingerprint,
+        fingerprint: contentHash,
+        contentHash,
+        normalizedFilenameKey,
       });
       warnings.push(`DXF_READ_FAILED:${file.name}`);
     }

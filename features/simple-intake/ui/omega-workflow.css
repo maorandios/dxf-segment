@@ -66,6 +66,15 @@
   --success: 142 72% 29%;
   --warning: 32 95% 37%;
 
+  /* Field fill used by Input / Textarea / Select (overrides global dark #0c1318) */
+  --color-input: #ffffff;
+  --color-border: #e4e7ec;
+  --color-foreground: #101828;
+  --color-muted-foreground: #667085;
+  --color-ring: #0f766e;
+  --color-ring-offset-background: #f7f8fa;
+  --color-background: #f7f8fa;
+
   color-scheme: light;
   direction: rtl;
   background-color: var(--ow-bg);
@@ -76,6 +85,21 @@
 
 .omega-workflow * {
   border-color: var(--ow-border);
+}
+
+/* Force light field surfaces even when primitives still carry dark utilities. */
+.omega-workflow input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.omega-workflow textarea,
+.omega-workflow select,
+.omega-workflow button[role="combobox"] {
+  background-color: var(--ow-surface) !important;
+  color: var(--ow-text) !important;
+  border-color: var(--ow-border) !important;
+}
+
+.omega-workflow input::placeholder,
+.omega-workflow textarea::placeholder {
+  color: var(--ow-text-muted) !important;
 }
 
 .omega-workflow .ow-ltr {

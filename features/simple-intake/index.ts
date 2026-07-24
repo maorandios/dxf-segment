@@ -18,6 +18,58 @@ export {
 } from "./matchWithFilenamePriority";
 export { normalizeDxfFileKey, hasExplicitDxfFileName } from "./normalizeDxfFileKey";
 export {
+  getExplicitDxfFileName,
+  getEffectiveSourceDxfFileName,
+  rowHasExplicitDxfFileName,
+  computeExplicitDxfFilenameCoverage,
+  buildDxfFilenameCoverageDiagnostics,
+  buildDxfFilenameMappingDiagnostics,
+  pickRawExplicitDxfFileName,
+} from "./getExplicitDxfFileName";
+export {
+  buildUnifiedIntakeSummary,
+  buildUnifiedIntakeSourceNotices,
+  getEffectiveSourceDxfFileNameWithSnapshot,
+  getEffectiveExplicitDxfFileName,
+  buildSummaryDiagnosticsV2,
+  buildFilenameProvenanceSample,
+  resolveLinkedItemExplicitFilename,
+  computeSourceFilenameCoverage,
+} from "./buildUnifiedIntakeSummary";
+export type { UnifiedIntakeSummary } from "./buildUnifiedIntakeSummary";
+export {
+  buildInitialIntakeSummary,
+  buildInitialIntakeNotices,
+  filterInitialIntakeNotices,
+  buildFilenameFlowDiagnostics,
+  buildFilenameFlowSample,
+} from "./buildInitialIntakeSummary";
+export type {
+  InitialIntakeSummary,
+  InitialIntakeNotice,
+  FilenameFlowDiagnostics,
+} from "./buildInitialIntakeSummary";
+export {
+  buildIntakeAnalysisSummary,
+  buildAttentionSupportingText,
+} from "./buildIntakeAnalysisSummary";
+export type {
+  IntakeAnalysisSummary,
+  IntakeDuplicateGroup,
+} from "./buildIntakeAnalysisSummary";
+export {
+  buildPreUnifiedReviewSummary,
+  buildPreUnifiedReviewSummaryFromCanonical,
+  buildPreUnifiedReviewSummaryFromUnifiedItems,
+  buildPreUnifiedSourceNotices,
+} from "./buildPreUnifiedReviewSummary";
+export type {
+  ExplicitDxfFilenameCoverage,
+  ExplicitDxfFilenameCoverageSummary,
+} from "./getExplicitDxfFileName";
+export type { PreUnifiedReviewSummary } from "./buildPreUnifiedReviewSummary";
+export { calculateFileSha256 } from "./calculateFileSha256";
+export {
   buildSimpleWorkbookSnapshot,
   assertSnapshotCoverageComplete,
 } from "./buildSimpleWorkbookSnapshot";

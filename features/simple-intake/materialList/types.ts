@@ -52,6 +52,8 @@ export type MaterialListUserOverrides = {
   quantity?: number | null;
   widthMm?: number | null;
   lengthMm?: number | null;
+  /** Explicit DXF filename override — takes precedence over extracted dxfFileName. */
+  dxfFileName?: string | null;
 };
 
 export type MaterialListFieldResolutions = Partial<

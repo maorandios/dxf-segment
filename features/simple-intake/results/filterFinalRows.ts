@@ -4,6 +4,19 @@
 
 import type { FinalFilterId, FinalIntakeRow, FinalSortId } from "./types";
 
+const MISSING_DXF_CODES = new Set([
+  "NO_DXF_FOUND",
+  "EXPLICIT_DXF_FILE_MISSING",
+  "DXF_ASSIGNED_TO_BETTER_ROW",
+]);
+
+const DUPLICATE_DXF_CODES = new Set([
+  "MULTIPLE_DXF_CANDIDATES",
+  "DUPLICATE_DXF_USAGE",
+]);
+
+const CONFLICT_CODES = new Set(["PART_ID_DIMENSION_MISMATCH"]);
+
 export function filterFinalRows(
   rows: FinalIntakeRow[],
   filter: FinalFilterId
@@ -23,6 +36,20 @@ export function filterFinalRows(
       return rows.filter((r) => r.status === "BLOCKED");
     case "EXCLUDED":
       return rows.filter((r) => r.status === "EXCLUDED");
+    case "MISSING_DXF":
+      return rows.filter((r) =>
+        r.issueCodes.some((c) => MISSING_DXF_CODES.has(c))
+      );
+    case "DUPLICATE_DXF":
+      return rows.filter(
+        (r) =>
+          r.issueCodes.some((c) => DUPLICATE_DXF_CODES.has(c)) ||
+          r.match.status === "AMBIGUOUS"
+      );
+    case "CONFLICTING_DATA":
+      return rows.filter((r) =>
+        r.issueCodes.some((c) => CONFLICT_CODES.has(c))
+      );
     default:
       return rows;
   }

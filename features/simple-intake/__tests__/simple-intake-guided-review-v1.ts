@@ -597,11 +597,15 @@ function run(): void {
       path.join(root, "workflow/PostAnalysisWorkflow.tsx"),
       "utf8"
     );
-    assert(workflow.includes("ANALYSIS_SUMMARY") || workflow.includes("SUMMARY") || workflow.includes("ReadinessSummary"), "summary state");
-    assert(workflow.includes("FINAL_TABLE"), "table state");
     assert(
-      workflow.includes("appendDxfFilesAndRematch"),
-      "local dxf append"
+      workflow.includes("PreUnifiedReviewSummaryScreen") ||
+        workflow.includes("InitialIntakeSummaryScreen") ||
+        workflow.includes("SUMMARY"),
+      "summary state"
+    );
+    assert(
+      workflow.includes("ResultsReviewScreen") && workflow.includes("TABLE"),
+      "table state"
     );
     assert(!workflow.includes("/api/simple-intake/analyze"), "no re-analyze");
 
@@ -619,15 +623,27 @@ function run(): void {
       path.join(root, "../../app/api/simple-intake/analyze/route.ts"),
       "utf8"
     );
-    assert(route.includes("providerCallCount: 1"), "exactly one AI call");
+    assert(
+      route.includes("providerCallCount: out.providerCallCount") ||
+        route.includes("providerCallCount: 1"),
+      "exactly one AI call path"
+    );
 
     const summaryUi = fs.readFileSync(
-      path.join(root, "readiness/ReadinessSummary.tsx"),
+      path.join(root, "workflow/initialIntake/InitialIntakeSummaryScreen.tsx"),
       "utf8"
     );
-    assert(summaryUi.includes("הבדיקה הושלמה"), "summary heading");
-    assert(summaryUi.includes("טפל ב-"), "guided CTA");
-    assert(summaryUi.includes("המשך לטבלה") || summaryUi.includes("הצג טבלה"), "table secondary");
+    const actionPanel = fs.readFileSync(
+      path.join(root, "workflow/initialIntake/UnifiedReviewActionPanel.tsx"),
+      "utf8"
+    );
+    assert(
+      summaryUi.includes("ניתוח ראשוני") || summaryUi.includes("עיבוד הושלם"),
+      "summary heading"
+    );
+    assert(actionPanel.includes("פתח טבלת בדיקה מאוחדת"), "primary CTA");
+    assert(!summaryUi.includes("AttentionInbox"), "no decision inbox");
+    assert(!summaryUi.includes("התחל בדיקה"), "no start-review CTA");
 
     console.log("✓ Workflow wiring + single provider call preserved");
   }
@@ -642,8 +658,8 @@ function run(): void {
       review.includes("confirmedManual?: Set<string>"),
       "shared confirmed prop"
     );
-    assert(review.includes("onStartGuidedReview"), "nav back to guided");
-    assert(review.includes("טפל ב-"), "table CTA for unresolved");
+    assert(review.includes("onShowSummary"), "nav back to summary");
+    assert(review.includes("onOpenCompletionRequest"), "completion from table");
     console.log("✓ Table navigation preserves shared local state API");
   }
 

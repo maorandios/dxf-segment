@@ -2,6 +2,7 @@
  * Adapt PDF AI material-list output into canonical MaterialListRow[].
  */
 
+import { pickRawExplicitDxfFileName } from "../getExplicitDxfFileName";
 import { deriveApprovalStatus } from "./completeness";
 import { buildPdfRowId } from "./materialSourceTypes";
 import { isFieldUsable } from "./qualityGate";
@@ -81,7 +82,7 @@ export function adaptPdfMaterialListRows(args: {
       quantity: asFiniteNumber(candidate.quantity),
       widthMm: asFiniteNumber(candidate.widthMm),
       lengthMm: asFiniteNumber(candidate.lengthMm),
-      dxfFileName: trimStr(candidate.dxfFileName),
+      dxfFileName: pickRawExplicitDxfFileName(candidate),
     };
     const checked = aiPdfMaterialListRowSchema.safeParse(shaped);
     if (!checked.success) {

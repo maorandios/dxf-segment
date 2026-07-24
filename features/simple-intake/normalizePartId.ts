@@ -2,6 +2,8 @@
  * Minimal part-ID / filename normalization for Simple Intake matching.
  */
 
+import { calculateFileSha256 } from "./calculateFileSha256";
+
 export function normalizePartIdForMatch(raw: string | null | undefined): string {
   if (raw == null) return "";
   return String(raw)
@@ -17,14 +19,7 @@ export function partIdFromDxfFilename(filename: string): string {
   return filename.replace(/\.dxf$/i, "").trim();
 }
 
+/** SHA-256 of file bytes — used as contentHash for exact duplicate detection. */
 export async function fingerprintFile(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  // FNV-1a 32-bit — enough for duplicate detection in-session
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < bytes.length; i++) {
-    hash ^= bytes[i]!;
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `fnv1a:${(hash >>> 0).toString(16)}:${file.size}`;
+  return calculateFileSha256(file);
 }

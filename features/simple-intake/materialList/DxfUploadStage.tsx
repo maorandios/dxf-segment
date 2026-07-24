@@ -22,7 +22,9 @@ export function DxfUploadStage() {
   const [notices, setNotices] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const canMatch = session.dxfFiles.length > 0 && !busy;
+  const canContinue = session.dxfFiles.length > 0 && !busy;
+  const hasMaterialRows = session.materialListRows.length > 0;
+  const isDxfFirst = !hasMaterialRows;
 
   const acceptFiles = (list: File[]) => {
     const nextNotices: string[] = [];
@@ -66,10 +68,14 @@ export function DxfUploadStage() {
           className="mb-3 text-[13px]"
           style={{ color: "var(--ow-text-muted)" }}
         >
-          {session.materialListRows.length.toLocaleString("he-IL")} פריטים
-          מאושרים
+          {hasMaterialRows
+            ? `${session.materialListRows.length.toLocaleString("he-IL")} פריטים מאושרים`
+            : null}
           {session.dxfFiles.length > 0
-            ? ` · ${session.dxfFiles.length.toLocaleString("he-IL")} קבצים נבחרו`
+            ? `${hasMaterialRows ? " · " : ""}${session.dxfFiles.length.toLocaleString("he-IL")} קבצים נבחרו`
+            : null}
+          {session.dxfParts.length > 0
+            ? ` · ${session.dxfParts.filter((p) => p.geometryStatus === "VALID").length.toLocaleString("he-IL")} תקינים`
             : null}
         </p>
 
@@ -176,23 +182,37 @@ export function DxfUploadStage() {
       <StickyActionBar
         statusText={
           session.dxfFiles.length > 0
-            ? `${session.dxfFiles.length.toLocaleString("he-IL")} קבצים מוכנים להתאמה`
+            ? isDxfFirst
+              ? `${session.dxfFiles.length.toLocaleString("he-IL")} קבצים מוכנים`
+              : `${session.dxfFiles.length.toLocaleString("he-IL")} קבצים מוכנים להתאמה`
             : "העלה לפחות קובץ DXF אחד"
         }
-        secondary={{
-          label: "חזרה",
-          onClick: () => simpleIntakeActions.backToMaterialList(),
-          disabled: busy,
-        }}
+        secondary={
+          hasMaterialRows
+            ? {
+                label: "חזרה",
+                onClick: () => simpleIntakeActions.backToMaterialList(),
+                disabled: busy,
+              }
+            : undefined
+        }
         primary={{
-          label: busy ? "מחבר קבצים..." : "נתח והתאם קבצים",
-          disabled: !canMatch,
+          label: busy
+            ? isDxfFirst
+              ? "קורא קבצים..."
+              : "מחבר קבצים..."
+            : isDxfFirst
+              ? "הבא"
+              : "נתח והתאם קבצים",
+          disabled: !canContinue,
           loading: busy,
           onClick: () => {
             setBusy(true);
-            void simpleIntakeActions
-              .runDxfStageFromApprovedList()
-              .finally(() => setBusy(false));
+            void (
+              isDxfFirst
+                ? simpleIntakeActions.completeDxfIntake()
+                : simpleIntakeActions.runDxfStageFromApprovedList()
+            ).finally(() => setBusy(false));
           },
         }}
       />

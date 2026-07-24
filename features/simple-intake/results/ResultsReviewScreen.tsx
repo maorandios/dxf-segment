@@ -52,21 +52,31 @@ const FILTER_CHIPS: Array<{ id: FinalFilterId; label: string }> = [
   { id: "EXCLUDED", label: "מוחרג" },
 ];
 
+const SPECIAL_FILTER_CHIPS: Partial<Record<FinalFilterId, string>> = {
+  MISSING_DXF: "DXF חסר",
+  DUPLICATE_DXF: "כפילות DXF",
+  CONFLICTING_DATA: "נתונים סותרים",
+};
+
 export function ResultsReviewScreen({
   confirmedManual: confirmedManualProp,
   onConfirmedManualChange,
   unresolvedCount,
   onStartGuidedReview,
   onShowSummary,
+  onOpenCompletionRequest,
+  initialFilter = "ALL",
 }: {
   confirmedManual?: Set<string>;
   onConfirmedManualChange?: (next: Set<string>) => void;
   unresolvedCount?: number;
   onStartGuidedReview?: () => void;
   onShowSummary?: () => void;
+  onOpenCompletionRequest?: () => void;
+  initialFilter?: FinalFilterId;
 } = {}) {
   const session = useSimpleIntakeSession();
-  const [filter, setFilter] = useState<FinalFilterId>("ALL");
+  const [filter, setFilter] = useState<FinalFilterId>(initialFilter);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<FinalSortId>("DEFAULT");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -283,9 +293,21 @@ export function ResultsReviewScreen({
         <div className="flex flex-wrap gap-2">
           {onShowSummary && (
             <Button type="button" variant="ghost" size="sm" onClick={onShowSummary}>
-              סיכום בדיקה
+              חזרה לסיכום
             </Button>
           )}
+          {onOpenCompletionRequest &&
+            unresolvedCount != null &&
+            unresolvedCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onOpenCompletionRequest}
+              >
+                הכן בקשת השלמה
+              </Button>
+            )}
           {onStartGuidedReview &&
             unresolvedCount != null &&
             unresolvedCount > 0 && (
@@ -323,7 +345,12 @@ export function ResultsReviewScreen({
           }}
         >
           <div className="flex gap-1 overflow-x-auto pb-1">
-            {FILTER_CHIPS.map((chip) => (
+            {[
+              ...FILTER_CHIPS,
+              ...(SPECIAL_FILTER_CHIPS[filter]
+                ? [{ id: filter, label: SPECIAL_FILTER_CHIPS[filter]! }]
+                : []),
+            ].map((chip) => (
               <Button
                 key={chip.id}
                 type="button"

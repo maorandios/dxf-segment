@@ -12,6 +12,20 @@ import {
 } from "./matchSimpleRows";
 import { matchWithFilenamePriority } from "./matchWithFilenamePriority";
 import {
+  buildDxfFilenameCoverageDiagnostics,
+  buildDxfFilenameMappingDiagnostics,
+} from "./getExplicitDxfFileName";
+import {
+  buildUnifiedIntakeSummary,
+  buildSummaryDiagnosticsV2,
+  buildFilenameProvenanceSample,
+} from "./buildUnifiedIntakeSummary";
+import {
+  buildFilenameFlowDiagnostics,
+  buildFilenameFlowSample,
+  buildInitialIntakeSummary,
+} from "./buildInitialIntakeSummary";
+import {
   effectiveMaterialFields,
   refreshRowCompleteness,
   summarizeMaterialList,
@@ -44,13 +58,14 @@ import type {
 } from "./types";
 import { validateSimpleAiResult } from "./validateAiResult";
 import { workbookActivityMinDurationMs } from "./ui/deriveWorkflowPresentation";
+import { buildWorkflowDebug } from "./quoteWorkflow/quoteStageModel";
 
 type Listener = () => void;
 
 const QUOTE_STAGE_ORDER: OmegaQuoteStage[] = [
-  "MATERIAL_LIST",
-  "DXF_MATCHING",
-  "DATA_APPROVAL",
+  "DXF_INTAKE",
+  "MATERIAL_INTAKE",
+  "UNIFIED_REVIEW",
   "QUOTE_PRICING",
   "COMPLETED",
 ];
@@ -211,8 +226,9 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       quoteDetails,
-      quoteStage: "MATERIAL_LIST",
-      enteredQuoteStages: markEntered([], "MATERIAL_LIST"),
+      quoteStage: "DXF_INTAKE",
+      status: "DXF_UPLOAD",
+      enteredQuoteStages: markEntered([], "DXF_INTAKE"),
     });
     return true;
   },
@@ -251,16 +267,26 @@ export const simpleIntakeActions = {
     if (targetIdx < currentIdx && !entered) return;
 
     let status = session.status;
-    if (stage === "MATERIAL_LIST") {
+    if (stage === "DXF_INTAKE") {
+      status = "DXF_UPLOAD";
+    } else if (stage === "MATERIAL_INTAKE") {
       status =
-        session.materialListRows.length > 0
-          ? "MATERIAL_LIST_REVIEW"
-          : recomputeReadyStatus(session.workbookFile);
-    } else if (stage === "DXF_MATCHING") {
-      if (session.resultRows.length > 0) status = "DXF_REVIEW";
-      else if (session.materialListApproved) status = "DXF_UPLOAD";
-    } else if (stage === "DATA_APPROVAL") {
-      status = "FINAL_PRICING_TABLE";
+        session.materialListRows.length > 0 &&
+        session.status === "MATERIAL_LIST_QUALITY_FAILED"
+          ? "MATERIAL_LIST_QUALITY_FAILED"
+          : session.materialListRows.length > 0 &&
+              session.resultRows.length === 0
+            ? "MATERIAL_LIST_REVIEW"
+            : recomputeReadyStatus(session.workbookFile);
+    } else if (stage === "UNIFIED_REVIEW") {
+      status =
+        session.resultRows.length > 0
+          ? session.status === "FINAL_PRICING_TABLE"
+            ? "FINAL_PRICING_TABLE"
+            : "DXF_REVIEW"
+          : session.materialListRows.length > 0
+            ? "MATERIAL_LIST_REVIEW"
+            : "DXF_UPLOAD";
     } else if (stage === "QUOTE_PRICING" || stage === "COMPLETED") {
       status = "FINAL_PRICING_TABLE";
     }
@@ -275,7 +301,7 @@ export const simpleIntakeActions = {
 
   advanceToPricing(): void {
     if (
-      session.quoteStage !== "DATA_APPROVAL" &&
+      session.quoteStage !== "UNIFIED_REVIEW" &&
       session.status !== "FINAL_PRICING_TABLE" &&
       session.status !== "DXF_REVIEW" &&
       session.status !== "READY"
@@ -532,9 +558,9 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       status: recomputeReadyStatus(session.workbookFile),
-      quoteStage: session.quoteDetails ? "MATERIAL_LIST" : "QUOTE_SETUP",
+      quoteStage: session.quoteDetails ? "MATERIAL_INTAKE" : "QUOTE_SETUP",
       enteredQuoteStages: session.quoteDetails
-        ? markEntered(session.enteredQuoteStages, "MATERIAL_LIST")
+        ? markEntered(session.enteredQuoteStages, "MATERIAL_INTAKE")
         : [],
       error: null,
       analyzingLabel: null,
@@ -551,9 +577,10 @@ export const simpleIntakeActions = {
       localSummary: null,
       matchingDiagnostics: null,
       workbookSnapshot: null,
-      dxfParts: [],
+      // Keep dxfFiles + dxfParts registry for DXF-first reuse.
       lastDebug: null,
       providerCallCount: 0,
+      timing: emptyTiming(),
     });
   },
 
@@ -672,7 +699,12 @@ export const simpleIntakeActions = {
   },
 
   approveMaterialList(opts: { allowMissing: boolean }): void {
-    if (session.status !== "MATERIAL_LIST_REVIEW") return;
+    if (
+      session.status !== "MATERIAL_LIST_REVIEW" &&
+      session.status !== "MATERIAL_LIST_QUALITY_FAILED"
+    ) {
+      return;
+    }
     const summary = summarizeMaterialList(session.materialListRows);
     if (!opts.allowMissing && summary.incompleteRows > 0) return;
 
@@ -688,14 +720,11 @@ export const simpleIntakeActions = {
       ...session,
       materialListRows,
       materialListApproved: true,
-      status: "DXF_UPLOAD",
-      quoteStage: "DXF_MATCHING",
-      enteredQuoteStages: markEntered(
-        session.enteredQuoteStages,
-        "DXF_MATCHING"
-      ),
       extractedRows: materialListToExtractedRows(materialListRows),
     });
+
+    // Continue into local DXF matching → unified review (no separate DXF upload step).
+    void simpleIntakeActions.runDxfStageFromApprovedList();
   },
 
   backToMaterialList(): void {
@@ -710,25 +739,126 @@ export const simpleIntakeActions = {
     }
     setSession({
       ...session,
-      status: "MATERIAL_LIST_REVIEW",
-      quoteStage: "MATERIAL_LIST",
+      status: recomputeReadyStatus(session.workbookFile),
+      quoteStage: "MATERIAL_INTAKE",
       enteredQuoteStages: markEntered(
         session.enteredQuoteStages,
-        "MATERIAL_LIST"
+        "MATERIAL_INTAKE"
       ),
-      // Keep DXF files and prior match results for back-nav preservation.
+      // Keep DXF registry and prior match results for back-nav preservation.
     });
   },
 
-  async runDxfStageFromApprovedList(): Promise<void> {
-    if (!session.materialListApproved) return;
+  backToDxfIntake(): void {
+    setSession({
+      ...session,
+      status: "DXF_UPLOAD",
+      quoteStage: "DXF_INTAKE",
+      enteredQuoteStages: markEntered(session.enteredQuoteStages, "DXF_INTAKE"),
+      analyzingLabel: null,
+      error: null,
+    });
+  },
+
+  /**
+   * Stage 1 complete: parse DXFs locally into the registry, then open material intake.
+   * Does not run matching (no material rows yet) and does not call AI.
+   */
+  async completeDxfIntake(): Promise<void> {
     if (session.dxfFiles.length === 0) return;
     if (
       session.status !== "DXF_UPLOAD" &&
-      session.status !== "DXF_REVIEW" &&
-      session.status !== "FINAL_PRICING_TABLE" &&
-      session.status !== "READY"
+      session.quoteStage !== "DXF_INTAKE"
     ) {
+      return;
+    }
+
+    const dxfFiles = [...session.dxfFiles];
+    const existingParts = session.dxfParts;
+    const reused =
+      existingParts.length > 0 &&
+      existingParts.every((p) =>
+        dxfFiles.some((f) => f.name === p.filename || f.name === p.partId)
+      );
+
+    try {
+      let dxfParts = existingParts;
+      if (!reused || existingParts.length !== dxfFiles.length) {
+        const parsed = await parseSimpleDxfFiles(dxfFiles);
+        dxfParts = parsed.parts;
+      }
+
+      setSession({
+        ...getSimpleIntakeSession(),
+        status: recomputeReadyStatus(getSimpleIntakeSession().workbookFile),
+        quoteStage: "MATERIAL_INTAKE",
+        enteredQuoteStages: markEntered(
+          markEntered(getSimpleIntakeSession().enteredQuoteStages, "DXF_INTAKE"),
+          "MATERIAL_INTAKE"
+        ),
+        dxfParts,
+        dxfFiles,
+        analyzingLabel: null,
+        error: null,
+        lastDebug: {
+          ...(getSimpleIntakeSession().lastDebug ?? {}),
+          workflow: buildWorkflowDebug({
+            activeStage: "MATERIAL_INTAKE",
+            dxfParsedBeforeMaterialExtraction: true,
+            reusedExistingDxfRegistry: reused,
+            materialExtractionCompleted: false,
+            dxfMatchingCompleted: false,
+            unifiedReviewCreated: false,
+          }),
+        },
+      });
+    } catch (err) {
+      setSession({
+        ...getSimpleIntakeSession(),
+        status: "DXF_UPLOAD",
+        quoteStage: "DXF_INTAKE",
+        analyzingLabel: null,
+        error: {
+          stage: "DXF_READ",
+          message: err instanceof Error ? err.message : String(err),
+          retryable: true,
+        },
+      });
+    }
+  },
+
+  async runDxfStageFromApprovedList(): Promise<void> {
+    if (session.materialListRows.length === 0) return;
+
+    if (session.dxfFiles.length === 0) {
+      // Unified review without DXF files.
+      const materialListRows = session.materialListRows;
+      const extractedRows = materialListToExtractedRows(materialListRows);
+      setSession({
+        ...session,
+        materialListApproved: true,
+        extractedRows,
+        status: "DXF_REVIEW",
+        quoteStage: "UNIFIED_REVIEW",
+        enteredQuoteStages: markEntered(
+          session.enteredQuoteStages,
+          "UNIFIED_REVIEW"
+        ),
+        resultRows: [],
+        unmatchedDxfIds: [],
+        dxfAvailability: [],
+        lastDebug: {
+          ...(session.lastDebug ?? {}),
+          workflow: buildWorkflowDebug({
+            activeStage: "UNIFIED_REVIEW",
+            dxfParsedBeforeMaterialExtraction: session.dxfParts.length > 0,
+            reusedExistingDxfRegistry: session.dxfParts.length > 0,
+            materialExtractionCompleted: true,
+            dxfMatchingCompleted: false,
+            unifiedReviewCreated: true,
+          }),
+        },
+      });
       return;
     }
 
@@ -739,18 +869,29 @@ export const simpleIntakeActions = {
     const startedAt = session.startedAt ?? new Date().toISOString();
     const t0 = Date.now();
     const timing = { ...session.timing };
+    const reusedExistingDxfRegistry = session.dxfParts.length > 0;
 
     setSession({
       ...session,
       status: "DXF_PROCESSING",
-      analyzingLabel: "קורא קובצי DXF",
+      analyzingLabel: "מתאים בין הנתונים לקובצי DXF",
+      materialListApproved: true,
       extractedRows,
     });
 
     try {
       const tDxf = Date.now();
-      const { parts: dxfParts } = await parseSimpleDxfFiles(dxfFiles);
-      timing.dxfParseMs = Date.now() - tDxf;
+      let dxfParts = session.dxfParts;
+      const namesMatch =
+        dxfParts.length === dxfFiles.length &&
+        dxfFiles.every((f) =>
+          dxfParts.some((p) => p.filename === f.name || p.partId === f.name)
+        );
+      if (!namesMatch) {
+        const parsed = await parseSimpleDxfFiles(dxfFiles);
+        dxfParts = parsed.parts;
+      }
+      timing.dxfParseMs = (timing.dxfParseMs ?? 0) + (Date.now() - tDxf);
 
       setSession({
         ...getSimpleIntakeSession(),
@@ -840,7 +981,6 @@ export const simpleIntakeActions = {
           null,
       });
 
-      // Preserve materialListStage from Stage 1 debug when present.
       if (
         prevDebug.materialListStage &&
         typeof prevDebug.materialListStage === "object"
@@ -866,15 +1006,75 @@ export const simpleIntakeActions = {
         matched.filenameMatchingDebug;
       (debug as Record<string, unknown>).itemFilenameMatchDebug =
         matched.itemFilenameDebug;
+      (debug as Record<string, unknown>).dxfFilenameCoverage =
+        buildDxfFilenameCoverageDiagnostics({
+          materialListRows,
+          dxfParts,
+          resultRows: matched.resultRows,
+        });
+      (debug as Record<string, unknown>).dxfFilenameMapping =
+        buildDxfFilenameMappingDiagnostics({
+          materialListRows,
+          extractedRows,
+          unifiedItems: linkedItems,
+        });
+      {
+        const intakeSummary = buildUnifiedIntakeSummary({
+          materialRows: materialListRows,
+          dxfParts,
+          resultRows: matched.resultRows,
+          summaryReady: materialListRows.length > 0,
+        });
+        (debug as Record<string, unknown>).summarySourceOfTruth =
+          buildSummaryDiagnosticsV2({
+            summary: intakeSummary,
+            materialRows: materialListRows,
+            unifiedItemCount: linkedItems.length,
+          });
+        (debug as Record<string, unknown>).summaryDiagnostics =
+          (debug as Record<string, unknown>).summarySourceOfTruth;
+        (debug as Record<string, unknown>).filenameProvenanceSample =
+          buildFilenameProvenanceSample({
+            materialRows: materialListRows,
+            dxfParts,
+            resultRows: matched.resultRows,
+            limit: 10,
+          });
+        const initialSummary = buildInitialIntakeSummary({
+          unifiedItems: linkedItems,
+          dxfParts,
+          ready: linkedItems.length > 0,
+        });
+        (debug as Record<string, unknown>).filenameFlowDiagnostics =
+          buildFilenameFlowDiagnostics({
+            summary: initialSummary,
+            canonicalRows: materialListRows,
+            unifiedItems: linkedItems,
+            rawExtractionRows: extractedRows,
+          });
+        (debug as Record<string, unknown>).filenameFlowSample =
+          buildFilenameFlowSample({
+            unifiedItems: linkedItems,
+            limit: 10,
+          });
+      }
       (debug as Record<string, unknown>).aiCallCountStage2 = 0;
+      (debug as Record<string, unknown>).workflow = buildWorkflowDebug({
+        activeStage: "UNIFIED_REVIEW",
+        dxfParsedBeforeMaterialExtraction: true,
+        reusedExistingDxfRegistry,
+        materialExtractionCompleted: true,
+        dxfMatchingCompleted: true,
+        unifiedReviewCreated: true,
+      });
 
       setSession({
         ...getSimpleIntakeSession(),
         status: "DXF_REVIEW",
-        quoteStage: "DXF_MATCHING",
+        quoteStage: "UNIFIED_REVIEW",
         enteredQuoteStages: markEntered(
           getSimpleIntakeSession().enteredQuoteStages,
-          "DXF_MATCHING"
+          "UNIFIED_REVIEW"
         ),
         analyzingLabel: null,
         materialListRows,
@@ -902,7 +1102,8 @@ export const simpleIntakeActions = {
       };
       setSession({
         ...getSimpleIntakeSession(),
-        status: "DXF_UPLOAD",
+        status: "MATERIAL_LIST_REVIEW",
+        quoteStage: "MATERIAL_INTAKE",
         analyzingLabel: null,
         error,
       });
@@ -920,10 +1121,10 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       status: "FINAL_PRICING_TABLE",
-      quoteStage: "DATA_APPROVAL",
+      quoteStage: "UNIFIED_REVIEW",
       enteredQuoteStages: markEntered(
         session.enteredQuoteStages,
-        "DATA_APPROVAL"
+        "UNIFIED_REVIEW"
       ),
     });
   },
@@ -943,6 +1144,11 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       status: "ANALYZING",
+      quoteStage: "MATERIAL_INTAKE",
+      enteredQuoteStages: markEntered(
+        session.enteredQuoteStages,
+        "MATERIAL_INTAKE"
+      ),
       runId,
       startedAt,
       completedAt: null,
@@ -965,7 +1171,7 @@ export const simpleIntakeActions = {
       matchingDiagnostics: null,
       lastDebug: null,
       providerCallCount: 0,
-      dxfParts: [],
+      // Preserve DXF registry parsed in stage 1.
       timing,
     });
 
@@ -1271,45 +1477,85 @@ export const simpleIntakeActions = {
       };
 
       // Keep ANALYZING visible long enough for each timeline phase (≥2s).
-      const minMs = workbookActivityMinDurationMs(5);
+      const phaseCount =
+        getSimpleIntakeSession().dxfParts.length > 0 ||
+        getSimpleIntakeSession().dxfFiles.length > 0
+          ? 6
+          : 5;
+      const minMs = workbookActivityMinDurationMs(phaseCount);
       const remaining = minMs - (Date.now() - t0);
       if (remaining > 0) {
         await new Promise((r) => setTimeout(r, remaining));
       }
 
+      if (!qualityGatePassed) {
+        setSession({
+          ...getSimpleIntakeSession(),
+          status: "MATERIAL_LIST_QUALITY_FAILED",
+          quoteStage: "MATERIAL_INTAKE",
+          analyzingLabel: null,
+          materialListRows,
+          materialListApproved: false,
+          materialListShowUnresolvedOnly: false,
+          extractedRows: materialListToExtractedRows(materialListRows),
+          // Keep dxfParts from stage 1.
+          resultRows: [],
+          unmatchedDxfIds: [],
+          dxfAvailability: [],
+          coverageIssues: [],
+          exactIdOccurrences: [],
+          hasCoverageWarnings: false,
+          localSummary: null,
+          matchingDiagnostics: null,
+          workbookSnapshot: snapshot,
+          timing,
+          completedAt,
+          lastDebug: {
+            ...debug,
+            workflow: buildWorkflowDebug({
+              activeStage: "MATERIAL_INTAKE",
+              dxfParsedBeforeMaterialExtraction:
+                getSimpleIntakeSession().dxfParts.length > 0,
+              reusedExistingDxfRegistry:
+                getSimpleIntakeSession().dxfParts.length > 0,
+              materialExtractionCompleted: true,
+              dxfMatchingCompleted: false,
+              unifiedReviewCreated: false,
+            }),
+          },
+          providerCallCount,
+          error: {
+            stage: "VALIDATION",
+            message:
+              "חלק מהנתונים קיימים בקובץ אך לא פוענחו בצורה אמינה.",
+            retryable: true,
+          },
+        });
+        return;
+      }
+
+      // Successful extraction → auto local DXF matching → unified review.
       setSession({
         ...getSimpleIntakeSession(),
-        status: qualityGatePassed
-          ? "MATERIAL_LIST_REVIEW"
-          : "MATERIAL_LIST_QUALITY_FAILED",
         analyzingLabel: null,
         materialListRows,
-        materialListApproved: false,
+        materialListApproved: true,
         materialListShowUnresolvedOnly: false,
         extractedRows: materialListToExtractedRows(materialListRows),
-        dxfParts: [],
-        resultRows: [],
-        unmatchedDxfIds: [],
-        dxfAvailability: [],
-        coverageIssues: [],
-        exactIdOccurrences: [],
-        hasCoverageWarnings: false,
-        localSummary: null,
-        matchingDiagnostics: null,
         workbookSnapshot: snapshot,
         timing,
         completedAt,
         lastDebug: debug,
         providerCallCount,
-        error: qualityGatePassed
-          ? null
-          : {
-              stage: "VALIDATION",
-              message:
-                "חלק מהנתונים קיימים בקובץ אך לא פוענחו בצורה אמינה.",
-              retryable: true,
-            },
+        error: null,
+        quoteStage: "MATERIAL_INTAKE",
+        enteredQuoteStages: markEntered(
+          getSimpleIntakeSession().enteredQuoteStages,
+          "MATERIAL_INTAKE"
+        ),
       });
+
+      await simpleIntakeActions.runDxfStageFromApprovedList();
     } catch (err) {
       const error: SimpleIntakeError = {
         stage: "AI_REQUEST",
@@ -1329,7 +1575,13 @@ export const simpleIntakeActions = {
     conflict: true;
     occupyingSourceRow: number;
   } {
-    if (session.status !== "READY") return { conflict: false };
+    if (
+      session.status !== "READY" &&
+      session.status !== "DXF_REVIEW" &&
+      session.status !== "FINAL_PRICING_TABLE"
+    ) {
+      return { conflict: false };
+    }
     const result = applyManualDxfSelection({
       resultRows: session.resultRows,
       resultRowId,

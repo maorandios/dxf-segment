@@ -61,6 +61,7 @@ export function AnalyzingStep() {
       populatedRows,
       sourceType,
       pdfPageCount,
+      hasDxfRegistry: session.dxfParts.length > 0 || session.dxfFiles.length > 0,
     });
   }, [
     isDxf,

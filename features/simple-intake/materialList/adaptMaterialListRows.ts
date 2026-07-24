@@ -5,6 +5,7 @@
  * Entities without exact provenance are dropped (no sourceRow:0 fallback rows).
  */
 
+import { pickRawExplicitDxfFileName } from "../getExplicitDxfFileName";
 import { deriveApprovalStatus } from "./completeness";
 import { isFieldUsable } from "./qualityGate";
 import { aiMaterialListRowSchema } from "./schema";
@@ -110,7 +111,7 @@ export function adaptMaterialListRows(
       quantity: asFiniteNumber(candidate.quantity),
       widthMm: asFiniteNumber(candidate.widthMm),
       lengthMm: asFiniteNumber(candidate.lengthMm),
-      dxfFileName: trimStr(candidate.dxfFileName),
+      dxfFileName: pickRawExplicitDxfFileName(candidate),
     };
     const sourceRow =
       shaped.sourceRow != null &&

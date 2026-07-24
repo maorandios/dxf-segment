@@ -27,6 +27,7 @@ import {
   resolveMatchLevel,
 } from "../matchWithFilenamePriority";
 import { hasExplicitDxfFileName } from "../normalizeDxfFileKey";
+import { resolveLinkedItemExplicitFilename } from "../buildUnifiedIntakeSummary";
 
 function issueId(rowId: string, kind: string): string {
   return `${rowId}::${kind}`;
@@ -60,6 +61,10 @@ export function buildDxfLinkedMaterialItems(args: {
     const result = resultByExtractedId.get(materialRow.rowId);
     const e = effectiveMaterialFields(materialRow);
     const excluded = result?.excluded === true;
+    const effectiveExplicitName = resolveLinkedItemExplicitFilename({
+      materialRow,
+      resultRow: result ?? null,
+    });
 
     const match = result?.match;
     const matchedDxfId = match?.matchedDxfId ?? null;
@@ -151,7 +156,7 @@ export function buildDxfLinkedMaterialItems(args: {
         });
       } else if (dxfStatus === "MISSING") {
         void unmatchedReasons.get(materialRow.rowId);
-        const explicitName = materialRow.dxfFileName;
+        const explicitName = effectiveExplicitName;
         if (hasExplicitDxfFileName(explicitName)) {
           issues.push({
             id: issueId(materialRow.rowId, "MISSING_EXPLICIT_DXF"),
@@ -287,7 +292,7 @@ export function buildDxfLinkedMaterialItems(args: {
       matchedDxfId,
       candidateDxfIds,
       matchedFilename: dxf?.filename ?? null,
-      extractedDxfFileName: materialRow.dxfFileName,
+      extractedDxfFileName: effectiveExplicitName,
       matchLevel,
       dxfStatus,
       workbookDimensions,

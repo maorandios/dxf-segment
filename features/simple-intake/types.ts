@@ -21,9 +21,9 @@ export type SimpleIntakeStatus =
 /** Presentation stages for the quote workspace (UI shell). */
 export type OmegaQuoteStage =
   | "QUOTE_SETUP"
-  | "MATERIAL_LIST"
-  | "DXF_MATCHING"
-  | "DATA_APPROVAL"
+  | "DXF_INTAKE"
+  | "MATERIAL_INTAKE"
+  | "UNIFIED_REVIEW"
   | "QUOTE_PRICING"
   | "COMPLETED";
 
@@ -111,9 +111,13 @@ export type SimpleDxfPart = {
   areaMm2: number | null;
   geometryStatus: "VALID" | "INVALID";
   error: string | null;
+  /** @deprecated Prefer contentHash — kept for older debug/tests. */
   fingerprint: string | null;
+  /** SHA-256 of physical file bytes for exact duplicate detection. */
+  contentHash?: string | null;
+  /** Normalized filename key used for exact source-name matching. */
+  normalizedFilenameKey?: string;
 };
-
 export type SimpleAiRow = {
   rowId: string;
   sheetName: string;

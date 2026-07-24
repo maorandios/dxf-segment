@@ -85,10 +85,14 @@ export function SimpleIntakeShell() {
     body = <AnalyzingStep />;
   } else if (session.status === "MATERIAL_LIST_QUALITY_FAILED") {
     body = <MaterialListQualityFailedScreen />;
-  } else if (session.status === "MATERIAL_LIST_REVIEW") {
-    body = <MaterialListReviewScreen />;
-  } else if (session.status === "DXF_UPLOAD") {
+  } else if (
+    session.quoteStage === "DXF_INTAKE" ||
+    session.status === "DXF_UPLOAD"
+  ) {
     body = <DxfUploadStage />;
+  } else if (session.status === "MATERIAL_LIST_REVIEW") {
+    // Recovery / quality-failed path only — primary flow skips this screen.
+    body = <MaterialListReviewScreen />;
   } else if (
     session.status === "DXF_REVIEW" ||
     session.status === "FINAL_PRICING_TABLE" ||
@@ -98,6 +102,7 @@ export function SimpleIntakeShell() {
   } else if (session.status === "FAILED") {
     body = <FailedStep />;
   } else {
+    // MATERIAL_INTAKE upload
     body = <UploadStep />;
   }
 

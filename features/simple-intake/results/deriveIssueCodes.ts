@@ -43,6 +43,10 @@ export function deriveIssueCodes(args: {
         row.match.message.startsWith("MISSING_EXPLICIT_DXF"))
     ) {
       codes.push("EXPLICIT_DXF_FILE_MISSING");
+    } else if (
+      args.unmatchedReason === "CANDIDATES_ASSIGNED_TO_BETTER_ROWS"
+    ) {
+      codes.push("DXF_ASSIGNED_TO_BETTER_ROW");
     } else {
       codes.push("NO_DXF_FOUND");
     }

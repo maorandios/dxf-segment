@@ -5,6 +5,7 @@
  * UI-only rows without provenance get a unique negative synthetic sourceRow.
  */
 
+import { getExplicitDxfFileName } from "../getExplicitDxfFileName";
 import type { SimpleExtractedRow } from "../types";
 import { effectiveMaterialFields } from "./completeness";
 import type { MaterialListRow } from "./types";
@@ -65,7 +66,7 @@ export function materialListToExtractedRows(
       thicknessMm: e.thicknessMm,
       widthMm: e.widthMm,
       lengthMm: e.lengthMm,
-      dxfFileName: row.dxfFileName,
+      dxfFileName: getExplicitDxfFileName(row),
       sourceAreaM2: null,
       sourceWeightKg: null,
       confidence: 1,

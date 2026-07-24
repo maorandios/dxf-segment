@@ -1,5 +1,7 @@
 /**
  * Five-step quote workflow presentation helpers.
+ * Stage order: DXF → material → unified review → pricing → completed.
+ * Labels reuse the existing Hebrew step copy, remapped to the new order.
  */
 
 import type {
@@ -9,27 +11,36 @@ import type {
 } from "../types";
 
 export type QuoteStepperId =
-  | "MATERIAL_LIST"
-  | "DXF_MATCHING"
-  | "DATA_APPROVAL"
+  | "DXF_INTAKE"
+  | "MATERIAL_INTAKE"
+  | "UNIFIED_REVIEW"
   | "QUOTE_PRICING"
   | "COMPLETED";
 
 export const QUOTE_STEPPER_ORDER: QuoteStepperId[] = [
-  "MATERIAL_LIST",
-  "DXF_MATCHING",
-  "DATA_APPROVAL",
+  "DXF_INTAKE",
+  "MATERIAL_INTAKE",
+  "UNIFIED_REVIEW",
   "QUOTE_PRICING",
   "COMPLETED",
 ];
 
+/** Existing step labels remapped to the DXF-first order. */
 export const QUOTE_STEPPER_LABELS: Record<QuoteStepperId, string> = {
-  MATERIAL_LIST: "הפקת רשימת חומר",
-  DXF_MATCHING: "התאמות קבצי DXF",
-  DATA_APPROVAL: "אישור נתונים",
+  DXF_INTAKE: "התאמות קבצי DXF",
+  MATERIAL_INTAKE: "הפקת רשימת חומר",
+  UNIFIED_REVIEW: "אישור נתונים",
   QUOTE_PRICING: "תמחור הצעה",
   COMPLETED: "סיום",
 };
+
+export const WORKFLOW_STAGE_ORDER_DEBUG = [
+  "DXF_INTAKE",
+  "MATERIAL_INTAKE",
+  "UNIFIED_REVIEW",
+  "QUOTE_PRICING",
+  "COMPLETED",
+] as const;
 
 export function quoteStageToStepperId(
   stage: OmegaQuoteStage
@@ -58,10 +69,10 @@ export function deriveQuoteStepperStates(
       continue;
     }
     if (i < currentIndex) {
-      if (id === "MATERIAL_LIST" && attention?.materialNeedsCompletion) {
+      if (id === "MATERIAL_INTAKE" && attention?.materialNeedsCompletion) {
         result[id] = "ATTENTION";
       } else if (
-        (id === "DXF_MATCHING" || id === "DATA_APPROVAL") &&
+        (id === "DXF_INTAKE" || id === "UNIFIED_REVIEW") &&
         attention?.dxfNeedsAttention
       ) {
         result[id] = "ATTENTION";
@@ -82,4 +93,23 @@ export function deriveOmegaQuoteStage(
 ): OmegaQuoteStage {
   if (!session.quoteDetails) return "QUOTE_SETUP";
   return session.quoteStage;
+}
+
+export function buildWorkflowDebug(args: {
+  activeStage: OmegaQuoteStage;
+  dxfParsedBeforeMaterialExtraction: boolean;
+  reusedExistingDxfRegistry: boolean;
+  materialExtractionCompleted: boolean;
+  dxfMatchingCompleted: boolean;
+  unifiedReviewCreated: boolean;
+}): Record<string, unknown> {
+  return {
+    stageOrder: [...WORKFLOW_STAGE_ORDER_DEBUG],
+    activeStage: args.activeStage,
+    dxfParsedBeforeMaterialExtraction: args.dxfParsedBeforeMaterialExtraction,
+    reusedExistingDxfRegistry: args.reusedExistingDxfRegistry,
+    materialExtractionCompleted: args.materialExtractionCompleted,
+    dxfMatchingCompleted: args.dxfMatchingCompleted,
+    unifiedReviewCreated: args.unifiedReviewCreated,
+  };
 }

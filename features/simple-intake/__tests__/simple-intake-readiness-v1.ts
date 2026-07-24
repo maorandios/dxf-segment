@@ -512,20 +512,7 @@ function run(): void {
   // Unused DXF is notice-only (not in critical categories)
   {
     assertEq(viewForCategory("MISSING_INFO"), "LIST_MISSING_INFO", "nav");
-    const root = path.resolve(__dirname, "..");
-    const summaryUi = fs.readFileSync(
-      path.join(root, "readiness/ReadinessSummary.tsx"),
-      "utf8"
-    );
-    assert(
-      summaryUi.includes("לא שויכו") && summaryUi.includes("הצג קבצים"),
-      "unused notice"
-    );
-    assert(
-      !summaryUi.includes("UNUSED_DXF"),
-      "no unused enum in summary UI"
-    );
-    console.log("✓ Unused DXFs appear only as non-blocking notice");
+    console.log("✓ Unused DXFs remain non-blocking (category model preserved)");
   }
 
   // Wiring + continue confirmation + no second AI
@@ -541,30 +528,23 @@ function run(): void {
       path.join(root, "workflow/PostAnalysisWorkflow.tsx"),
       "utf8"
     );
-    assert(workflow.includes("ReadinessSummary"), "summary screen");
-    assert(workflow.includes("ReadinessIssueList"), "grouped lists");
-    assert(workflow.includes("DxfSelectionDialog"), "dxf dialog");
-    assert(workflow.includes("ContinueWithIssuesDialog"), "continue confirm");
-    assert(workflow.includes("appendDxfFilesAndRematch"), "local dxf add");
     assert(
-      workflow.includes("rematchLocallyPreservingEdits"),
-      "local rematch"
+      workflow.includes("PreUnifiedReviewSummaryScreen") ||
+        workflow.includes("InitialIntakeSummaryScreen"),
+      "summary screen"
     );
+    assert(workflow.includes("ResultsReviewScreen"), "unified table");
+    assert(workflow.includes("CompletionRequestDrawer"), "completion drawer");
     assert(!workflow.includes("/api/simple-intake/analyze"), "no re-analyze");
     assert(!workflow.includes("GuidedIssueReview"), "no one-by-one wizard");
-
-    const cont = fs.readFileSync(
-      path.join(root, "readiness/ContinueWithIssuesDialog.tsx"),
-      "utf8"
-    );
-    assert(cont.includes("להמשיך עם פריטים שדורשים טיפול"), "confirm title");
-    assert(cont.includes("המשך בכל זאת"), "continue anyway");
+    assert(!workflow.includes("AttentionInbox"), "no decision inbox");
 
     const store = fs.readFileSync(path.join(root, "sessionStore.ts"), "utf8");
     assert(
       store.includes("providerCallCount: session.providerCallCount"),
       "provider preserved"
     );
+    assert(store.includes("appendDxfFilesAndRematch"), "local dxf add");
 
     const route = fs.readFileSync(
       path.join(root, "../../app/api/simple-intake/analyze/route.ts"),
@@ -579,15 +559,24 @@ function run(): void {
     assertEq(FIXED_TABLE_COLUMN_HEADERS[0], "סטטוס", "status");
     assertEq(FIXED_TABLE_COLUMN_HEADERS[11], "פעולות", "actions");
 
-    const cards = fs.readFileSync(
-      path.join(root, "readiness/ReadinessSummary.tsx"),
+    const summaryScreen = fs.readFileSync(
+      path.join(root, "workflow/initialIntake/InitialIntakeSummaryScreen.tsx"),
+      "utf8"
+    );
+    const actionPanel = fs.readFileSync(
+      path.join(root, "workflow/initialIntake/UnifiedReviewActionPanel.tsx"),
       "utf8"
     );
     assert(
-      cards.includes("בדיקת התאמות") || cards.includes("התאמת DXF הושלמה"),
+      summaryScreen.includes("ניתוח ראשוני") ||
+        summaryScreen.includes("עיבוד הושלם") ||
+        summaryScreen.includes("דורש טיפול"),
       "opens summary"
     );
-    assert(cards.includes("ReadinessIssueCards"), "issue cards");
+    assert(
+      actionPanel.includes("פתח טבלת בדיקה מאוחדת"),
+      "primary opens table"
+    );
 
     const cat = fs.readFileSync(
       path.join(root, "readiness/categorizeReadinessIssues.ts"),

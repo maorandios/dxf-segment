@@ -160,8 +160,11 @@ export function buildWorkbookActivitySteps(args: {
   populatedRows?: number | null;
   sourceType?: "EXCEL" | "PDF" | null;
   pdfPageCount?: number | null;
+  /** When true, include DXF-connection phases in the combined material intake timeline. */
+  hasDxfRegistry?: boolean;
 }): ActivityStepModel[] {
   const isPdf = args.sourceType === "PDF";
+  const hasDxf = Boolean(args.hasDxfRegistry);
 
   const sheetHint =
     args.sheetCount != null && args.populatedRows != null
@@ -195,6 +198,15 @@ export function buildWorkbookActivitySteps(args: {
           label: "בודקים נתונים חסרים",
           detail: "בודקים סוג חומר, עובי, כמות ומידות",
         },
+        ...(hasDxf
+          ? [
+              {
+                id: "link",
+                label: "מחברים קבצים לפריטים",
+                detail: "מחברים את קובצי ה-DXF שכבר נקלטו",
+              },
+            ]
+          : []),
         {
           id: "prepare",
           label: "מכינים את הטבלה",
@@ -222,6 +234,15 @@ export function buildWorkbookActivitySteps(args: {
           label: "מאמתים ערכים לא חד-משמעיים",
           detail: "נמצאו מספר נתונים שדורשים בדיקה נוספת",
         },
+        ...(hasDxf
+          ? [
+              {
+                id: "link",
+                label: "מחברים קבצים לפריטים",
+                detail: "מחברים את קובצי ה-DXF שכבר נקלטו",
+              },
+            ]
+          : []),
         {
           id: "prepare",
           label: "מכינים את הטבלה",
@@ -229,8 +250,6 @@ export function buildWorkbookActivitySteps(args: {
         },
       ];
 
-  // Pace strictly by elapsed time — at least 2s per phase so fast AI calls
-  // still show a readable animated progression.
   const phaseSec = ACTIVITY_PHASE_MIN_MS / 1000;
   const activeIndex = Math.min(
     Math.floor(args.elapsedSec / phaseSec),

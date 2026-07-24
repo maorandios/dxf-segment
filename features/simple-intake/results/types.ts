@@ -142,7 +142,10 @@ export type FinalFilterId =
   | "READY"
   | "NEEDS_REVIEW"
   | "BLOCKED"
-  | "EXCLUDED";
+  | "EXCLUDED"
+  | "MISSING_DXF"
+  | "DUPLICATE_DXF"
+  | "CONFLICTING_DATA";
 
 export type FinalSortId =
   | "DEFAULT"
