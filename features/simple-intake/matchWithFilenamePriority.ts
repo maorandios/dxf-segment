@@ -14,6 +14,7 @@ import {
   deriveSimpleDxfAvailability,
   matchSimpleRows,
 } from "./matchSimpleRows";
+import { classifyDxfDuplicates } from "./classifyDxfDuplicates";
 import type {
   SimpleDxfAvailabilityItem,
   SimpleDxfPart,
@@ -135,14 +136,30 @@ export function matchWithFilenamePriority(args: {
   itemFilenameDebug: Record<string, ItemFilenameMatchDebug>;
 } {
   const dxfById = new Map(args.dxfParts.map((d) => [d.id, d]));
+  const classified = classifyDxfDuplicates(args.dxfParts);
+  const secondaryIds = classified.secondaryDuplicateFileIds;
+
   const byKey = new Map<string, SimpleDxfPart[]>();
   for (const dxf of args.dxfParts) {
     if (dxf.geometryStatus === "INVALID") continue;
+    // Identical content duplicates: keep only the canonical instance for matching.
+    if (secondaryIds.has(dxf.id)) continue;
     const key = normalizeDxfFileKey(dxf.filename);
     if (!key) continue;
     const list = byKey.get(key) ?? [];
     list.push(dxf);
     byKey.set(key, list);
+  }
+
+  // Same-name different-content: include all conflicting uploads for review.
+  for (const group of classified.groups) {
+    if (group.classification !== "SAME_NAME_DIFFERENT_CONTENT") continue;
+    const key = group.files[0]?.normalizedFileNameKey;
+    if (!key) continue;
+    const parts = group.files
+      .map((f) => dxfById.get(f.fileId))
+      .filter((d): d is SimpleDxfPart => d != null && d.geometryStatus === "VALID");
+    if (parts.length > 1) byKey.set(key, parts);
   }
 
   const usedDxfIds = new Set<string>();
@@ -165,11 +182,10 @@ export function matchWithFilenamePriority(args: {
     const matches = (byKey.get(key) ?? []).filter(
       (d) => !usedDxfIds.has(d.id)
     );
-    // Also consider already-used duplicates for conflict detection when
-    // multiple uploads share the key (before any assignment).
     const allWithKey = byKey.get(key) ?? [];
 
     if (allWithKey.length > 1) {
+      // Same-name different content — require review; do not auto-pick.
       duplicateFilenameConflicts++;
       const match: SimpleMatchResult = {
         status: "AMBIGUOUS",
@@ -209,7 +225,9 @@ export function matchWithFilenamePriority(args: {
     filenameResults.set(row.rowId, emptyResultRow(row, match));
   }
 
-  const remainingDxfs = args.dxfParts.filter((d) => !usedDxfIds.has(d.id));
+  const remainingDxfs = args.dxfParts.filter(
+    (d) => !usedDxfIds.has(d.id) && !secondaryIds.has(d.id)
+  );
   const heuristic = matchSimpleRows({
     extractedRows: heuristicRows,
     dxfParts: remainingDxfs,

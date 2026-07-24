@@ -159,8 +159,31 @@ console.log("=== Approved Material List to DXF Review v1 ===\n");
     ],
     dxfParts: [dxfPart({ id: "d1", filename: "ok.dxf", widthMm: 100, lengthMm: 200 })],
   });
-  assertEq(items[0]!.finalStatus, "READY", "clear match ready");
-  assertEq(items[0]!.issues.length, 0, "no user issues");
+  const matchedRow = resultRow("ok", {
+    status: "MATCHED",
+    method: "EXACT_ID",
+    matchedDxfId: "d1",
+    candidates: [],
+    message: null,
+  });
+  const itemsConfirmed = buildDxfLinkedMaterialItems({
+    materialListRows: [materialRow({ rowId: "ok" })],
+    resultRows: [matchedRow],
+    dxfParts: [dxfPart({ id: "d1", filename: "ok.dxf", widthMm: 100, lengthMm: 200 })],
+    confirmedMatchIds: new Set([matchedRow.resultRowId, "ok"]),
+  });
+  assertEq(items[0]!.finalStatus, "NEEDS_REVIEW", "unconfirmed heuristic needs review");
+  assert(
+    items[0]!.issues.some((i) => i.kind === "HEURISTIC_MATCH_UNCONFIRMED"),
+    "heuristic issue"
+  );
+  assertEq(itemsConfirmed[0]!.finalStatus, "READY", "confirmed match ready");
+  assertEq(
+    itemsConfirmed[0]!.issues.filter((i) => i.kind === "HEURISTIC_MATCH_UNCONFIRMED")
+      .length,
+    0,
+    "no heuristic issue when confirmed"
+  );
   const reviewUi = fs.readFileSync(
     path.join(__dirname, "../readiness/ReadinessSummary.tsx"),
     "utf8"
@@ -168,7 +191,7 @@ console.log("=== Approved Material List to DXF Review v1 ===\n");
   assert(!reviewUi.includes("confidence"), "no confidence");
   assert(!reviewUi.includes("score"), "no score");
   assert(!reviewUi.toLowerCase().includes("exact_id"), "no method");
-  console.log("✓ Clear match happens without user-facing warning / no scores");
+  console.log("✓ Clear match requires confirmation; no scores");
 }
 
 {

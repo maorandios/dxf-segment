@@ -10,9 +10,10 @@ import {
 } from "lucide-react";
 import type { IntakeAnalysisSummary } from "../../buildIntakeAnalysisSummary";
 import {
-  buildAttentionSupportingText,
+  buildReviewMetricCategoryLine,
   formatHebrewCount,
 } from "../../buildIntakeAnalysisSummary";
+import { buildDxfDuplicateCardBadge } from "../../classifyDxfDuplicates";
 
 export type AnalysisTone = "healthy" | "attention" | "information" | "error";
 
@@ -30,7 +31,7 @@ const TONE_STYLES: Record<
     border: "#F9DBAF",
     bg: "rgba(254, 243, 199, 0.45)",
     accent: "#B45309",
-    label: "דורש תשומת לב",
+    label: "דורש בדיקה",
   },
   information: {
     border: "var(--ow-border)",
@@ -53,7 +54,6 @@ export function InitialAnalysisMetric({
   badge,
   tone = "information",
   icon,
-  staggerMs = 0,
   className,
   valueNode,
 }: {
@@ -63,7 +63,6 @@ export function InitialAnalysisMetric({
   badge?: string | null;
   tone?: AnalysisTone;
   icon: React.ReactNode;
-  staggerMs?: number;
   className?: string;
   valueNode?: React.ReactNode;
 }) {
@@ -71,20 +70,19 @@ export function InitialAnalysisMetric({
   return (
     <section
       className={cn(
-        "initial-analysis-metric flex min-h-[168px] flex-1 flex-col rounded-[20px] border px-5 py-4",
+        "flex min-h-[132px] flex-1 flex-col rounded-[18px] border px-4 py-3.5",
         className
       )}
       style={{
         borderColor: styles.border,
         backgroundColor: styles.bg,
-        animationDelay: `${staggerMs}ms`,
       }}
-      aria-label={`${label}: ${value}. ${supporting}`}
+      aria-label={`${label}: ${value}. ${supporting}${badge ? `. ${badge}` : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span
-            className="flex h-8 w-8 items-center justify-center rounded-full"
+            className="flex h-7 w-7 items-center justify-center rounded-full"
             style={{
               backgroundColor: "rgba(255,255,255,0.75)",
               color: styles.accent,
@@ -94,14 +92,14 @@ export function InitialAnalysisMetric({
             {icon}
           </span>
           <h3
-            className="text-[13px] font-medium"
+            className="text-[12px] font-medium"
             style={{ color: "var(--ow-text-secondary)" }}
           >
             {label}
           </h3>
         </div>
         <span
-          className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+          className="rounded-full px-2 py-0.5 text-[10px] font-medium"
           style={{
             color: styles.accent,
             backgroundColor: "rgba(255,255,255,0.7)",
@@ -112,20 +110,20 @@ export function InitialAnalysisMetric({
       </div>
 
       <div
-        className="initial-analysis-metric-value mt-4 text-[40px] font-semibold leading-none tracking-tight ow-tabular"
+        className="mt-3 text-[34px] font-semibold leading-none tracking-tight ow-tabular"
         style={{ color: "var(--ow-text)" }}
       >
         {valueNode ?? value}
       </div>
       <p
-        className="mt-2 text-[13px] leading-snug"
+        className="mt-1.5 text-[12px] leading-snug"
         style={{ color: "var(--ow-text-secondary)" }}
       >
         {supporting}
       </p>
       {badge ? (
         <p
-          className="mt-auto pt-3 text-[12px] font-medium"
+          className="mt-auto pt-2 text-[12px] font-medium"
           style={{ color: styles.accent }}
         >
           {badge}
@@ -137,16 +135,13 @@ export function InitialAnalysisMetric({
   );
 }
 
-function RtlFlowChevron({ className }: { className?: string }) {
+function RtlFlowChevron() {
   return (
     <div
-      className={cn(
-        "hidden shrink-0 items-center self-center text-[var(--ow-text-muted)] lg:flex",
-        className
-      )}
+      className="hidden shrink-0 items-center self-center text-[var(--ow-text-muted)] lg:flex"
       aria-hidden
     >
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
         <path
           d="M12.5 4.5L7 10l5.5 5.5"
           stroke="currentColor"
@@ -166,56 +161,50 @@ export function InitialAnalysisSummary({
 }) {
   const m = summary.material;
   const d = summary.dxf;
+  const review = summary.reviewMetric;
+  const hasFindings = summary.findings.length > 0;
 
   const materialTone: AnalysisTone =
-    m.extractedIdentifierCount === 0 && m.totalRows > 0
-      ? "attention"
-      : m.rowsWithoutIdentifierCount > 0
+    m.extractionStatus === "EMPTY"
+      ? "error"
+      : m.matchingIdentifierStatus === "ATTENTION"
         ? "attention"
-        : "healthy";
+        : m.rowsWithoutIdentifierCount > 0
+          ? "attention"
+          : "healthy";
 
   const uploadTone: AnalysisTone =
     d.totalFiles === 0
       ? "error"
-      : d.duplicateGroups.length > 0
+      : summary.showNoUsableDxfFailure
+        ? "error"
+        : d.duplicateSummary.duplicateFileCount > 0 ||
+            d.duplicateSummary.sameNameDifferentContentConflictCount > 0
+          ? "information"
+          : "healthy";
+
+  // Issues requiring review — attention, not a global error (unless no usable DXF).
+  const attentionTone: AnalysisTone = !summary.ready
+    ? "information"
+    : summary.showNoUsableDxfFailure
+      ? "error"
+      : hasFindings || review.affectedItemCount > 0
         ? "attention"
         : "healthy";
 
-  const attentionTone: AnalysisTone = !summary.ready
-    ? "information"
-    : summary.actionableDiscrepancyCount > 0
-      ? summary.comparison.missingDxfPartIds.length > 0
-        ? "error"
-        : "attention"
-      : "healthy";
-
   const materialBadge =
-    m.extractedIdentifierCount === 0
-      ? "לא זוהו מזהי פריט"
-      : m.rowsWithoutIdentifierCount > 0
-        ? `${formatHebrewCount(m.extractedIdentifierCount)} מתוך ${formatHebrewCount(m.totalRows)} שורות כוללות מזהה פריט`
-        : `${formatHebrewCount(m.uniquePartIds.length)} מזהי פריט זוהו`;
+    m.matchingIdentifierStatus === "ATTENTION" &&
+    summary.identifierCoverage.coverage === "NONE"
+      ? "לא נמצאו מזהי התאמה ברשימה"
+      : m.extractedIdentifierCount === 0
+        ? "לא זוהו מזהי פריט"
+        : `${formatHebrewCount(m.extractedIdentifierCount)} עם מזהה פריט`;
 
-  const dxfBadgeParts: string[] = [
-    `${formatHebrewCount(d.uniquePartIds.length)} ייחודיים`,
-  ];
-  if (d.duplicateGroups.length === 1) {
-    dxfBadgeParts.push("עותק כפול אחד");
-  } else if (d.duplicateGroups.length > 1) {
-    dxfBadgeParts.push(
-      `${formatHebrewCount(d.duplicateGroups.length)} פריטים כפולים`
-    );
-  } else if (d.exactContentDuplicateFileCount > 0) {
-    dxfBadgeParts.push(
-      d.exactContentDuplicateFileCount === 1
-        ? "עותק כפול אחד"
-        : `${formatHebrewCount(d.exactContentDuplicateFileCount)} עותקים כפולים`
-    );
-  }
+  const dxfBadge = buildDxfDuplicateCardBadge(d.duplicateSummary);
 
   let attentionValue = "0";
-  let attentionSupporting = "לא נמצאו פערים מהותיים";
-  let attentionBadge: string | null = "ניתן להמשיך לטבלת הבדיקה המלאה";
+  let attentionSupporting = "אין פערים הדורשים בדיקה";
+  let attentionBadge: string | null = null;
   let attentionValueNode: React.ReactNode | undefined;
 
   if (!summary.ready) {
@@ -224,21 +213,36 @@ export function InitialAnalysisSummary({
     attentionBadge = "משווה בין רשימת החומר לקובצי ה־DXF";
     attentionValueNode = (
       <Loader2
-        className="h-9 w-9 animate-spin"
+        className="h-8 w-8 animate-spin"
         style={{ color: "var(--ow-text-muted)" }}
         aria-label="בודק התאמות"
       />
     );
-  } else if (summary.actionableDiscrepancyCount > 0) {
-    attentionValue = formatHebrewCount(summary.actionableDiscrepancyCount);
-    attentionSupporting = "פערים דורשים בדיקה";
-    const support = buildAttentionSupportingText(summary);
-    attentionBadge = support.length > 0 ? support : null;
+  } else if (hasFindings || review.affectedItemCount > 0) {
+    if (review.affectedItemCount > 0) {
+      attentionValue = formatHebrewCount(review.affectedItemCount);
+      attentionSupporting =
+        review.affectedItemCount === 1
+          ? "פריט דורש בדיקה"
+          : "פריטים דורשים בדיקה";
+      const categoryLine = buildReviewMetricCategoryLine(summary);
+      attentionBadge = categoryLine || null;
+    } else {
+      attentionValue = formatHebrewCount(review.findingCategoryCount);
+      attentionSupporting =
+        review.findingCategoryCount === 1
+          ? "סוג ממצא זוהה"
+          : "סוגי ממצאים זוהו";
+      attentionBadge =
+        summary.matchingStatus.suggestedMatchCount > 0
+          ? `${formatHebrewCount(summary.matchingStatus.suggestedMatchCount)} התאמות מוצעות`
+          : null;
+    }
   }
 
   return (
     <div
-      className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-2"
+      className="flex flex-col gap-2.5 lg:flex-row lg:items-stretch lg:gap-2"
       role="group"
       aria-label="סיכום ניתוח ראשוני"
     >
@@ -248,33 +252,32 @@ export function InitialAnalysisSummary({
         supporting="פריטים ברשימה"
         badge={materialBadge}
         tone={materialTone}
-        staggerMs={0}
-        icon={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
+        icon={<FileSpreadsheet className="h-3.5 w-3.5" aria-hidden />}
       />
       <RtlFlowChevron />
       <InitialAnalysisMetric
         label="קובצי DXF"
         value={formatHebrewCount(d.totalFiles)}
-        supporting={d.totalFiles === 1 ? "קובץ הועלה" : "קבצים הועלו"}
-        badge={dxfBadgeParts.join(" · ")}
+        supporting={
+          d.totalFiles === 1 ? "קובץ DXF נותח" : "קובצי DXF נותחו"
+        }
+        badge={dxfBadge}
         tone={uploadTone}
-        staggerMs={90}
-        icon={<Files className="h-4 w-4" aria-hidden />}
+        icon={<Files className="h-3.5 w-3.5" aria-hidden />}
       />
       <RtlFlowChevron />
       <InitialAnalysisMetric
-        label="דורש טיפול"
+        label="דורש בדיקה"
         value={attentionValue}
         valueNode={attentionValueNode}
         supporting={attentionSupporting}
         badge={attentionBadge}
         tone={attentionTone}
-        staggerMs={180}
         icon={
           attentionTone === "healthy" ? (
-            <CheckCircle2 className="h-4 w-4" aria-hidden />
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
           ) : (
-            <AlertTriangle className="h-4 w-4" aria-hidden />
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
           )
         }
       />

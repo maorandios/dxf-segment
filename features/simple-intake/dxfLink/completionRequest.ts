@@ -5,6 +5,9 @@
 import ExcelJS from "exceljs";
 import { displayLabel, effectiveMaterialFields } from "../materialList/completeness";
 import { hasExplicitDxfFileName } from "../normalizeDxfFileKey";
+import {
+  computeSourceIdentifierCoverage,
+} from "../getSourceMatchIdentifier";
 import type { MaterialListRow } from "../materialList/types";
 import type { DxfLinkedMaterialItem, DxfReviewIssue } from "./types";
 
@@ -29,7 +32,17 @@ export function customerActionableIssues(
   );
 }
 
-function dxfCompletionLines(item: DxfLinkedMaterialItem): string[] {
+function sourceHasNoIdentifiers(
+  items: ReadonlyArray<DxfLinkedMaterialItem>
+): boolean {
+  const rows = items.map((i) => i.materialRow);
+  return computeSourceIdentifierCoverage(rows).coverage === "NONE";
+}
+
+function dxfCompletionLines(
+  item: DxfLinkedMaterialItem,
+  opts?: { suppressMissingFilenameAsk?: boolean }
+): string[] {
   const lines: string[] = [];
   const hasExplicit = hasExplicitDxfFileName(item.extractedDxfFileName);
   const dxfIssues = item.issues.filter(
@@ -49,6 +62,10 @@ function dxfCompletionLines(item: DxfLinkedMaterialItem): string[] {
     }
     if (issue.kind === "MISSING_DXF") {
       if (!hasExplicit) {
+        if (opts?.suppressMissingFilenameAsk) {
+          // Source-level request covers the global missing-identifier case.
+          continue;
+        }
         lines.push("• לא צוין שם קובץ DXF עבור הפריט.");
         lines.push(
           "• לא ניתן היה לשייך קובץ DXF באופן חד-משמעי. נא לציין את שם הקובץ המתאים."
@@ -73,6 +90,7 @@ export function buildCompletionClipboardMessage(
   items: DxfLinkedMaterialItem[],
   selectedMaterialRowIds: ReadonlySet<string>
 ): string {
+  const noIdentifiers = sourceHasNoIdentifiers(items);
   const selected = items.filter(
     (i) =>
       selectedMaterialRowIds.has(i.materialRowId) &&
@@ -80,7 +98,18 @@ export function buildCompletionClipboardMessage(
   );
 
   const blocks: string[] = [];
-  selected.forEach((item, index) => {
+  if (noIdentifiers) {
+    blocks.push(
+      [
+        "הערה כללית:",
+        "• ברשימת החומר לא נמצאו מספרי פריט או שמות קובצי DXF.",
+        "• להתאמה ודאית נא לשלוח רשימה מעודכנת הכוללת מזהים, או לאשר ידנית את ההתאמות המוצעות בטבלה.",
+      ].join("\n")
+    );
+  }
+
+  let itemIndex = 0;
+  selected.forEach((item) => {
     const label = displayLabel(item.materialRow);
     const lines = customerActionableIssues(item).flatMap((issue) => {
       if (issue.kind === "DIMENSION_MISMATCH") {
@@ -102,9 +131,13 @@ export function buildCompletionClipboardMessage(
       }
       return [`• ${issue.messageHe}`];
     });
-    const dxfLines = dxfCompletionLines(item);
+    const dxfLines = dxfCompletionLines(item, {
+      suppressMissingFilenameAsk: noIdentifiers,
+    });
     const all = [...dxfLines, ...lines];
-    blocks.push(`${index + 1}. ${label}\n${all.join("\n")}`);
+    if (all.length === 0) return;
+    itemIndex += 1;
+    blocks.push(`${itemIndex}. ${label}\n${all.join("\n")}`);
   });
 
   return [
@@ -122,10 +155,15 @@ export function buildCompletionClipboardMessage(
   ].join("\n");
 }
 
-function whatIsNeededHe(item: DxfLinkedMaterialItem): string {
+function whatIsNeededHe(
+  item: DxfLinkedMaterialItem,
+  opts?: { suppressMissingFilenameAsk?: boolean }
+): string {
   const issues = customerActionableIssues(item);
   const parts: string[] = [];
-  const dxfLines = dxfCompletionLines(item).map((l) => l.replace(/^•\s*/, ""));
+  const dxfLines = dxfCompletionLines(item, opts).map((l) =>
+    l.replace(/^•\s*/, "")
+  );
   parts.push(...dxfLines);
   for (const i of issues) {
     if (
@@ -183,6 +221,8 @@ export async function buildCompletionWorkbook(args: {
   sheet1.addRow(headers1);
   sheet1.getRow(1).font = { bold: true };
 
+  const noIdentifiers = sourceHasNoIdentifiers(args.items);
+
   selected.forEach((item, i) => {
     const e = effectiveMaterialFields(item.materialRow);
     const row = sheet1.addRow([
@@ -197,7 +237,7 @@ export async function buildCompletionWorkbook(args: {
       item.matchedFilename ?? "",
       item.dxfDimensions.widthMm ?? "",
       item.dxfDimensions.lengthMm ?? "",
-      whatIsNeededHe(item),
+      whatIsNeededHe(item, { suppressMissingFilenameAsk: noIdentifiers }),
       "",
     ]);
     // Highlight editable/missing cells (material, thickness, qty, dxf name when missing, customer reply).

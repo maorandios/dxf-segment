@@ -1,7 +1,11 @@
 export { InitialAnalysisSummary, InitialAnalysisMetric } from "./InitialAnalysisSummary";
 export {
-  IntakeDiscrepancyCards,
-  IntakeAnalysisOverviewNotice,
+  IntakeSummaryIssueList,
+  IntakeWorkflowFailureNotice,
+} from "./IntakeDiscrepancyCards";
+/** @deprecated Prefer IntakeSummaryIssueList */
+export {
+  IntakeSummaryIssueList as IntakeDiscrepancyCards,
 } from "./IntakeDiscrepancyCards";
 export { UnifiedReviewNextSteps } from "./UnifiedReviewNextSteps";
 export { UnifiedReviewActionPanel } from "./UnifiedReviewActionPanel";

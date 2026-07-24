@@ -17,6 +17,7 @@ export function deriveIssueCodes(args: {
   unmatchedReason: SimpleUnmatchedReason | null;
   duplicateDxf: boolean;
   manualMatchUnconfirmed: boolean;
+  heuristicMatchUnconfirmed?: boolean;
   dxfFilesUploaded: boolean;
 }): FinalIssueCode[] {
   const codes: FinalIssueCode[] = [];
@@ -26,6 +27,10 @@ export function deriveIssueCodes(args: {
 
   if (args.manualMatchUnconfirmed && row.match.matchedDxfId) {
     codes.push("MANUAL_MATCH_NOT_CONFIRMED");
+  }
+
+  if (args.heuristicMatchUnconfirmed && row.match.matchedDxfId) {
+    codes.push("HEURISTIC_MATCH_UNCONFIRMED");
   }
 
   if (row.match.status === "AMBIGUOUS") {

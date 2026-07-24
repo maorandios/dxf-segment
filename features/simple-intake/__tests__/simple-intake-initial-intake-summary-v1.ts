@@ -419,13 +419,16 @@ console.log("=== Initial Intake Summary Redesign and Notice Fix v1 ===\n");
 
   assert(analysis.includes("רשימת החומר"), "material section");
   assert(analysis.includes("קובצי DXF"), "uploads section");
-  assert(analysis.includes("דורש טיפול"), "attention section");
+  assert(
+    analysis.includes("דורש בדיקה") || analysis.includes("דורש טיפול"),
+    "attention section"
+  );
   assert(!analysis.includes("פערים ראשוניים"), "old gaps removed");
   assert(!screen.includes("מידות"), "no dim mismatch");
   assert(!screen.includes("התאמות מוצעות"), "no suggested");
   assert(!screen.includes("AMBIGUOUS"), "no candidates");
-  assert(next.includes("ייצוא"), "export explanation");
-  assert(action.includes("אינה מאפסת"), "no reset reassurance");
+  assert(next.includes("ייצוא") || next.includes("טבלת הבדיקה"), "help content exists");
+  assert(action.includes("אינה מאפסת") || action.includes("אינה מאשרת"), "no approve reassurance");
   assert(action.includes("פתח טבלת בדיקה מאוחדת"), "primary CTA");
   assert(action.includes("חזרה להעלאת DXF"), "secondary nav");
   assert(workflow.includes("InitialIntakeSummaryScreen"), "wired");

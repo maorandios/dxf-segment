@@ -50,12 +50,56 @@ export type {
   FilenameFlowDiagnostics,
 } from "./buildInitialIntakeSummary";
 export {
+  classifyDxfDuplicates,
+  buildDxfDuplicateCardBadge,
+  buildDxfDuplicateFindingCopy,
+  buildFilenameContentConflictFindingCopy,
+} from "./classifyDxfDuplicates";
+export type {
+  DxfDuplicateClassification,
+  DxfContentEqualityBasis,
+  DxfDuplicateGroup,
+  DxfDuplicateSummary,
+  DxfDuplicateDiagnostics,
+  ClassifiedDxfDuplicates,
+} from "./classifyDxfDuplicates";
+export {
+  getSourceMatchIdentifier,
+  computeSourceIdentifierCoverage,
+  rowHasAnyExplicitSourceIdentifier,
+  toMatchingCapability,
+} from "./getSourceMatchIdentifier";
+export type {
+  SourceMatchIdentifier,
+  SourceIdentifierCoverage,
+  SourceIdentifierCoverageSummary,
+  MaterialSourceMatchingCapability,
+} from "./getSourceMatchIdentifier";
+export {
   buildIntakeAnalysisSummary,
   buildAttentionSupportingText,
+  buildReviewMetricCategoryLine,
+  buildOneLineAnalysisSummary,
+  deriveInitialSummaryIssueCounts,
+  deriveReviewSummaryMetric,
+  deriveAffectedMaterialItemIds,
+  buildInitialFindingPresentations,
+  buildSummaryIssueActionRows,
+  buildInitialFindingsDiagnostics,
+  assertPhysicalUniqueDuplicateInvariant,
 } from "./buildIntakeAnalysisSummary";
 export type {
   IntakeAnalysisSummary,
   IntakeDuplicateGroup,
+  InitialSummaryIssueCounts,
+  InitialFindingPresentation,
+  InitialFindingCategory,
+  InitialFindingSeverity,
+  ReviewSummaryMetric,
+  InitialFindingsDiagnostics,
+  IdentifierFreeAnalysisDiagnostics,
+  MatchingStatusCounts,
+  SummaryIssueActionRow,
 } from "./buildIntakeAnalysisSummary";
 export {
   buildPreUnifiedReviewSummary,

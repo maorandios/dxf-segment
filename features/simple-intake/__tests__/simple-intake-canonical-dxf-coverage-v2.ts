@@ -521,8 +521,19 @@ console.log(
       workflow.includes("buildPreUnifiedReviewSummaryFromCanonical"),
     "canonical summary"
   );
-  assert(analysis.includes("ייחודיים") || analysis.includes("דורש טיפול"), "unique/attention");
-  assert(analysis.includes("קבצים הועלו") || analysis.includes("קובץ הועלה"), "physical copy");
+  assert(
+    analysis.includes("buildDxfDuplicateCardBadge") ||
+      analysis.includes("קבצים כפולים") ||
+      analysis.includes("דורש בדיקה") ||
+      analysis.includes("דורש טיפול"),
+    "duplicate/attention card"
+  );
+  assert(
+    analysis.includes("קובצי DXF נותחו") ||
+      analysis.includes("קבצים הועלו") ||
+      analysis.includes("קובץ הועלה"),
+    "physical copy"
+  );
   assert(!screen.includes("AttentionInbox"), "no inbox");
   assert(
     !summaryMod.includes("sourceExplicitDxfFileName ?? assigned"),

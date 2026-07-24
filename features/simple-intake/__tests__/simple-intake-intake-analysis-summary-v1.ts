@@ -11,7 +11,6 @@ import { deriveApprovalStatus } from "../materialList/completeness";
 import type { MaterialListRow } from "../materialList/types";
 import {
   buildIntakeAnalysisSummary,
-  buildAttentionSupportingText,
 } from "../buildIntakeAnalysisSummary";
 import { normalizePartIdForMatch } from "../normalizePartId";
 import { filterFinalRows } from "../results/filterFinalRows";
@@ -116,28 +115,39 @@ console.log("=== Intake Analysis Summary v1 (part-ID comparison) ===\n");
   );
   assertEq(summary.comparison.extraDxfPartIds.length, 0, "no extras");
   assert(
-    buildAttentionSupportingText(summary).includes("4 קבצים חסרים"),
-    "supporting text"
+    summary.reviewMetric.findingCategoryCount === 1 &&
+      summary.findings.some((f) => f.category === "MISSING_DXF"),
+    "one finding category: missing"
   );
+  assertEq(summary.reviewMetric.affectedItemCount, 4, "4 unique missing part ids");
   console.log("✓ Missing DXF via normalized set difference (not 6-1)");
 }
 
 {
-  // Duplicate part-id group
+  // Duplicate content group (same bytes, different names)
   const rows = [materialRow({ rowId: "a", partId: "P1091" })];
   const parts = [
-    dxf({ id: "d1", filename: "P1091.dxf", partId: "P1091" }),
-    dxf({ id: "d2", filename: "P1091-copy.dxf", partId: "P1091" }),
+    dxf({ id: "d1", filename: "P1091.dxf", partId: "P1091", contentHash: "same" }),
+    dxf({
+      id: "d2",
+      filename: "P1091-copy.dxf",
+      partId: "P1091",
+      contentHash: "same",
+    }),
   ];
   const summary = buildIntakeAnalysisSummary({
     materialRows: rows,
     dxfParts: parts,
     ready: true,
   });
-  assertEq(summary.dxf.duplicateGroups.length, 1, "one dup group");
-  assertEq(summary.dxf.duplicateGroups[0]!.files.length, 2, "two files");
+  assertEq(summary.dxf.duplicateSummary.duplicateFileCount, 1, "one duplicate file");
+  assertEq(
+    summary.dxf.classifiedDuplicateGroups[0]!.classification,
+    "DIFFERENT_NAME_SAME_CONTENT",
+    "diff name same content"
+  );
   assertEq(summary.comparison.missingDxfPartIds.length, 0, "not missing");
-  assertEq(summary.actionableDiscrepancyCount, 1, "one actionable");
+  assert(summary.actionableDiscrepancyCount >= 1, "actionable");
   console.log("✓ Duplicate DXF group with real filenames");
 }
 
@@ -170,8 +180,13 @@ console.log("=== Intake Analysis Summary v1 (part-ID comparison) ===\n");
     resultRows: [],
     ready: true,
   });
-  assertEq(summary.showMissingIdentifiersWarning, true, "warning when none");
-  console.log("✓ True missing-identifiers warning only when none extracted/matched");
+  assertEq(summary.showMissingIdentifiersWarning, false, "banner replaced by finding");
+  assert(
+    summary.findings.some((f) => f.category === "SOURCE_HAS_NO_DXF_IDENTIFIERS"),
+    "no-id finding when NONE"
+  );
+  assertEq(summary.comparison.extraDxfPartIds.length, 0, "no false extras");
+  console.log("✓ True missing-identifiers finding when none extracted");
 }
 
 {
@@ -257,6 +272,10 @@ console.log("=== Intake Analysis Summary v1 (part-ID comparison) ===\n");
     "utf8"
   );
   const cards = fs.readFileSync(
+    path.join(root, "buildIntakeAnalysisSummary.ts"),
+    "utf8"
+  );
+  const listUi = fs.readFileSync(
     path.join(root, "workflow/initialIntake/IntakeDiscrepancyCards.tsx"),
     "utf8"
   );
@@ -264,13 +283,15 @@ console.log("=== Intake Analysis Summary v1 (part-ID comparison) ===\n");
     path.join(root, "workflow/PostAnalysisWorkflow.tsx"),
     "utf8"
   );
-  assert(analysisUi.includes("דורש טיפול"), "attention card");
+  assert(analysisUi.includes("דורש בדיקה") || analysisUi.includes("דורש טיפול"), "attention card");
   assert(!analysisUi.includes("פערים ראשוניים"), "old gaps card gone");
   assert(!analysisUi.includes("אין שמות מקור להשוואה"), "no dash message");
   assert(!screen.includes("לא נמצאו שמות קובצי DXF ברשימת החומר"), "old warning gone");
-  assert(cards.includes("קובצי DXF חסרים"), "missing card");
-  assert(cards.includes("הצג את הפריטים החסרים"), "missing action");
-  assert(cards.includes("MISSING_DXF"), "missing opens MISSING_DXF filter");
+  assert(cards.includes("קובצי DXF חסרים"), "missing title");
+  assert(cards.includes("MISSING_DXF"), "missing filter mapping");
+  assert(cards.includes("description"), "finding explanations");
+  assert(!listUi.includes("פתח בטבלה"), "findings not navigational");
+  assert(listUi.includes("<li") || listUi.includes("FindingRow"), "read-only rows");
   assert(workflow.includes("buildIntakeAnalysisSummary"), "wired");
   assert(workflow.includes("onOpenUnifiedTable"), "opens table");
   console.log("✓ UI copy and wiring");

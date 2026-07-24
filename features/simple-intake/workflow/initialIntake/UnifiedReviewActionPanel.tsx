@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Info } from "lucide-react";
 
 export function UnifiedReviewActionPanel({
   canOpen,
@@ -15,48 +14,31 @@ export function UnifiedReviewActionPanel({
   onBackToDxf?: () => void;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <div
-        className="flex flex-col gap-4 rounded-[20px] border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-3 rounded-[18px] border px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
         style={{
           borderColor: "var(--ow-border)",
           backgroundColor: "var(--ow-surface)",
         }}
       >
-        <div className="flex min-w-0 items-start gap-2.5">
-          <Info
-            className="mt-0.5 h-4 w-4 shrink-0"
-            style={{ color: "var(--ow-text-muted)" }}
-            aria-hidden
-          />
-          <div className="min-w-0 space-y-1">
-            <p
-              className="text-[13px] leading-relaxed"
-              style={{ color: "var(--ow-text-secondary)" }}
-            >
-              פתיחת הטבלה אינה מאפסת את הניתוח ואינה מוחקת נתונים. ניתן לחזור
-              למסך הסיכום בכל עת.
-            </p>
-            <p
-              className="text-[12px]"
-              style={{ color: "var(--ow-text-muted)" }}
-            >
-              במסך הבא ניתן לטפל בכל פריט ולייצא דוח פערים מרוכז לפני תמחור.
-            </p>
-          </div>
-        </div>
+        <p
+          className="max-w-xl text-[12px] leading-relaxed"
+          style={{ color: "var(--ow-text-secondary)" }}
+        >
+          פתיחת הטבלה אינה מאשרת את הנתונים. כל הפערים נשמרים, וניתן לייצא דוח פערים מרוכז לפני תמחור.
+        </p>
 
         <Button
           type="button"
           disabled={!canOpen}
           onClick={onOpenUnifiedTable}
-          className="min-w-[12rem] shrink-0 transition-transform duration-150 hover:-translate-y-px focus-visible:ring-2"
+          className="min-w-[11rem] shrink-0 focus-visible:ring-2"
           style={
             canOpen
               ? {
                   backgroundColor: "var(--ow-accent)",
                   color: "var(--ow-accent-fg)",
-                  boxShadow: "0 6px 16px -8px rgba(16, 24, 40, 0.35)",
                 }
               : undefined
           }
@@ -71,7 +53,7 @@ export function UnifiedReviewActionPanel({
             <button
               type="button"
               onClick={onBackToDxf}
-              className="text-[13px] underline-offset-2 hover:underline"
+              className="text-[12px] underline-offset-2 hover:underline"
               style={{ color: "var(--ow-text-muted)" }}
             >
               חזרה להעלאת DXF
@@ -81,7 +63,7 @@ export function UnifiedReviewActionPanel({
             <button
               type="button"
               onClick={onBackToMaterial}
-              className="text-[13px] underline-offset-2 hover:underline"
+              className="text-[12px] underline-offset-2 hover:underline"
               style={{ color: "var(--ow-text-muted)" }}
             >
               חזרה לרשימת החומר

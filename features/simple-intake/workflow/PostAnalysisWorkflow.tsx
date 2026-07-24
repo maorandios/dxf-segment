@@ -50,12 +50,14 @@ export function PostAnalysisWorkflow() {
         resultRows: session.resultRows,
         dxfParts: session.dxfParts,
         diagnostics: session.matchingDiagnostics,
+        confirmedMatchIds: confirmedManual,
       }),
     [
       session.materialListRows,
       session.resultRows,
       session.dxfParts,
       session.matchingDiagnostics,
+      confirmedManual,
     ]
   );
 
@@ -91,6 +93,7 @@ export function PostAnalysisWorkflow() {
         dxfParts: session.dxfParts,
         resultRows: session.resultRows,
         finalRows,
+        confirmedMatchIds: confirmedManual,
         ready: summaryReady,
       }),
     [
@@ -98,6 +101,7 @@ export function PostAnalysisWorkflow() {
       session.dxfParts,
       session.resultRows,
       finalRows,
+      confirmedManual,
       summaryReady,
     ]
   );
@@ -114,14 +118,20 @@ export function PostAnalysisWorkflow() {
     (filter?: FinalFilterId) => {
       const nextFilter: FinalFilterId =
         filter ??
-        (analysis.actionableDiscrepancyCount > 0 || actionableCount > 0
+        (analysis.reviewMetric.affectedItemCount > 0 ||
+        analysis.actionableDiscrepancyCount > 0 ||
+        actionableCount > 0
           ? "NEEDS_ATTENTION"
           : "ALL");
       setTableFilter(nextFilter);
       setView("TABLE");
       simpleIntakeActions.enterFinalPricingTable();
     },
-    [actionableCount, analysis.actionableDiscrepancyCount]
+    [
+      actionableCount,
+      analysis.actionableDiscrepancyCount,
+      analysis.reviewMetric.affectedItemCount,
+    ]
   );
 
   if (session.resultRows.length === 0 && session.materialListRows.length === 0) {

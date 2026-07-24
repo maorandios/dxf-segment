@@ -63,6 +63,9 @@ function deriveAvailableActions(args: {
   if (args.issueCodes.includes("MANUAL_MATCH_NOT_CONFIRMED")) {
     actions.push("CONFIRM_MANUAL_MATCH");
   }
+  if (args.issueCodes.includes("HEURISTIC_MATCH_UNCONFIRMED")) {
+    actions.push("CONFIRM_MANUAL_MATCH");
+  }
   if (args.issueCodes.includes("MISSING_MATERIAL")) {
     actions.push("ENTER_MATERIAL");
   }
@@ -187,10 +190,18 @@ export function deriveFinalRows(args: {
     });
 
     const isManuallyMatched = row.match.method === "MANUAL";
+    const isHeuristicMatched =
+      row.match.method === "EXACT_ID" || row.match.method === "GEOMETRY";
     const isManualMatchConfirmed =
-      isManuallyMatched && confirmed.has(row.resultRowId);
+      (isManuallyMatched || isHeuristicMatched) &&
+      confirmed.has(row.resultRowId);
     const manualMatchUnconfirmed =
       isManuallyMatched &&
+      row.match.matchedDxfId != null &&
+      !confirmed.has(row.resultRowId);
+    const heuristicMatchUnconfirmed =
+      isHeuristicMatched &&
+      row.match.status === "MATCHED" &&
       row.match.matchedDxfId != null &&
       !confirmed.has(row.resultRowId);
 
@@ -214,6 +225,7 @@ export function deriveFinalRows(args: {
       unmatchedReason,
       duplicateDxf,
       manualMatchUnconfirmed,
+      heuristicMatchUnconfirmed,
       dxfFilesUploaded,
     });
 

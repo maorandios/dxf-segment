@@ -39,6 +39,8 @@ export function issueMessageHe(
       return "חסרות מידות הנדרשות למציאת קובץ DXF מתאים.";
     case "MANUAL_MATCH_NOT_CONFIRMED":
       return "נבחר קובץ DXF ידנית. יש לאשר את הבחירה.";
+    case "HEURISTIC_MATCH_UNCONFIRMED":
+      return "הוצעה התאמת DXF לפי מידות או נתונים — נדרש אישור.";
     default:
       return "";
   }
@@ -47,6 +49,7 @@ export function issueMessageHe(
 export function primaryActionLabelHe(codes: FinalIssueCode[]): string | null {
   if (codes.includes("MULTIPLE_DXF_CANDIDATES")) return "בחר DXF";
   if (codes.includes("MANUAL_MATCH_NOT_CONFIRMED")) return "אשר התאמה";
+  if (codes.includes("HEURISTIC_MATCH_UNCONFIRMED")) return "אשר התאמה";
   if (codes.includes("MISSING_MATERIAL")) return "הזן חומר";
   if (codes.includes("MISSING_THICKNESS")) return "הזן עובי";
   if (codes.includes("MISSING_QUANTITY")) return "הזן כמות";

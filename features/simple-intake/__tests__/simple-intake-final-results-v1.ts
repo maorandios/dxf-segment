@@ -109,16 +109,33 @@ function derive(
   parts: SimpleDxfPart[],
   opts?: {
     confirmed?: Set<string>;
+    /** When true (default), heuristic matches are treated as user-confirmed for fixtures. */
+    assumeHeuristicConfirmed?: boolean;
     diagnostics?: SimpleMatchingDiagnostics | null;
   }
 ): FinalIntakeRow[] {
+  const assume = opts?.assumeHeuristicConfirmed !== false;
+  const confirmed =
+    opts?.confirmed ??
+    (assume
+      ? new Set(
+          rows
+            .filter(
+              (r) =>
+                r.match.status === "MATCHED" &&
+                (r.match.method === "EXACT_ID" ||
+                  r.match.method === "GEOMETRY")
+            )
+            .map((r) => r.resultRowId)
+        )
+      : new Set<string>());
   return deriveFinalRows({
     resultRows: rows,
     dxfParts: parts,
     workbookFilename: "mat.xlsx",
     snapshot: null,
     diagnostics: opts?.diagnostics ?? null,
-    confirmedManualMatchIds: opts?.confirmed,
+    confirmedManualMatchIds: confirmed,
   });
 }
 
@@ -150,7 +167,7 @@ function run(): void {
     console.log("✓ T1 READY derivation");
   }
 
-  // T2 no part ID still READY
+  // T2 heuristic match requires confirmation (SUGGESTED → NEEDS_REVIEW)
   {
     const rows = derive(
       [
@@ -167,12 +184,35 @@ function run(): void {
           status: "READY",
         }),
       ],
-      [part]
+      [part],
+      { assumeHeuristicConfirmed: false, confirmed: new Set() }
     );
-    assertEq(rows[0]!.status, "READY", "T2");
-    assert(!rows[0]!.issueCodes.includes("MISSING_MATERIAL" as never) || true, "T2");
-    assertEq(rows[0]!.part.displayName, "P1", "T2 display from dxf");
-    console.log("✓ T2 no part ID can be READY");
+    assertEq(rows[0]!.status, "NEEDS_REVIEW", "T2 unconfirmed heuristic");
+    assert(
+      rows[0]!.issueCodes.includes("HEURISTIC_MATCH_UNCONFIRMED"),
+      "T2 heuristic code"
+    );
+    const confirmed = derive(
+      [
+        resultRow({
+          resultRowId: "r1",
+          extracted: extracted({ rowId: "e1", partId: null }),
+          match: {
+            status: "MATCHED",
+            method: "GEOMETRY",
+            matchedDxfId: "d1",
+            candidates: [],
+            message: null,
+          },
+          status: "READY",
+        }),
+      ],
+      [part],
+      { confirmed: new Set(["r1"]) }
+    );
+    assertEq(confirmed[0]!.status, "READY", "T2 confirmed READY");
+    assertEq(confirmed[0]!.part.displayName, "P1", "T2 display from dxf");
+    console.log("✓ T2 heuristic match needs confirmation");
   }
 
   // T3 missing material

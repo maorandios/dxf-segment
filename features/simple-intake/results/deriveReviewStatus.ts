@@ -19,6 +19,7 @@ const REVIEW: FinalIssueCode[] = [
   "MULTIPLE_DXF_CANDIDATES",
   "PART_ID_DIMENSION_MISMATCH",
   "MANUAL_MATCH_NOT_CONFIRMED",
+  "HEURISTIC_MATCH_UNCONFIRMED",
 ];
 
 export function deriveReviewStatus(args: {

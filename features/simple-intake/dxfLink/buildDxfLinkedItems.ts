@@ -43,11 +43,14 @@ export function buildDxfLinkedMaterialItems(args: {
   customerConfirmDimMismatchIds?: ReadonlySet<string>;
   /** Items that accepted DXF dims for mismatch (resolved locally). */
   acceptedDxfDimMismatchIds?: ReadonlySet<string>;
+  /** Confirmed heuristic or manual assignments (resultRowId or materialRowId). */
+  confirmedMatchIds?: ReadonlySet<string>;
 }): DxfLinkedMaterialItem[] {
   const deferred = args.deferredIssueIds ?? new Set<string>();
   const customerConfirm =
     args.customerConfirmDimMismatchIds ?? new Set<string>();
   const acceptedDims = args.acceptedDxfDimMismatchIds ?? new Set<string>();
+  const confirmed = args.confirmedMatchIds ?? new Set<string>();
 
   const resultByExtractedId = new Map(
     args.resultRows.map((r) => [r.extracted.rowId, r])
@@ -210,6 +213,27 @@ export function buildDxfLinkedMaterialItems(args: {
         });
       }
 
+      const matchLevelPreview = match
+        ? resolveMatchLevel(match)
+        : "UNASSIGNED";
+      const resultConfirmed =
+        (result?.resultRowId != null && confirmed.has(result.resultRowId)) ||
+        confirmed.has(materialRow.rowId);
+      if (
+        hasValidDxf &&
+        matchLevelPreview === "SUGGESTED" &&
+        !resultConfirmed
+      ) {
+        issues.push({
+          id: issueId(materialRow.rowId, "HEURISTIC_MATCH_UNCONFIRMED"),
+          kind: "HEURISTIC_MATCH_UNCONFIRMED",
+          messageHe:
+            "הוצעה התאמת DXF לפי מידות או נתונים — נדרש אישור.",
+          customerActionable: false,
+          deferred: false,
+        });
+      }
+
       if (!(e.material && e.material.trim())) {
         issues.push({
           id: issueId(materialRow.rowId, "MISSING_MATERIAL"),
@@ -330,6 +354,7 @@ function deriveFinalItemStatus(args: {
   if (
     kinds.has("MULTIPLE_DXF") ||
     kinds.has("DIMENSION_MISMATCH") ||
+    kinds.has("HEURISTIC_MATCH_UNCONFIRMED") ||
     args.deferredIssueIds.length > 0 ||
     args.customerConfirmDim
   ) {
