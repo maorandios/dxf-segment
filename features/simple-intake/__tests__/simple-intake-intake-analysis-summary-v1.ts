@@ -262,6 +262,7 @@ console.log("=== Intake Analysis Summary v1 (part-ID comparison) ===\n");
         message: null,
       },
       sourceOrderIndex: 0,
+      materialRowId: "1",
       dimensionComparison: null,
       rawDxfDimensions: { widthMm: null, lengthMm: null },
     } as FinalIntakeRow,

@@ -15,6 +15,15 @@ import {
   reconcileActiveIssueCodes,
   type UnifiedReviewSummary,
 } from "./results/activeReviewReasons";
+import {
+  buildCanonicalReviewSummaryFromFinalRows,
+  buildReviewIdentityDiagnostics,
+  getCanonicalMaterialItemId,
+  isNonEmptyString,
+  type CanonicalReviewSummary,
+  type IdentityMappingSampleRow,
+  type ReviewIdentityDiagnostics,
+} from "./results/canonicalMaterialItemId";
 import { resolveMatchLevel } from "./matchWithFilenamePriority";
 import {
   computeSourceIdentifierCoverage,
@@ -259,6 +268,11 @@ export type IntakeAnalysisSummary = {
   /** Developer-only active review diagnostics. */
   activeReviewDiagnostics: ActiveReviewDiagnostics;
   reviewReasonSample: ReviewReasonSampleRow[];
+  /** Shared status/count selector (summary + table agreement). */
+  canonicalReviewSummary: CanonicalReviewSummary | null;
+  /** Developer-only identity / count-agreement diagnostics. */
+  reviewIdentityDiagnostics: ReviewIdentityDiagnostics | null;
+  identityMappingSample: IdentityMappingSampleRow[];
   ready: boolean;
 };
 
@@ -316,11 +330,14 @@ export function deriveInitialSummaryIssueCounts(args: {
 
 /**
  * Unique material items requiring review from unified/final row state.
- * Deduplicates by canonical row id; never counts issue occurrences.
+ * Deduplicates by canonical material-row id; never uses presentation resultRowId.
  */
 export function deriveAffectedMaterialItemIds(args: {
   finalRows?: ReadonlyArray<
-    Pick<FinalIntakeRow, "id" | "status" | "issueCodes" | "isExcluded">
+    Pick<
+      FinalIntakeRow,
+      "id" | "materialRowId" | "status" | "issueCodes" | "isExcluded"
+    >
   >;
   resultRows?: ReadonlyArray<SimpleResultRow>;
 }): Set<string> {
@@ -329,20 +346,21 @@ export function deriveAffectedMaterialItemIds(args: {
   if (args.finalRows && args.finalRows.length > 0) {
     for (const row of args.finalRows) {
       if (row.isExcluded) continue;
-      if (row.status === "NEEDS_REVIEW" || row.status === "BLOCKED") {
-        affected.add(row.id);
-        continue;
-      }
-      if (row.issueCodes.some((c) => AFFECTED_FINAL_CODES.has(c))) {
-        affected.add(row.id);
-      }
+      const needsAttention =
+        row.status === "NEEDS_REVIEW" ||
+        row.status === "BLOCKED" ||
+        row.issueCodes.some((c) => AFFECTED_FINAL_CODES.has(c));
+      if (!needsAttention) continue;
+      const canonicalId = getCanonicalMaterialItemId(row);
+      if (canonicalId) affected.add(canonicalId);
     }
     return affected;
   }
 
   for (const row of args.resultRows ?? []) {
     if (row.excluded) continue;
-    const id = row.extracted.rowId || row.resultRowId;
+    const id = row.extracted.rowId;
+    if (!isNonEmptyString(id)) continue;
     if (row.match.status === "AMBIGUOUS" || row.match.status === "UNMATCHED") {
       affected.add(id);
       continue;
@@ -364,7 +382,10 @@ export function enforceAffectedItemCountInvariant(args: {
   materialRowIds: ReadonlySet<string>;
   materialItemCount: number;
   finalRows?: ReadonlyArray<
-    Pick<FinalIntakeRow, "id" | "status" | "issueCodes" | "isExcluded">
+    Pick<
+      FinalIntakeRow,
+      "id" | "materialRowId" | "status" | "issueCodes" | "isExcluded"
+    >
   >;
 }): {
   affectedItemIds: Set<string>;
@@ -380,7 +401,7 @@ export function enforceAffectedItemCountInvariant(args: {
 
   if (typeof console !== "undefined" && console.warn) {
     console.warn(
-      "[omega] affectedItemCount exceeds materialItemCount — re-deriving from unique row ids",
+      "[omega] affectedItemCount exceeds materialItemCount — identity mismatch; re-deriving from canonical material ids",
       {
         affectedItemCount: args.affectedItemIds.size,
         materialItemCount,
@@ -397,7 +418,8 @@ export function enforceAffectedItemCountInvariant(args: {
         row.status === "BLOCKED" ||
         row.issueCodes.some((c) => AFFECTED_FINAL_CODES.has(c))
       ) {
-        rederived.add(row.id);
+        const canonicalId = getCanonicalMaterialItemId(row);
+        if (canonicalId) rederived.add(canonicalId);
       }
     }
   } else {
@@ -709,6 +731,7 @@ export function buildIntakeAnalysisSummary(args: {
     Pick<
       FinalIntakeRow,
       | "id"
+      | "materialRowId"
       | "status"
       | "issueCodes"
       | "part"
@@ -977,13 +1000,24 @@ export function buildIntakeAnalysisSummary(args: {
     };
   }
 
-  let affectedItemIds = deriveAffectedMaterialItemIds({
-    finalRows: args.finalRows,
-    resultRows: args.resultRows,
-  });
+  // Final rows are the primary count source once the unified set is complete.
+  // Do not merge presentation resultRowIds with material.rowId (that doubled 14→28).
+  const unifiedReviewCreated = Boolean(
+    args.finalRows && args.finalRows.length > 0
+  );
+  const finalRowsReady =
+    unifiedReviewCreated &&
+    args.finalRows!.length === args.materialRows.length;
 
-  // Prefer status-derived final-row ids when available.
-  if (unifiedSummary && args.finalRows && args.finalRows.length > 0) {
+  let affectedItemIds: Set<string>;
+  let canonicalReviewSummary: CanonicalReviewSummary | null = null;
+
+  if (finalRowsReady && args.finalRows) {
+    canonicalReviewSummary = buildCanonicalReviewSummaryFromFinalRows({
+      finalRows: args.finalRows,
+      findingOccurrenceCount: issueCounts.actionableIssueCount,
+      findingCategoryCount: findings.length,
+    });
     affectedItemIds = new Set(
       args.finalRows
         .filter(
@@ -991,39 +1025,33 @@ export function buildIntakeAnalysisSummary(args: {
             !r.isExcluded &&
             (r.status === "NEEDS_REVIEW" || r.status === "BLOCKED")
         )
-        .map((r) => r.id)
+        .map((r) => getCanonicalMaterialItemId(r))
+        .filter(isNonEmptyString)
     );
-  }
-
-  // Part IDs already represented by an affected final row — avoid double-counting
-  // when material.rowId !== finalRows.id (e.g. res_<rowId> vs rowId → 14+14=28).
-  const coveredPartIds = new Set<string>();
-  if (args.finalRows) {
-    for (const row of args.finalRows) {
-      if (!affectedItemIds.has(row.id)) continue;
-      const id =
-        normalizePartIdForMatch(row.part.sourcePartId) ||
-        normalizePartIdForMatch(row.part.displayName);
-      if (id) coveredPartIds.add(id);
+  } else {
+    // Fallback before final rows are ready — issue/material IDs only; never
+    // merge with a partial final-row presentation-id set.
+    affectedItemIds = new Set<string>();
+    if (args.resultRows && args.resultRows.length > 0) {
+      affectedItemIds = deriveAffectedMaterialItemIds({
+        resultRows: args.resultRows,
+      });
     }
-  }
-
-  for (const partId of missingDxfPartIds) {
-    if (coveredPartIds.has(partId)) continue;
-    for (const row of args.materialRows) {
-      const norm = normalizePartIdForMatch(
-        getSourceMatchIdentifier(row).partId
-      );
-      if (norm === partId) affectedItemIds.add(row.rowId);
+    for (const partId of missingDxfPartIds) {
+      for (const row of args.materialRows) {
+        const norm = normalizePartIdForMatch(
+          getSourceMatchIdentifier(row).partId
+        );
+        if (norm === partId) affectedItemIds.add(row.rowId);
+      }
     }
-  }
-  for (const partId of conflictingPartIds) {
-    if (coveredPartIds.has(partId)) continue;
-    for (const row of args.materialRows) {
-      const norm = normalizePartIdForMatch(
-        getSourceMatchIdentifier(row).partId
-      );
-      if (norm === partId) affectedItemIds.add(row.rowId);
+    for (const partId of conflictingPartIds) {
+      for (const row of args.materialRows) {
+        const norm = normalizePartIdForMatch(
+          getSourceMatchIdentifier(row).partId
+        );
+        if (norm === partId) affectedItemIds.add(row.rowId);
+      }
     }
   }
 
@@ -1040,6 +1068,35 @@ export function buildIntakeAnalysisSummary(args: {
     issueCounts,
     findingsCount: findings.length,
   });
+
+  // When ready, lock affected to canonical status sum (never findings).
+  if (canonicalReviewSummary) {
+    reviewMetric.affectedItemCount = canonicalReviewSummary.affectedItemCount;
+  }
+
+  const identityPack =
+    finalRowsReady && args.finalRows
+      ? buildReviewIdentityDiagnostics({
+          materialRowCount: totalRows,
+          finalRows: args.finalRows,
+          summaryReviewCount: canonicalReviewSummary?.reviewItemCount ?? 0,
+        })
+      : {
+          reviewIdentityDiagnostics: null,
+          identityMappingSample: [] as IdentityMappingSampleRow[],
+        };
+
+  if (
+    identityPack.reviewIdentityDiagnostics &&
+    !identityPack.reviewIdentityDiagnostics.countAgreementPassed &&
+    typeof console !== "undefined" &&
+    console.warn
+  ) {
+    console.warn(
+      "[omega] summary/table review count disagreement — identity mismatch",
+      identityPack.reviewIdentityDiagnostics
+    );
+  }
 
   const initialFindingsDiagnostics = buildInitialFindingsDiagnostics({
     reviewMetric,
@@ -1122,6 +1179,9 @@ export function buildIntakeAnalysisSummary(args: {
     dimensionComparisonSample,
     activeReviewDiagnostics,
     reviewReasonSample,
+    canonicalReviewSummary,
+    reviewIdentityDiagnostics: identityPack.reviewIdentityDiagnostics,
+    identityMappingSample: identityPack.identityMappingSample,
     ready,
   };
 }

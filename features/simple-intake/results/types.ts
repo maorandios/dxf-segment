@@ -123,6 +123,11 @@ export type FinalIntakeRow = FinalTableRow & {
   reviewStatus: FinalReviewStatus;
   sourceOrderIndex: number;
   /**
+   * Canonical business identity of the material-list row.
+   * Distinct from `id` (presentation/result-row ID). Used for all item counts.
+   */
+  materialRowId: string;
+  /**
    * Rotation-invariant comparison of source vs original DXF dims.
    * Null when either side lacks valid dimensions or DXF is not matched.
    */

@@ -9,6 +9,7 @@ import type {
   SimpleResultRow,
   SimpleWorkbookSnapshot,
 } from "../types";
+import { buildCanonicalReviewSummaryFromFinalRows } from "./canonicalMaterialItemId";
 import {
   calcCommercialAreaM2,
   calcCommercialTotalWeightKg,
@@ -297,6 +298,7 @@ export function deriveFinalRows(args: {
 
     return {
       id: row.resultRowId,
+      materialRowId: extracted.rowId,
       status,
       reviewStatus: status,
       part: {
@@ -394,10 +396,11 @@ export function summarizeFinalRows(rows: FinalIntakeRow[]): FinalResultsSummary 
     (sum, row) => sum + (row.quantity ?? 0),
     0
   );
-  const ready = rows.filter((r) => r.status === "READY").length;
-  const needsReview = rows.filter((r) => r.status === "NEEDS_REVIEW").length;
-  const blocked = rows.filter((r) => r.status === "BLOCKED").length;
-  const excluded = rows.filter((r) => r.status === "EXCLUDED").length;
+  const canonical = buildCanonicalReviewSummaryFromFinalRows({
+    finalRows: rows,
+    findingOccurrenceCount: 0,
+    findingCategoryCount: 0,
+  });
 
   return {
     total: totalRowCount,
@@ -405,10 +408,10 @@ export function summarizeFinalRows(rows: FinalIntakeRow[]): FinalResultsSummary 
     totalUnitCount,
     rowsWithMissingQuantity,
     isTotalUnitCountComplete: rowsWithMissingQuantity === 0,
-    ready,
-    needsReview,
-    blocked,
-    excluded,
-    needsAttention: needsReview + blocked,
+    ready: canonical.readyItemCount,
+    needsReview: canonical.reviewItemCount,
+    blocked: canonical.blockedItemCount,
+    excluded: canonical.excludedItemCount,
+    needsAttention: canonical.affectedItemCount,
   };
 }

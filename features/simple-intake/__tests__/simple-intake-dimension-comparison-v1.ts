@@ -302,11 +302,15 @@ console.log("=== Rotation-Invariant Dimension Comparison v1 ===\n");
 {
   // Count deduplication: 74 NEEDS_REVIEW rows + inflated occurrence set
   const finalRows: Array<
-    Pick<FinalIntakeRow, "id" | "status" | "issueCodes" | "isExcluded">
+    Pick<
+      FinalIntakeRow,
+      "id" | "materialRowId" | "status" | "issueCodes" | "isExcluded"
+    >
   > = [];
   for (let i = 0; i < 74; i++) {
     finalRows.push({
-      id: `r${i}`,
+      id: `res_r${i}`,
+      materialRowId: `r${i}`,
       status: "NEEDS_REVIEW",
       issueCodes: ["HEURISTIC_MATCH_UNCONFIRMED", "PART_ID_DIMENSION_MISMATCH"],
       isExcluded: false,
@@ -314,9 +318,14 @@ console.log("=== Rotation-Invariant Dimension Comparison v1 ===\n");
   }
   const affected = deriveAffectedMaterialItemIds({ finalRows });
   assertEq(affected.size, 74, "unique affected = 74");
+  assert(affected.has("r0"), "canonical material id");
+  assert(!affected.has("res_r0"), "not presentation id");
   const inv = enforceAffectedItemCountInvariant({
-    affectedItemIds: new Set([...affected, ...Array.from({ length: 14 }, (_, i) => `extra-${i}`)]),
-    materialRowIds: new Set(finalRows.map((r) => r.id)),
+    affectedItemIds: new Set([
+      ...affected,
+      ...Array.from({ length: 14 }, (_, i) => `extra-${i}`),
+    ]),
+    materialRowIds: new Set(finalRows.map((r) => r.materialRowId)),
     materialItemCount: 74,
     finalRows,
   });
@@ -327,7 +336,10 @@ console.log("=== Rotation-Invariant Dimension Comparison v1 ===\n");
 
 {
   const finalRows: Array<
-    Pick<FinalIntakeRow, "id" | "status" | "issueCodes" | "isExcluded">
+    Pick<
+      FinalIntakeRow,
+      "id" | "materialRowId" | "status" | "issueCodes" | "isExcluded"
+    >
   > = [];
   for (let i = 0; i < 74; i++) {
     let issueCodes: FinalIntakeRow["issueCodes"] = [];
@@ -347,7 +359,8 @@ console.log("=== Rotation-Invariant Dimension Comparison v1 ===\n");
       }
     }
     finalRows.push({
-      id: `r${i}`,
+      id: `res_r${i}`,
+      materialRowId: `r${i}`,
       status: i < 14 ? "NEEDS_REVIEW" : "READY",
       issueCodes,
       isExcluded: false,

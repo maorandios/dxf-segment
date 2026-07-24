@@ -68,9 +68,10 @@ function dxf(
   };
 }
 
-function conflictRow(partId: string): FinalIntakeRow {
+function conflictRow(partId: string, materialRowId = "4"): FinalIntakeRow {
   return {
-    id: partId,
+    id: `res_${materialRowId}`,
+    materialRowId,
     status: "NEEDS_REVIEW",
     reviewStatus: "NEEDS_REVIEW",
     part: {
@@ -112,7 +113,8 @@ function conflictRow(partId: string): FinalIntakeRow {
       message: null,
     },
     sourceOrderIndex: 0,
-    resultRowId: partId,
+    dimensionComparison: null,
+    rawDxfDimensions: { widthMm: null, lengthMm: null },
   } as unknown as FinalIntakeRow;
 }
 

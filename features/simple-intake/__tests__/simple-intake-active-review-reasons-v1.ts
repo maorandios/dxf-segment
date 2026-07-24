@@ -80,7 +80,7 @@ function resultRow(args: {
   lengthMm?: number;
 }): SimpleResultRow {
   return {
-    resultRowId: args.rowId,
+    resultRowId: `res_${args.rowId}`,
     status: "READY",
     excluded: false,
     extracted: {
@@ -282,6 +282,31 @@ console.log("=== Canonical Active Review Reasons v1 ===\n");
   assertEq(intake.reviewMetric.affectedItemCount, 14, "summary card 14");
   assertEq(intake.issueCounts.conflictingDataCount, 14, "findings 14");
   assertEq(intake.findings.length, 1, "one finding category");
+  assertEq(
+    intake.canonicalReviewSummary?.totalItemCount,
+    74,
+    "canonical total 74"
+  );
+  assertEq(
+    intake.canonicalReviewSummary?.reviewItemCount,
+    14,
+    "canonical review 14"
+  );
+  assertEq(
+    intake.canonicalReviewSummary?.affectedItemCount,
+    14,
+    "canonical affected 14 not 28"
+  );
+  assert(
+    intake.reviewIdentityDiagnostics?.countAgreementPassed === true,
+    "summary/table agreement"
+  );
+  assertEq(
+    finalRows[0]!.id.startsWith("res_") &&
+      finalRows[0]!.materialRowId === "r0",
+    true,
+    "presentation id differs from materialRowId"
+  );
   assertEq(
     intake.activeReviewDiagnostics.readyItemCount,
     60,

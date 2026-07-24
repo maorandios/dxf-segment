@@ -108,6 +108,17 @@ export type {
   SummaryIssueActionRow,
 } from "./buildIntakeAnalysisSummary";
 export {
+  getCanonicalMaterialItemId,
+  buildCanonicalReviewSummaryFromFinalRows,
+  buildReviewIdentityDiagnostics,
+  isNonEmptyString,
+} from "./results/canonicalMaterialItemId";
+export type {
+  CanonicalReviewSummary,
+  ReviewIdentityDiagnostics,
+  IdentityMappingSampleRow,
+} from "./results/canonicalMaterialItemId";
+export {
   getActiveReviewReasons,
   getActiveBlockingReasons,
   deriveUnifiedItemStatus,
