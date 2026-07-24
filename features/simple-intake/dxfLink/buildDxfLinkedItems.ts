@@ -14,7 +14,7 @@ import {
   finalDimsFromDxf,
   formatDimsHe,
 } from "./calculations";
-import { isSignificantDimensionMismatch } from "./dimensionMismatch";
+import { comparePlateDimensions } from "./dimensionMismatch";
 import type {
   DxfLinkStageDebug,
   DxfLinkStatus,
@@ -139,6 +139,10 @@ export function buildDxfLinkedMaterialItems(args: {
             totalWeightKg: null,
           };
 
+    const dimensionComparison = hasValidDxf
+      ? comparePlateDimensions(workbookDimensions, dxfDimensions)
+      : null;
+
     const issues: DxfReviewIssue[] = [];
     if (!excluded) {
       if (dxfStatus === "AMBIGUOUS") {
@@ -184,12 +188,7 @@ export function buildDxfLinkedMaterialItems(args: {
       if (
         hasValidDxf &&
         !acceptedDims.has(materialRow.rowId) &&
-        isSignificantDimensionMismatch({
-          workbookWidthMm: workbookDimensions.widthMm,
-          workbookLengthMm: workbookDimensions.lengthMm,
-          dxfWidthMm: dxfDimensions.widthMm,
-          dxfLengthMm: dxfDimensions.lengthMm,
-        })
+        dimensionComparison?.hasSignificantMismatch
       ) {
         issues.push({
           id: issueId(materialRow.rowId, "DIMENSION_MISMATCH"),
@@ -210,6 +209,7 @@ export function buildDxfLinkedMaterialItems(args: {
             dxfDimensions.widthMm,
             dxfDimensions.lengthMm
           ),
+          dimensionComparison,
         });
       }
 
@@ -222,7 +222,8 @@ export function buildDxfLinkedMaterialItems(args: {
       if (
         hasValidDxf &&
         matchLevelPreview === "SUGGESTED" &&
-        !resultConfirmed
+        !resultConfirmed &&
+        match?.method === "GEOMETRY"
       ) {
         issues.push({
           id: issueId(materialRow.rowId, "HEURISTIC_MATCH_UNCONFIRMED"),
@@ -322,6 +323,7 @@ export function buildDxfLinkedMaterialItems(args: {
       workbookDimensions,
       dxfDimensions,
       finalDimensions,
+      dimensionComparison,
       calculations,
       issues,
       deferredIssueIds,

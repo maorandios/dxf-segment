@@ -3,6 +3,8 @@
  * Canonical FinalTableRow is the only model rendered by the fixed table.
  */
 
+import type { PlateDimensionComparison } from "../dxfLink/dimensionMismatch";
+
 export type FinalIssueCode =
   | "NO_DXF_FOUND"
   | "EXPLICIT_DXF_FILE_MISSING"
@@ -120,6 +122,16 @@ export type FinalIntakeRow = FinalTableRow & {
   };
   reviewStatus: FinalReviewStatus;
   sourceOrderIndex: number;
+  /**
+   * Rotation-invariant comparison of source vs original DXF dims.
+   * Null when either side lacks valid dimensions or DXF is not matched.
+   */
+  dimensionComparison: PlateDimensionComparison | null;
+  /** Original DXF bounding-box dims (not min/max-normalized). */
+  rawDxfDimensions: {
+    widthMm: number | null;
+    lengthMm: number | null;
+  };
 };
 
 export type FinalResultsSummary = {

@@ -2,11 +2,11 @@
 
 import { cn } from "@/lib/utils";
 import {
-  FileSpreadsheet,
+  AlertCircle,
+  ClipboardList,
   Files,
-  AlertTriangle,
-  CheckCircle2,
   Loader2,
+  type LucideIcon,
 } from "lucide-react";
 import type { IntakeAnalysisSummary } from "../../buildIntakeAnalysisSummary";
 import {
@@ -17,43 +17,23 @@ import { buildDxfDuplicateCardBadge } from "../../classifyDxfDuplicates";
 
 export type AnalysisTone = "healthy" | "attention" | "information" | "error";
 
-const TONE_STYLES: Record<
-  AnalysisTone,
-  { border: string; bg: string; accent: string; label: string }
-> = {
-  healthy: {
-    border: "#B7E4C7",
-    bg: "rgba(209, 250, 223, 0.35)",
-    accent: "#0F7A45",
-    label: "תקין",
-  },
-  attention: {
-    border: "#F9DBAF",
-    bg: "rgba(254, 243, 199, 0.45)",
-    accent: "#B45309",
-    label: "דורש בדיקה",
-  },
-  information: {
-    border: "var(--ow-border)",
-    bg: "var(--ow-info-soft)",
-    accent: "var(--ow-text-secondary)",
-    label: "מידע",
-  },
-  error: {
-    border: "#FECDCA",
-    bg: "var(--ow-error-soft)",
-    accent: "var(--ow-error)",
-    label: "שגיאה",
-  },
-};
+const VIVID_ORANGE = "#ea580c";
+const VIVID_GREEN = "#16a34a";
+const MUTED_GRAY = "var(--ow-text-muted)";
 
+function conclusionIsOk(tone: AnalysisTone): boolean {
+  return tone === "healthy";
+}
+
+/** Compact metric cell — kept for callers/tests; prefer InitialAnalysisSummary. */
 export function InitialAnalysisMetric({
   label,
   value,
   supporting,
   badge,
   tone = "information",
-  icon,
+  icon: Icon,
+  headerStyle = "muted",
   className,
   valueNode,
 }: {
@@ -62,94 +42,73 @@ export function InitialAnalysisMetric({
   supporting: string;
   badge?: string | null;
   tone?: AnalysisTone;
-  icon: React.ReactNode;
+  icon?: LucideIcon;
+  /** muted = gray header; vivid = strong orange header (review card) */
+  headerStyle?: "muted" | "vivid";
   className?: string;
   valueNode?: React.ReactNode;
 }) {
-  const styles = TONE_STYLES[tone];
+  const headerColor =
+    headerStyle === "vivid" ? VIVID_ORANGE : MUTED_GRAY;
+  const ok = conclusionIsOk(tone);
+  const conclusionDot = ok ? VIVID_GREEN : VIVID_ORANGE;
+
   return (
-    <section
+    <div
       className={cn(
-        "flex min-h-[132px] flex-1 flex-col rounded-[18px] border px-4 py-3.5",
+        "flex min-w-0 flex-col gap-3 rounded-[var(--ow-radius-lg)] border px-5 py-5",
         className
       )}
       style={{
-        borderColor: styles.border,
-        backgroundColor: styles.bg,
+        borderColor: "var(--ow-border)",
+        backgroundColor: "color-mix(in srgb, var(--ow-surface) 20%, transparent)",
       }}
       aria-label={`${label}: ${value}. ${supporting}${badge ? `. ${badge}` : ""}`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span
-            className="flex h-7 w-7 items-center justify-center rounded-full"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.75)",
-              color: styles.accent,
-            }}
+      <div className="flex items-center gap-2.5">
+        {Icon ? (
+          <Icon
+            className="h-4 w-4 shrink-0"
+            style={{ color: headerColor }}
             aria-hidden
-          >
-            {icon}
-          </span>
-          <h3
-            className="text-[12px] font-medium"
-            style={{ color: "var(--ow-text-secondary)" }}
-          >
-            {label}
-          </h3>
-        </div>
+          />
+        ) : null}
         <span
-          className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-          style={{
-            color: styles.accent,
-            backgroundColor: "rgba(255,255,255,0.7)",
-          }}
+          className="text-[12px] font-medium tracking-wide"
+          style={{ color: headerColor }}
         >
-          {styles.label}
+          {label}
         </span>
       </div>
 
       <div
-        className="mt-3 text-[34px] font-semibold leading-none tracking-tight ow-tabular"
+        className="ow-tabular text-[34px] font-semibold leading-none tracking-tight sm:text-[36px]"
         style={{ color: "var(--ow-text)" }}
       >
         {valueNode ?? value}
       </div>
-      <p
-        className="mt-1.5 text-[12px] leading-snug"
-        style={{ color: "var(--ow-text-secondary)" }}
-      >
-        {supporting}
-      </p>
-      {badge ? (
-        <p
-          className="mt-auto pt-2 text-[12px] font-medium"
-          style={{ color: styles.accent }}
-        >
-          {badge}
-        </p>
-      ) : (
-        <div className="mt-auto" />
-      )}
-    </section>
-  );
-}
 
-function RtlFlowChevron() {
-  return (
-    <div
-      className="hidden shrink-0 items-center self-center text-[var(--ow-text-muted)] lg:flex"
-      aria-hidden
-    >
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-        <path
-          d="M12.5 4.5L7 10l5.5 5.5"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <div className="space-y-1">
+        <p
+          className="text-[13px] leading-snug"
+          style={{ color: "var(--ow-text-secondary)" }}
+        >
+          {supporting}
+        </p>
+        {badge ? (
+          <p
+            className="flex items-start gap-2 text-[12px] font-bold leading-snug"
+            style={{ color: "var(--ow-text-secondary)" }}
+          >
+            <span
+              className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: conclusionDot }}
+              aria-hidden
+            />
+            <span>{badge}</span>
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -183,7 +142,6 @@ export function InitialAnalysisSummary({
           ? "information"
           : "healthy";
 
-  // Issues requiring review — attention, not a global error (unless no usable DXF).
   const attentionTone: AnalysisTone = !summary.ready
     ? "information"
     : summary.showNoUsableDxfFailure
@@ -213,7 +171,7 @@ export function InitialAnalysisSummary({
     attentionBadge = "משווה בין רשימת החומר לקובצי ה־DXF";
     attentionValueNode = (
       <Loader2
-        className="h-8 w-8 animate-spin"
+        className="h-7 w-7 animate-spin"
         style={{ color: "var(--ow-text-muted)" }}
         aria-label="בודק התאמות"
       />
@@ -225,8 +183,7 @@ export function InitialAnalysisSummary({
         review.affectedItemCount === 1
           ? "פריט דורש בדיקה"
           : "פריטים דורשים בדיקה";
-      const categoryLine = buildReviewMetricCategoryLine(summary);
-      attentionBadge = categoryLine || null;
+      attentionBadge = buildReviewMetricCategoryLine(summary) || null;
     } else {
       attentionValue = formatHebrewCount(review.findingCategoryCount);
       attentionSupporting =
@@ -242,7 +199,7 @@ export function InitialAnalysisSummary({
 
   return (
     <div
-      className="flex flex-col gap-2.5 lg:flex-row lg:items-stretch lg:gap-2"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-3"
       role="group"
       aria-label="סיכום ניתוח ראשוני"
     >
@@ -252,20 +209,18 @@ export function InitialAnalysisSummary({
         supporting="פריטים ברשימה"
         badge={materialBadge}
         tone={materialTone}
-        icon={<FileSpreadsheet className="h-3.5 w-3.5" aria-hidden />}
+        icon={ClipboardList}
+        headerStyle="muted"
       />
-      <RtlFlowChevron />
       <InitialAnalysisMetric
         label="קובצי DXF"
         value={formatHebrewCount(d.totalFiles)}
-        supporting={
-          d.totalFiles === 1 ? "קובץ DXF נותח" : "קובצי DXF נותחו"
-        }
+        supporting={d.totalFiles === 1 ? "קובץ DXF נותח" : "קובצי DXF נותחו"}
         badge={dxfBadge}
         tone={uploadTone}
-        icon={<Files className="h-3.5 w-3.5" aria-hidden />}
+        icon={Files}
+        headerStyle="muted"
       />
-      <RtlFlowChevron />
       <InitialAnalysisMetric
         label="דורש בדיקה"
         value={attentionValue}
@@ -273,13 +228,8 @@ export function InitialAnalysisSummary({
         supporting={attentionSupporting}
         badge={attentionBadge}
         tone={attentionTone}
-        icon={
-          attentionTone === "healthy" ? (
-            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-          ) : (
-            <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-          )
-        }
+        icon={AlertCircle}
+        headerStyle="vivid"
       />
     </div>
   );

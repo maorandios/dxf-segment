@@ -303,20 +303,56 @@ export function GuidedIssueReview({
           {code === "PART_ID_DIMENSION_MISMATCH" && (
             <div className="space-y-3">
               <div className="rounded-md border border-border p-3 text-sm">
-                <div>
-                  מידות בקובץ החומרים:{" "}
-                  {formatDxfDims(
-                    row.source.sourceWidthMm,
-                    row.source.sourceLengthMm
-                  )}
-                </div>
-                <div className="mt-1">
-                  מידות בקובץ ה-DXF:{" "}
-                  {formatDxfDims(
-                    row.dxfDimensions.widthMm,
-                    row.dxfDimensions.lengthMm
-                  )}
-                </div>
+                {row.dimensionComparison ? (
+                  <>
+                    <div>
+                      מידות ברשימת החומר:{" "}
+                      {formatDxfDims(
+                        row.dimensionComparison.source.widthMm,
+                        row.dimensionComparison.source.lengthMm
+                      )}
+                    </div>
+                    <div className="mt-1">
+                      מידות בקובץ ה-DXF:{" "}
+                      {formatDxfDims(
+                        row.dimensionComparison.dxf.widthMm,
+                        row.dimensionComparison.dxf.lengthMm
+                      )}
+                    </div>
+                    {row.dimensionComparison.orientation === "ROTATED" ? (
+                      <div className="mt-1 text-muted-foreground">
+                        המידות הושוו ללא תלות בכיוון.
+                      </div>
+                    ) : null}
+                    <div className="mt-1">
+                      נמצא פער משמעותי במידות (הפרש מרבי:{" "}
+                      {row.dimensionComparison.maxAbsoluteDifferenceMm.toLocaleString(
+                        "he-IL",
+                        { maximumFractionDigits: 2 }
+                      )}{" "}
+                      מ״מ).
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      מידות בקובץ החומרים:{" "}
+                      {formatDxfDims(
+                        row.source.sourceWidthMm,
+                        row.source.sourceLengthMm
+                      )}
+                    </div>
+                    <div className="mt-1">
+                      מידות בקובץ ה-DXF:{" "}
+                      {formatDxfDims(
+                        row.rawDxfDimensions?.widthMm ??
+                          row.dxfDimensions.widthMm,
+                        row.rawDxfDimensions?.lengthMm ??
+                          row.dxfDimensions.lengthMm
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 {row.part.matchedDxfId && (

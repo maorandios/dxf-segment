@@ -3,6 +3,7 @@
  */
 
 import type { MaterialListRow } from "../materialList/types";
+import type { PlateDimensionComparison } from "./dimensionMismatch";
 
 export type FinalItemStatus =
   | "READY"
@@ -39,6 +40,8 @@ export type DxfReviewIssue = {
   /** Optional compact comparison for dimension mismatch. */
   workbookDimsLabel?: string;
   dxfDimsLabel?: string;
+  /** Selected rotation-invariant comparison when dims were evaluated. */
+  dimensionComparison?: PlateDimensionComparison | null;
 };
 
 export type DxfLinkedMaterialItem = {
@@ -69,6 +72,9 @@ export type DxfLinkedMaterialItem = {
     lengthMm: number | null;
     source: "DXF" | "WORKBOOK" | "NONE";
   };
+
+  /** Comparison for review UI; null when dims unavailable. */
+  dimensionComparison: PlateDimensionComparison | null;
 
   calculations: {
     unitAreaM2: number | null;

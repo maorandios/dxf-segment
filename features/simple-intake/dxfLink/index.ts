@@ -9,10 +9,22 @@ export type {
 } from "./types";
 export { FINAL_ITEM_STATUS_HE, DXF_MATCH_LEVEL_HE } from "./types";
 export {
+  PLATE_DIMENSION_TOLERANCE,
   DIMENSION_MISMATCH_ABSOLUTE_MM,
   DIMENSION_MISMATCH_RELATIVE_PERCENT,
   normalizeDimensionPair,
+  areValidPositiveDimensions,
+  comparePlateDimensions,
+  getComparisonScore,
   isSignificantDimensionMismatch,
+} from "./dimensionMismatch";
+export type {
+  PlateDimensions,
+  DimensionOrientation,
+  DimensionComparisonTolerance,
+  DimensionAxisComparison,
+  PlateDimensionComparison,
+  NullablePlateDimensions,
 } from "./dimensionMismatch";
 export {
   calcDxfLinkMetrics,

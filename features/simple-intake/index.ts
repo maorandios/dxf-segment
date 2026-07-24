@@ -83,9 +83,11 @@ export {
   deriveInitialSummaryIssueCounts,
   deriveReviewSummaryMetric,
   deriveAffectedMaterialItemIds,
+  enforceAffectedItemCountInvariant,
   buildInitialFindingPresentations,
   buildSummaryIssueActionRows,
   buildInitialFindingsDiagnostics,
+  buildDimensionComparisonDiagnostics,
   assertPhysicalUniqueDuplicateInvariant,
 } from "./buildIntakeAnalysisSummary";
 export type {
@@ -98,9 +100,22 @@ export type {
   ReviewSummaryMetric,
   InitialFindingsDiagnostics,
   IdentifierFreeAnalysisDiagnostics,
+  DimensionComparisonDiagnostics,
+  DimensionComparisonSampleRow,
+  ActiveReviewDiagnostics,
+  ReviewReasonSampleRow,
   MatchingStatusCounts,
   SummaryIssueActionRow,
 } from "./buildIntakeAnalysisSummary";
+export {
+  getActiveReviewReasons,
+  getActiveBlockingReasons,
+  deriveUnifiedItemStatus,
+  buildUnifiedReviewSummary,
+  reconcileActiveIssueCodes,
+  activeReviewReasonLabelHe,
+} from "./results/activeReviewReasons";
+export type { UnifiedReviewSummary } from "./results/activeReviewReasons";
 export {
   buildPreUnifiedReviewSummary,
   buildPreUnifiedReviewSummaryFromCanonical,

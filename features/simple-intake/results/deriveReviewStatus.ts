@@ -1,48 +1,26 @@
 /**
  * Four user-facing review statuses for the final results table.
+ * Delegates to canonical active-reason selectors.
  */
 
+import {
+  deriveUnifiedItemStatus,
+} from "./activeReviewReasons";
+import type { PlateDimensionComparison } from "../dxfLink/dimensionMismatch";
 import type { FinalIssueCode, FinalReviewStatus } from "./types";
-
-const BLOCKING: FinalIssueCode[] = [
-  "NO_DXF_FOUND",
-  "EXPLICIT_DXF_FILE_MISSING",
-  "DXF_ASSIGNED_TO_BETTER_ROW",
-  "DXF_INVALID",
-  "MISSING_QUANTITY",
-  "MISSING_MATERIAL",
-  "MISSING_THICKNESS",
-  "MISSING_REQUIRED_DIMENSIONS",
-];
-
-const REVIEW: FinalIssueCode[] = [
-  "MULTIPLE_DXF_CANDIDATES",
-  "PART_ID_DIMENSION_MISMATCH",
-  "MANUAL_MATCH_NOT_CONFIRMED",
-  "HEURISTIC_MATCH_UNCONFIRMED",
-];
 
 export function deriveReviewStatus(args: {
   excluded: boolean;
   hasValidMatchedDxf: boolean;
   issueCodes: FinalIssueCode[];
+  dimensionComparison?: PlateDimensionComparison | null;
+  exactIdentifierAssignment?: boolean;
 }): FinalReviewStatus {
-  if (args.excluded) return "EXCLUDED";
-
-  const codes = args.issueCodes;
-
-  if (codes.some((c) => BLOCKING.includes(c))) {
-    return "BLOCKED";
-  }
-
-  if (codes.some((c) => REVIEW.includes(c))) {
-    return "NEEDS_REVIEW";
-  }
-
-  // READY: valid DXF + quantity + material + thickness (no blocking/review issues)
-  if (args.hasValidMatchedDxf) {
-    return "READY";
-  }
-
-  return "BLOCKED";
+  return deriveUnifiedItemStatus({
+    isExcluded: args.excluded,
+    hasValidMatchedDxf: args.hasValidMatchedDxf,
+    issueCodes: args.issueCodes,
+    dimensionComparison: args.dimensionComparison,
+    exactIdentifierAssignment: args.exactIdentifierAssignment,
+  });
 }

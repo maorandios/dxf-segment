@@ -14,16 +14,17 @@ export function UnifiedReviewActionPanel({
   onBackToDxf?: () => void;
 }) {
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       <div
-        className="flex flex-col gap-3 rounded-[18px] border px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-4 rounded-[var(--ow-radius-lg)] border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
         style={{
           borderColor: "var(--ow-border)",
           backgroundColor: "var(--ow-surface)",
+          boxShadow: "var(--ow-shadow-sm)",
         }}
       >
         <p
-          className="max-w-xl text-[12px] leading-relaxed"
+          className="max-w-xl text-[13px] leading-relaxed"
           style={{ color: "var(--ow-text-secondary)" }}
         >
           פתיחת הטבלה אינה מאשרת את הנתונים. כל הפערים נשמרים, וניתן לייצא דוח פערים מרוכז לפני תמחור.
@@ -33,14 +34,17 @@ export function UnifiedReviewActionPanel({
           type="button"
           disabled={!canOpen}
           onClick={onOpenUnifiedTable}
-          className="min-w-[11rem] shrink-0 focus-visible:ring-2"
+          className="h-12 min-w-[12rem] shrink-0 rounded-2xl px-8 text-[15px] font-medium shadow-none focus-visible:ring-2"
           style={
             canOpen
               ? {
                   backgroundColor: "var(--ow-accent)",
                   color: "var(--ow-accent-fg)",
                 }
-              : undefined
+              : {
+                  backgroundColor: "#E4E7EC",
+                  color: "#98A2B3",
+                }
           }
         >
           פתח טבלת בדיקה מאוחדת
@@ -48,26 +52,36 @@ export function UnifiedReviewActionPanel({
       </div>
 
       {(onBackToMaterial || onBackToDxf) && (
-        <div className="flex flex-wrap gap-3 px-1">
+        <div className="flex flex-wrap justify-end gap-2">
           {onBackToDxf && (
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={onBackToDxf}
-              className="text-[12px] underline-offset-2 hover:underline"
-              style={{ color: "var(--ow-text-muted)" }}
+              className="h-10 rounded-2xl px-4 text-[13px] font-medium shadow-none"
+              style={{
+                borderColor: "var(--ow-border-strong)",
+                color: "var(--ow-text-secondary)",
+                backgroundColor: "var(--ow-surface)",
+              }}
             >
               חזרה להעלאת DXF
-            </button>
+            </Button>
           )}
           {onBackToMaterial && (
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={onBackToMaterial}
-              className="text-[12px] underline-offset-2 hover:underline"
-              style={{ color: "var(--ow-text-muted)" }}
+              className="h-10 rounded-2xl px-4 text-[13px] font-medium shadow-none"
+              style={{
+                borderColor: "var(--ow-border-strong)",
+                color: "var(--ow-text-secondary)",
+                backgroundColor: "var(--ow-surface)",
+              }}
             >
               חזרה לרשימת החומר
-            </button>
+            </Button>
           )}
         </div>
       )}

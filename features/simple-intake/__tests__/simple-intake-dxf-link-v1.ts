@@ -146,7 +146,8 @@ console.log("=== Approved Material List to DXF Review v1 ===\n");
 }
 
 {
-  const items = buildDxfLinkedMaterialItems({
+  // Exact part-id assignment is CERTAIN — no manual confirmation required.
+  const exactItems = buildDxfLinkedMaterialItems({
     materialListRows: [materialRow({ rowId: "ok" })],
     resultRows: [
       resultRow("ok", {
@@ -159,9 +160,30 @@ console.log("=== Approved Material List to DXF Review v1 ===\n");
     ],
     dxfParts: [dxfPart({ id: "d1", filename: "ok.dxf", widthMm: 100, lengthMm: 200 })],
   });
+  assertEq(exactItems[0]!.finalStatus, "READY", "exact id ready");
+  assertEq(exactItems[0]!.matchLevel, "CERTAIN", "exact id certain");
+  assert(
+    !exactItems[0]!.issues.some((i) => i.kind === "HEURISTIC_MATCH_UNCONFIRMED"),
+    "no heuristic issue for exact id"
+  );
+
+  // Geometry suggestions still require confirmation.
+  const items = buildDxfLinkedMaterialItems({
+    materialListRows: [materialRow({ rowId: "ok" })],
+    resultRows: [
+      resultRow("ok", {
+        status: "MATCHED",
+        method: "GEOMETRY",
+        matchedDxfId: "d1",
+        candidates: [],
+        message: null,
+      }),
+    ],
+    dxfParts: [dxfPart({ id: "d1", filename: "ok.dxf", widthMm: 100, lengthMm: 200 })],
+  });
   const matchedRow = resultRow("ok", {
     status: "MATCHED",
-    method: "EXACT_ID",
+    method: "GEOMETRY",
     matchedDxfId: "d1",
     candidates: [],
     message: null,
@@ -172,7 +194,7 @@ console.log("=== Approved Material List to DXF Review v1 ===\n");
     dxfParts: [dxfPart({ id: "d1", filename: "ok.dxf", widthMm: 100, lengthMm: 200 })],
     confirmedMatchIds: new Set([matchedRow.resultRowId, "ok"]),
   });
-  assertEq(items[0]!.finalStatus, "NEEDS_REVIEW", "unconfirmed heuristic needs review");
+  assertEq(items[0]!.finalStatus, "NEEDS_REVIEW", "unconfirmed geometry needs review");
   assert(
     items[0]!.issues.some((i) => i.kind === "HEURISTIC_MATCH_UNCONFIRMED"),
     "heuristic issue"
@@ -191,7 +213,7 @@ console.log("=== Approved Material List to DXF Review v1 ===\n");
   assert(!reviewUi.includes("confidence"), "no confidence");
   assert(!reviewUi.includes("score"), "no score");
   assert(!reviewUi.toLowerCase().includes("exact_id"), "no method");
-  console.log("✓ Clear match requires confirmation; no scores");
+  console.log("✓ Exact id is CERTAIN; geometry suggestions require confirmation");
 }
 
 {

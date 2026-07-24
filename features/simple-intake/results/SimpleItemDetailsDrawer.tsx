@@ -7,9 +7,53 @@ import {
   formatDxfDims,
   formatWeightKg,
 } from "./commercialCalculations";
+import { describeDimensionComparisonHe } from "./dimensionComparisonCopy";
+import {
+  activeReviewReasonLabelHe,
+  getActiveBlockingReasons,
+  getActiveReviewReasons,
+} from "./activeReviewReasons";
 import { issueMessageHe, REVIEW_STATUS_HE } from "./issueMessages";
 import { SimpleDxfThumbnail } from "./SimpleDxfThumbnail";
+import type { PlateDimensionComparison } from "../dxfLink/dimensionMismatch";
 import type { FinalIntakeRow } from "./types";
+
+function DimensionComparisonNote({
+  comparison,
+}: {
+  comparison: PlateDimensionComparison;
+}) {
+  const copy = describeDimensionComparisonHe(comparison);
+  return (
+    <div
+      className="mt-3 space-y-1 rounded-md border px-3 py-2 text-xs"
+      style={{
+        borderColor: "var(--ow-border, hsl(var(--border)))",
+        backgroundColor: copy.isActionRequired
+          ? "var(--ow-attention-soft, hsl(var(--muted)))"
+          : "var(--ow-surface-muted, hsl(var(--muted)))",
+      }}
+    >
+      <p>
+        מידות ברשימת החומר: {copy.sourceLabel}
+      </p>
+      <p>מידות DXF: {copy.dxfLabel}</p>
+      {copy.orientationNote ? <p>{copy.orientationNote}</p> : null}
+      <p
+        style={{
+          color: copy.isActionRequired
+            ? "var(--ow-attention, hsl(var(--foreground)))"
+            : "var(--ow-text-secondary, hsl(var(--muted-foreground)))",
+        }}
+      >
+        {copy.toleranceNote}
+      </p>
+      {!copy.isActionRequired ? (
+        <p className="text-muted-foreground">אין צורך בפעולה.</p>
+      ) : null}
+    </div>
+  );
+}
 
 export function SimpleItemDetailsDrawer({
   row,
@@ -136,12 +180,21 @@ export function SimpleItemDetailsDrawer({
                 <tr className="border-b border-border/60">
                   <td className="py-1.5">רוחב</td>
                   <td>{fmt(row.source.sourceWidthMm)}</td>
-                  <td>{fmt(row.dxfDimensions.widthMm)}</td>
+                  <td>
+                    {fmt(
+                      row.rawDxfDimensions?.widthMm ?? row.dxfDimensions.widthMm
+                    )}
+                  </td>
                 </tr>
                 <tr className="border-b border-border/60">
                   <td className="py-1.5">אורך</td>
                   <td>{fmt(row.source.sourceLengthMm)}</td>
-                  <td>{fmt(row.dxfDimensions.lengthMm)}</td>
+                  <td>
+                    {fmt(
+                      row.rawDxfDimensions?.lengthMm ??
+                        row.dxfDimensions.lengthMm
+                    )}
+                  </td>
                 </tr>
                 <tr className="border-b border-border/60">
                   <td className="py-1.5">שטח מקור</td>
@@ -165,11 +218,49 @@ export function SimpleItemDetailsDrawer({
                 </tr>
               </tbody>
             </table>
-            <p className="mt-2 text-xs text-muted-foreground">
-              ערכי השטח והמשקל מהמסמך נשמרים כערכי מקור. החישוב המסחרי מבוסס על
-              מידות קובץ ה-DXF.
-            </p>
+            {row.dimensionComparison ? (
+              <DimensionComparisonNote comparison={row.dimensionComparison} />
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                ערכי השטח והמשקל מהמסמך נשמרים כערכי מקור. החישוב המסחרי מבוסס על
+                מידות קובץ ה-DXF.
+              </p>
+            )}
           </section>
+
+          {(row.status === "NEEDS_REVIEW" || row.status === "BLOCKED") && (
+            <section>
+              <h3 className="mb-2 font-medium">סיבת הבדיקה</h3>
+              {(() => {
+                const exact =
+                  row.match.status === "MATCHED" &&
+                  (row.match.method === "EXPLICIT_FILENAME" ||
+                    row.match.method === "EXACT_ID");
+                const reasons = [
+                  ...getActiveReviewReasons(row.issueCodes, {
+                    issueCodes: row.issueCodes,
+                    dimensionComparison: row.dimensionComparison,
+                    exactIdentifierAssignment: exact,
+                  }),
+                  ...getActiveBlockingReasons(row.issueCodes),
+                ];
+                if (reasons.length === 0) {
+                  return (
+                    <p className="text-muted-foreground">
+                      אין סיבת בדיקה פעילה.
+                    </p>
+                  );
+                }
+                return (
+                  <ul className="space-y-1.5 text-[13px]">
+                    {reasons.map((code) => (
+                      <li key={code}>{activeReviewReasonLabelHe(code)}</li>
+                    ))}
+                  </ul>
+                );
+              })()}
+            </section>
+          )}
 
           <section>
             <h3 className="mb-2 font-medium">בעיות ופעולות</h3>
@@ -195,7 +286,8 @@ export function SimpleItemDetailsDrawer({
               <Button type="button" size="sm" onClick={onPickDxf}>
                 שנה DXF
               </Button>
-              {row.issueCodes.includes("MANUAL_MATCH_NOT_CONFIRMED") && (
+              {(row.issueCodes.includes("MANUAL_MATCH_NOT_CONFIRMED") ||
+                row.issueCodes.includes("HEURISTIC_MATCH_UNCONFIRMED")) && (
                 <Button type="button" size="sm" onClick={onConfirmManual}>
                   אשר התאמה
                 </Button>

@@ -191,18 +191,18 @@ console.log("=== Initial Analysis Summary Polish v2 ===\n");
     "utf8"
   );
 
-  // Instructional section not rendered by default (only optional first-use)
-  assert(
-    !screen.includes("<UnifiedReviewNextSteps />") ||
-      screen.includes("showHelp"),
-    "next steps gated"
-  );
-  assert(screen.includes("showHelp"), "first-use help gate");
-  assert(screen.includes("buildOneLineAnalysisSummary"), "one-line summary");
+  // Help / instructional section removed — keep summary focused
+  assert(!screen.includes("עזרה"), "no help button");
+  assert(!screen.includes("showHelp"), "no help gate");
+  assert(!screen.includes("UnifiedReviewNextSteps"), "no next-steps panel");
+  assert(!screen.includes("buildOneLineAnalysisSummary"), "no one-line subtitle");
+  assert(screen.includes("ניתוח רשימת החומר וקבצי DXF"), "main title");
   assert(metrics.includes("רשימת החומר"), "material metric");
   assert(metrics.includes("קובצי DXF"), "dxf metric");
   assert(metrics.includes("דורש בדיקה"), "review label not error");
   assert(issues.includes("FindingRow") || issues.includes("<li"), "compact rows");
+  assert(issues.includes("מצאנו מספר פערים שדורשים התייחסות"), "findings heading");
+  assert(!issues.includes("פירוט מלא זמין"), "no findings subtitle");
   assert(!issues.includes("פתח בטבלה"), "no per-finding nav");
   assert(!issues.includes("PreviewIds"), "no id previews");
   assert(!issues.includes("נמצאו פערים בין רשימת החומר"), "no general gaps banner");
@@ -213,7 +213,7 @@ console.log("=== Initial Analysis Summary Polish v2 ===\n");
   );
   assert(action.includes("פתח טבלת בדיקה מאוחדת"), "primary CTA");
   assert(action.includes("חזרה להעלאת DXF"), "secondary");
-  console.log("✓ UI polish: no default instructional section, compact issues, CTA");
+  console.log("✓ UI polish: focused header, findings, CTA + back buttons");
 }
 
 {

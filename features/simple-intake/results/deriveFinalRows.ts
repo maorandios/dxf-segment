@@ -15,7 +15,9 @@ import {
   calcCommercialUnitWeightKg,
   resolvePlateDensityKgPerM3,
 } from "./commercialCalculations";
+import { comparePlateDimensions } from "../dxfLink/dimensionMismatch";
 import { normalizeDimensionPair } from "../dxfLink/dimensionMismatch";
+import { reconcileActiveIssueCodes } from "./activeReviewReasons";
 import { deriveIssueCodes } from "./deriveIssueCodes";
 import { deriveReviewStatus } from "./deriveReviewStatus";
 import { issueMessageHe, primaryActionLabelHe } from "./issueMessages";
@@ -190,17 +192,21 @@ export function deriveFinalRows(args: {
     });
 
     const isManuallyMatched = row.match.method === "MANUAL";
-    const isHeuristicMatched =
-      row.match.method === "EXACT_ID" || row.match.method === "GEOMETRY";
+    // Only geometry suggestions require confirmation — exact part-id / filename are CERTAIN.
+    const isGeometrySuggested = row.match.method === "GEOMETRY";
+    const exactIdentifierAssignment =
+      row.match.status === "MATCHED" &&
+      (row.match.method === "EXPLICIT_FILENAME" ||
+        row.match.method === "EXACT_ID");
     const isManualMatchConfirmed =
-      (isManuallyMatched || isHeuristicMatched) &&
+      (isManuallyMatched || isGeometrySuggested) &&
       confirmed.has(row.resultRowId);
     const manualMatchUnconfirmed =
       isManuallyMatched &&
       row.match.matchedDxfId != null &&
       !confirmed.has(row.resultRowId);
     const heuristicMatchUnconfirmed =
-      isHeuristicMatched &&
+      isGeometrySuggested &&
       row.match.status === "MATCHED" &&
       row.match.matchedDxfId != null &&
       !confirmed.has(row.resultRowId);
@@ -214,7 +220,19 @@ export function deriveFinalRows(args: {
       unmatchedReasons.get(row.resultRowId) ??
       null;
 
-    const issueCodes = deriveIssueCodes({
+    const rawDxfDimensions = {
+      widthMm: hasValidMatchedDxf ? (dxf!.widthMm ?? null) : null,
+      lengthMm: hasValidMatchedDxf ? (dxf!.lengthMm ?? null) : null,
+    };
+
+    const dimensionComparison = hasValidMatchedDxf
+      ? comparePlateDimensions(
+          { widthMm: sourceWidthMm, lengthMm: sourceLengthMm },
+          rawDxfDimensions
+        )
+      : null;
+
+    const rawCodes = deriveIssueCodes({
       row,
       dxf,
       material,
@@ -227,13 +245,38 @@ export function deriveFinalRows(args: {
       manualMatchUnconfirmed,
       heuristicMatchUnconfirmed,
       dxfFilesUploaded,
+      dimensionComparison,
+    });
+    const issueCodes = reconcileActiveIssueCodes(rawCodes, {
+      dimensionComparison,
+      exactIdentifierAssignment,
     });
 
     const status = deriveReviewStatus({
       excluded: row.excluded,
       hasValidMatchedDxf,
       issueCodes,
+      dimensionComparison,
+      exactIdentifierAssignment,
     });
+
+    if (
+      status === "NEEDS_REVIEW" &&
+      !issueCodes.some(
+        (c) =>
+          c === "MULTIPLE_DXF_CANDIDATES" ||
+          c === "PART_ID_DIMENSION_MISMATCH" ||
+          c === "MANUAL_MATCH_NOT_CONFIRMED" ||
+          c === "HEURISTIC_MATCH_UNCONFIRMED"
+      )
+    ) {
+      if (typeof console !== "undefined") {
+        console.warn(
+          "[omega] NEEDS_REVIEW without active review reason — forcing READY if DXF valid",
+          { id: row.resultRowId, issueCodes }
+        );
+      }
+    }
 
     const materialClean =
       material == null || String(material).trim() === ""
@@ -320,6 +363,8 @@ export function deriveFinalRows(args: {
       isManuallyMatched,
       isManualMatchConfirmed,
       isExcluded: row.excluded,
+      dimensionComparison,
+      rawDxfDimensions,
       match: {
         status: row.match.status,
         method: row.match.method,

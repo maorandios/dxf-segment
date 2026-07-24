@@ -2,7 +2,10 @@
  * Deterministic issue-code derivation for final review rows.
  */
 
-import { isSignificantDimensionMismatch } from "../dxfLink/dimensionMismatch";
+import {
+  comparePlateDimensions,
+  type PlateDimensionComparison,
+} from "../dxfLink/dimensionMismatch";
 import type { SimpleDxfPart, SimpleResultRow, SimpleUnmatchedReason } from "../types";
 import type { FinalIssueCode } from "./types";
 
@@ -19,6 +22,8 @@ export function deriveIssueCodes(args: {
   manualMatchUnconfirmed: boolean;
   heuristicMatchUnconfirmed?: boolean;
   dxfFilesUploaded: boolean;
+  /** When provided, reuse; otherwise computed from source/DXF dims. */
+  dimensionComparison?: PlateDimensionComparison | null;
 }): FinalIssueCode[] {
   const codes: FinalIssueCode[] = [];
   const { row } = args;
@@ -60,15 +65,24 @@ export function deriveIssueCodes(args: {
   if (
     row.match.status === "MATCHED" &&
     args.dxf &&
-    args.dxf.geometryStatus === "VALID" &&
-    isSignificantDimensionMismatch({
-      workbookWidthMm: args.sourceWidthMm,
-      workbookLengthMm: args.sourceLengthMm,
-      dxfWidthMm: args.dxf.widthMm,
-      dxfLengthMm: args.dxf.lengthMm,
-    })
+    args.dxf.geometryStatus === "VALID"
   ) {
-    codes.push("PART_ID_DIMENSION_MISMATCH");
+    const comparison =
+      args.dimensionComparison !== undefined
+        ? args.dimensionComparison
+        : comparePlateDimensions(
+            {
+              widthMm: args.sourceWidthMm,
+              lengthMm: args.sourceLengthMm,
+            },
+            {
+              widthMm: args.dxf.widthMm,
+              lengthMm: args.dxf.lengthMm,
+            }
+          );
+    if (comparison?.hasSignificantMismatch) {
+      codes.push("PART_ID_DIMENSION_MISMATCH");
+    }
   }
 
   // Duplicate DXF usage is diagnostics-only for the normal user (not a primary category).

@@ -7,6 +7,14 @@ import type { MaterialListRow } from "./materialList/types";
 import { normalizePartIdForMatch } from "./normalizePartId";
 import type { SimpleDxfPart, SimpleResultRow } from "./types";
 import type { FinalIssueCode, FinalFilterId, FinalIntakeRow } from "./results/types";
+import type { PlateDimensionComparison } from "./dxfLink/dimensionMismatch";
+import {
+  buildUnifiedReviewSummary,
+  getActiveBlockingReasons,
+  getActiveReviewReasons,
+  reconcileActiveIssueCodes,
+  type UnifiedReviewSummary,
+} from "./results/activeReviewReasons";
 import { resolveMatchLevel } from "./matchWithFilenamePriority";
 import {
   computeSourceIdentifierCoverage,
@@ -126,8 +134,8 @@ export type InitialFindingsDiagnostics = {
 export type IdentifierFreeAnalysisDiagnostics = {
   materialItemCount: number;
   rowsWithExplicitDxfFilename: number;
-  rowsWithExplicitPartId: number;
   rowsWithAnyExplicitIdentifier: number;
+  rowsWithExplicitPartId: number;
   identifierCoverage: SourceIdentifierCoverage;
   physicalDxfFileCount: number;
   uniqueDxfContentCount: number;
@@ -140,6 +148,64 @@ export type IdentifierFreeAnalysisDiagnostics = {
   affectedItemCount: number;
   unreferencedDxfCount: number;
   unverifiableUploadedDxfCount: number;
+};
+
+export type DimensionComparisonSampleRow = {
+  rowId: string;
+  partId: string | null;
+  sourceWidthMm: number | null;
+  sourceLengthMm: number | null;
+  dxfWidthMm: number | null;
+  dxfLengthMm: number | null;
+  selectedOrientation: "DIRECT" | "ROTATED" | null;
+  firstAxisDifferenceMm: number | null;
+  secondAxisDifferenceMm: number | null;
+  maxAbsoluteDifferenceMm: number | null;
+  maxRelativeDifference: number | null;
+  hasSignificantMismatch: boolean;
+};
+
+export type DimensionComparisonDiagnostics = {
+  comparedItemCount: number;
+  directOrientationSelectedCount: number;
+  rotatedOrientationSelectedCount: number;
+  withinToleranceCount: number;
+  significantMismatchCount: number;
+  previousDimensionIssueCount: number | null;
+  recalculatedDimensionIssueCount: number;
+  materialItemCount: number;
+  affectedItemCount: number;
+  issueOccurrenceCount: number;
+  issueCategoryCount: number;
+  affectedCountInvariantPassed: boolean;
+};
+
+export type ActiveReviewDiagnostics = {
+  totalItemCount: number;
+  readyItemCount: number;
+  reviewItemCount: number;
+  blockedItemCount: number;
+  excludedItemCount: number;
+  activeIssueOccurrenceCount: number;
+  activeIssueCategoryCount: number;
+  itemsMarkedReviewWithoutReason: number;
+  itemsMarkedReadyWithActiveReason: number;
+  exactIdentifierAssignments: number;
+  suggestedAssignments: number;
+  dimensionIssuesBeforeReconciliation: number;
+  activeDimensionIssuesAfterReconciliation: number;
+  statusCountInvariantPassed: boolean;
+};
+
+export type ReviewReasonSampleRow = {
+  rowId: string;
+  partId: string | null;
+  currentStatus: string;
+  matchLevel: string | null;
+  assignmentSource: string | null;
+  dimensionWithinTolerance: boolean | null;
+  activeReviewReasonTypes: string[];
+  activeBlockingReasonTypes: string[];
 };
 
 export type IntakeAnalysisSummary = {
@@ -187,6 +253,12 @@ export type IntakeAnalysisSummary = {
   /** Developer-only count diagnostics. */
   initialFindingsDiagnostics: InitialFindingsDiagnostics;
   identifierFreeAnalysisDiagnostics: IdentifierFreeAnalysisDiagnostics;
+  /** Developer-only dimension comparison diagnostics. */
+  dimensionComparisonDiagnostics: DimensionComparisonDiagnostics;
+  dimensionComparisonSample: DimensionComparisonSampleRow[];
+  /** Developer-only active review diagnostics. */
+  activeReviewDiagnostics: ActiveReviewDiagnostics;
+  reviewReasonSample: ReviewReasonSampleRow[];
   ready: boolean;
 };
 
@@ -244,7 +316,7 @@ export function deriveInitialSummaryIssueCounts(args: {
 
 /**
  * Unique material items requiring review from unified/final row state.
- * Does not inflate from the aggregated SOURCE_HAS_NO_DXF_IDENTIFIERS finding alone.
+ * Deduplicates by canonical row id; never counts issue occurrences.
  */
 export function deriveAffectedMaterialItemIds(args: {
   finalRows?: ReadonlyArray<
@@ -281,6 +353,72 @@ export function deriveAffectedMaterialItemIds(args: {
     }
   }
   return affected;
+}
+
+/**
+ * Hard invariant: affected ≤ material. On violation, log and re-derive from
+ * unique final-row ids with review/blocked status.
+ */
+export function enforceAffectedItemCountInvariant(args: {
+  affectedItemIds: ReadonlySet<string>;
+  materialRowIds: ReadonlySet<string>;
+  materialItemCount: number;
+  finalRows?: ReadonlyArray<
+    Pick<FinalIntakeRow, "id" | "status" | "issueCodes" | "isExcluded">
+  >;
+}): {
+  affectedItemIds: Set<string>;
+  affectedCountInvariantPassed: boolean;
+} {
+  const materialItemCount = args.materialItemCount;
+  if (args.affectedItemIds.size <= materialItemCount) {
+    return {
+      affectedItemIds: new Set(args.affectedItemIds),
+      affectedCountInvariantPassed: true,
+    };
+  }
+
+  if (typeof console !== "undefined" && console.warn) {
+    console.warn(
+      "[omega] affectedItemCount exceeds materialItemCount — re-deriving from unique row ids",
+      {
+        affectedItemCount: args.affectedItemIds.size,
+        materialItemCount,
+      }
+    );
+  }
+
+  const rederived = new Set<string>();
+  if (args.finalRows && args.finalRows.length > 0) {
+    for (const row of args.finalRows) {
+      if (row.isExcluded) continue;
+      if (
+        row.status === "NEEDS_REVIEW" ||
+        row.status === "BLOCKED" ||
+        row.issueCodes.some((c) => AFFECTED_FINAL_CODES.has(c))
+      ) {
+        rederived.add(row.id);
+      }
+    }
+  } else {
+    for (const id of args.affectedItemIds) {
+      if (args.materialRowIds.has(id)) rederived.add(id);
+    }
+  }
+
+  if (rederived.size > materialItemCount) {
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn(
+        "[omega] re-derived affectedItemCount still exceeds materialItemCount",
+        { rederived: rederived.size, materialItemCount }
+      );
+    }
+  }
+
+  return {
+    affectedItemIds: rederived,
+    affectedCountInvariantPassed: false,
+  };
 }
 
 export function deriveReviewSummaryMetric(args: {
@@ -436,6 +574,76 @@ export function buildInitialFindingsDiagnostics(args: {
   };
 }
 
+export function buildDimensionComparisonDiagnostics(args: {
+  finalRows?: ReadonlyArray<{
+    id: string;
+    part: { sourcePartId: string | null };
+    dimensionComparison?: PlateDimensionComparison | null;
+  }>;
+  materialItemCount: number;
+  affectedItemCount: number;
+  issueOccurrenceCount: number;
+  issueCategoryCount: number;
+  affectedCountInvariantPassed: boolean;
+}): {
+  dimensionComparisonDiagnostics: DimensionComparisonDiagnostics;
+  dimensionComparisonSample: DimensionComparisonSampleRow[];
+} {
+  let comparedItemCount = 0;
+  let directOrientationSelectedCount = 0;
+  let rotatedOrientationSelectedCount = 0;
+  let withinToleranceCount = 0;
+  let significantMismatchCount = 0;
+  const sample: DimensionComparisonSampleRow[] = [];
+
+  for (const row of args.finalRows ?? []) {
+    const comparison = row.dimensionComparison;
+    if (!comparison) continue;
+    comparedItemCount++;
+    if (comparison.orientation === "DIRECT") directOrientationSelectedCount++;
+    else rotatedOrientationSelectedCount++;
+    if (comparison.isWithinTolerance) withinToleranceCount++;
+    if (comparison.hasSignificantMismatch) significantMismatchCount++;
+
+    if (sample.length < 20) {
+      sample.push({
+        rowId: row.id,
+        partId: row.part.sourcePartId,
+        sourceWidthMm: comparison.source.widthMm,
+        sourceLengthMm: comparison.source.lengthMm,
+        dxfWidthMm: comparison.dxf.widthMm,
+        dxfLengthMm: comparison.dxf.lengthMm,
+        selectedOrientation: comparison.orientation,
+        firstAxisDifferenceMm:
+          comparison.compared.firstAxis.absoluteDifferenceMm,
+        secondAxisDifferenceMm:
+          comparison.compared.secondAxis.absoluteDifferenceMm,
+        maxAbsoluteDifferenceMm: comparison.maxAbsoluteDifferenceMm,
+        maxRelativeDifference: comparison.maxRelativeDifference,
+        hasSignificantMismatch: comparison.hasSignificantMismatch,
+      });
+    }
+  }
+
+  return {
+    dimensionComparisonDiagnostics: {
+      comparedItemCount,
+      directOrientationSelectedCount,
+      rotatedOrientationSelectedCount,
+      withinToleranceCount,
+      significantMismatchCount,
+      previousDimensionIssueCount: null,
+      recalculatedDimensionIssueCount: significantMismatchCount,
+      materialItemCount: args.materialItemCount,
+      affectedItemCount: args.affectedItemCount,
+      issueOccurrenceCount: args.issueOccurrenceCount,
+      issueCategoryCount: args.issueCategoryCount,
+      affectedCountInvariantPassed: args.affectedCountInvariantPassed,
+    },
+    dimensionComparisonSample: sample,
+  };
+}
+
 function deriveMatchingStatusCounts(
   resultRows: ReadonlyArray<SimpleResultRow> | undefined,
   confirmedIds?: ReadonlySet<string>
@@ -461,12 +669,16 @@ function deriveMatchingStatusCounts(
       continue;
     }
     const level = resolveMatchLevel(row.match);
-    if (level === "CERTAIN" && row.match.method === "EXPLICIT_FILENAME") {
+    if (
+      level === "CERTAIN" &&
+      (row.match.method === "EXPLICIT_FILENAME" ||
+        row.match.method === "EXACT_ID")
+    ) {
       explicitFilenameMatchCount++;
     } else if (level === "SUGGESTED") {
       suggestedMatchCount++;
     } else if (level === "CERTAIN") {
-      // Manual certain without counting as explicit filename
+      // Manual certain without counting as explicit identifier
     }
   }
 
@@ -496,7 +708,14 @@ export function buildIntakeAnalysisSummary(args: {
   finalRows?: ReadonlyArray<
     Pick<
       FinalIntakeRow,
-      "id" | "status" | "issueCodes" | "part" | "isExcluded"
+      | "id"
+      | "status"
+      | "issueCodes"
+      | "part"
+      | "isExcluded"
+      | "match"
+      | "preview"
+      | "dimensionComparison"
     >
   >;
   confirmedMatchIds?: ReadonlySet<string>;
@@ -630,12 +849,167 @@ export function buildIntakeAnalysisSummary(args: {
   );
   const issueRows = buildSummaryIssueActionRows(issueCounts, duplicateSummary);
 
-  const affectedItemIds = deriveAffectedMaterialItemIds({
+  const materialRowIdSet = new Set(args.materialRows.map((r) => r.rowId));
+
+  let unifiedSummary: UnifiedReviewSummary | null = null;
+  let activeReviewDiagnostics: ActiveReviewDiagnostics;
+  const reviewReasonSample: ReviewReasonSampleRow[] = [];
+
+  if (args.finalRows && args.finalRows.length > 0) {
+    const statusInputs = args.finalRows.map((row) => {
+      const exactIdentifierAssignment =
+        row.match.status === "MATCHED" &&
+        (row.match.method === "EXPLICIT_FILENAME" ||
+          row.match.method === "EXACT_ID");
+      return {
+        id: row.id,
+        isExcluded: row.isExcluded,
+        status: row.status,
+        issueCodes: row.issueCodes,
+        hasValidMatchedDxf: row.preview.geometryAvailable,
+        dimensionComparison: row.dimensionComparison,
+        exactIdentifierAssignment,
+      };
+    });
+    unifiedSummary = buildUnifiedReviewSummary(statusInputs);
+
+    let dimensionIssuesBefore = 0;
+    let activeDimensionIssuesAfter = 0;
+    let exactIdentifierAssignments = 0;
+    let suggestedAssignments = 0;
+
+    for (const row of args.finalRows) {
+      if (
+        row.match.method === "EXPLICIT_FILENAME" ||
+        row.match.method === "EXACT_ID"
+      ) {
+        if (row.match.status === "MATCHED") exactIdentifierAssignments++;
+      } else if (row.match.method === "GEOMETRY" && row.match.status === "MATCHED") {
+        suggestedAssignments++;
+      }
+      if (row.issueCodes.includes("PART_ID_DIMENSION_MISMATCH")) {
+        activeDimensionIssuesAfter++;
+      }
+      if (row.dimensionComparison?.hasSignificantMismatch) {
+        dimensionIssuesBefore++;
+      } else if (
+        row.dimensionComparison &&
+        !row.dimensionComparison.hasSignificantMismatch
+      ) {
+        // within tolerance — not an active issue
+      }
+
+      if (reviewReasonSample.length < 20) {
+        const exact =
+          row.match.status === "MATCHED" &&
+          (row.match.method === "EXPLICIT_FILENAME" ||
+            row.match.method === "EXACT_ID");
+        const review = getActiveReviewReasons(row.issueCodes, {
+          issueCodes: row.issueCodes,
+          dimensionComparison: row.dimensionComparison,
+          exactIdentifierAssignment: exact,
+        });
+        const blocking = getActiveBlockingReasons(
+          reconcileActiveIssueCodes(row.issueCodes, {
+            dimensionComparison: row.dimensionComparison,
+            exactIdentifierAssignment: exact,
+          })
+        );
+        reviewReasonSample.push({
+          rowId: row.id,
+          partId: row.part.sourcePartId,
+          currentStatus: row.status,
+          matchLevel:
+            row.match.status === "MATCHED"
+              ? row.match.method === "GEOMETRY"
+                ? "SUGGESTED"
+                : row.match.method === "EXPLICIT_FILENAME" ||
+                    row.match.method === "EXACT_ID" ||
+                    row.match.method === "MANUAL"
+                  ? "CERTAIN"
+                  : "SUGGESTED"
+              : "UNASSIGNED",
+          assignmentSource: row.match.method,
+          dimensionWithinTolerance:
+            row.dimensionComparison != null
+              ? row.dimensionComparison.isWithinTolerance
+              : null,
+          activeReviewReasonTypes: review,
+          activeBlockingReasonTypes: blocking,
+        });
+      }
+    }
+
+    activeReviewDiagnostics = {
+      totalItemCount: unifiedSummary.totalItemCount,
+      readyItemCount: unifiedSummary.readyItemCount,
+      reviewItemCount: unifiedSummary.reviewItemCount,
+      blockedItemCount: unifiedSummary.blockedItemCount,
+      excludedItemCount: unifiedSummary.excludedItemCount,
+      activeIssueOccurrenceCount: unifiedSummary.activeIssueOccurrenceCount,
+      activeIssueCategoryCount: findings.length,
+      itemsMarkedReviewWithoutReason:
+        unifiedSummary.itemsMarkedReviewWithoutReason,
+      itemsMarkedReadyWithActiveReason:
+        unifiedSummary.itemsMarkedReadyWithActiveReason,
+      exactIdentifierAssignments,
+      suggestedAssignments,
+      dimensionIssuesBeforeReconciliation: dimensionIssuesBefore,
+      activeDimensionIssuesAfterReconciliation: activeDimensionIssuesAfter,
+      statusCountInvariantPassed: unifiedSummary.statusCountInvariantPassed,
+    };
+  } else {
+    activeReviewDiagnostics = {
+      totalItemCount: totalRows,
+      readyItemCount: 0,
+      reviewItemCount: 0,
+      blockedItemCount: 0,
+      excludedItemCount: 0,
+      activeIssueOccurrenceCount: issueCounts.actionableIssueCount,
+      activeIssueCategoryCount: findings.length,
+      itemsMarkedReviewWithoutReason: 0,
+      itemsMarkedReadyWithActiveReason: 0,
+      exactIdentifierAssignments: matchingStatus.explicitFilenameMatchCount,
+      suggestedAssignments: matchingStatus.suggestedMatchCount,
+      dimensionIssuesBeforeReconciliation: 0,
+      activeDimensionIssuesAfterReconciliation: conflictingPartIds.length,
+      statusCountInvariantPassed: true,
+    };
+  }
+
+  let affectedItemIds = deriveAffectedMaterialItemIds({
     finalRows: args.finalRows,
     resultRows: args.resultRows,
   });
-  // Explicit missing DXF references always affect their material rows.
+
+  // Prefer status-derived final-row ids when available.
+  if (unifiedSummary && args.finalRows && args.finalRows.length > 0) {
+    affectedItemIds = new Set(
+      args.finalRows
+        .filter(
+          (r) =>
+            !r.isExcluded &&
+            (r.status === "NEEDS_REVIEW" || r.status === "BLOCKED")
+        )
+        .map((r) => r.id)
+    );
+  }
+
+  // Part IDs already represented by an affected final row — avoid double-counting
+  // when material.rowId !== finalRows.id (e.g. res_<rowId> vs rowId → 14+14=28).
+  const coveredPartIds = new Set<string>();
+  if (args.finalRows) {
+    for (const row of args.finalRows) {
+      if (!affectedItemIds.has(row.id)) continue;
+      const id =
+        normalizePartIdForMatch(row.part.sourcePartId) ||
+        normalizePartIdForMatch(row.part.displayName);
+      if (id) coveredPartIds.add(id);
+    }
+  }
+
   for (const partId of missingDxfPartIds) {
+    if (coveredPartIds.has(partId)) continue;
     for (const row of args.materialRows) {
       const norm = normalizePartIdForMatch(
         getSourceMatchIdentifier(row).partId
@@ -644,6 +1018,7 @@ export function buildIntakeAnalysisSummary(args: {
     }
   }
   for (const partId of conflictingPartIds) {
+    if (coveredPartIds.has(partId)) continue;
     for (const row of args.materialRows) {
       const norm = normalizePartIdForMatch(
         getSourceMatchIdentifier(row).partId
@@ -651,6 +1026,15 @@ export function buildIntakeAnalysisSummary(args: {
       if (norm === partId) affectedItemIds.add(row.rowId);
     }
   }
+
+  const invariant = enforceAffectedItemCountInvariant({
+    affectedItemIds,
+    materialRowIds: materialRowIdSet,
+    materialItemCount: totalRows,
+    finalRows: args.finalRows,
+  });
+  affectedItemIds = invariant.affectedItemIds;
+
   const reviewMetric = deriveReviewSummaryMetric({
     affectedItemIds,
     issueCounts,
@@ -660,6 +1044,18 @@ export function buildIntakeAnalysisSummary(args: {
   const initialFindingsDiagnostics = buildInitialFindingsDiagnostics({
     reviewMetric,
     issueCounts,
+  });
+
+  const {
+    dimensionComparisonDiagnostics,
+    dimensionComparisonSample,
+  } = buildDimensionComparisonDiagnostics({
+    finalRows: args.finalRows,
+    materialItemCount: totalRows,
+    affectedItemCount: reviewMetric.affectedItemCount,
+    issueOccurrenceCount: issueCounts.actionableIssueCount,
+    issueCategoryCount: findings.length,
+    affectedCountInvariantPassed: invariant.affectedCountInvariantPassed,
   });
 
   const identifierFreeAnalysisDiagnostics: IdentifierFreeAnalysisDiagnostics = {
@@ -716,14 +1112,16 @@ export function buildIntakeAnalysisSummary(args: {
     reviewMetric,
     findings,
     issueRows,
-    actionableDiscrepancyCount: Math.max(
-      issueCounts.actionableIssueCount,
-      reviewMetric.affectedItemCount
-    ),
+    // Unique material items only — never inflate with finding occurrence sums.
+    actionableDiscrepancyCount: reviewMetric.affectedItemCount,
     showMissingIdentifiersWarning,
     showNoUsableDxfFailure,
     initialFindingsDiagnostics,
     identifierFreeAnalysisDiagnostics,
+    dimensionComparisonDiagnostics,
+    dimensionComparisonSample,
+    activeReviewDiagnostics,
+    reviewReasonSample,
     ready,
   };
 }

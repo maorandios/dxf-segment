@@ -10,72 +10,43 @@ import { formatHebrewCount } from "../../buildIntakeAnalysisSummary";
 
 const SEVERITY_UI: Record<
   InitialFindingSeverity,
-  {
-    label: string;
-    badgeBg: string;
-    badgeFg: string;
-    side: string;
-  }
+  { label: string; signal: string }
 > = {
-  CRITICAL: {
-    label: "חמור",
-    badgeBg: "var(--ow-error-soft)",
-    badgeFg: "var(--ow-error)",
-    side: "var(--ow-error)",
-  },
-  REVIEW: {
-    label: "דורש בדיקה",
-    badgeBg: "rgba(254, 243, 199, 0.7)",
-    badgeFg: "#B45309",
-    side: "#F59E0B",
-  },
-  INFO: {
-    label: "מידע",
-    badgeBg: "var(--ow-info-soft)",
-    badgeFg: "var(--ow-text-secondary)",
-    side: "#94A3B8",
-  },
+  CRITICAL: { label: "חמור", signal: "var(--ow-error)" },
+  REVIEW: { label: "דורש בדיקה", signal: "var(--ow-attention)" },
+  INFO: { label: "מידע", signal: "var(--ow-text-muted)" },
 };
 
 function FindingRow({ finding }: { finding: InitialFindingPresentation }) {
   const sev = SEVERITY_UI[finding.severity];
   return (
     <li
-      className="flex min-h-[64px] items-start gap-3 border-b px-[18px] py-[14px] last:border-b-0"
+      className="flex min-h-[64px] items-start gap-3 px-5 py-4"
       style={{ borderColor: "var(--ow-border)" }}
       aria-label={`${sev.label}: ${finding.title}. ${finding.description}`}
     >
       <span
-        className="mt-1 h-10 w-1 shrink-0 rounded-full"
-        style={{ backgroundColor: sev.side }}
+        className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ backgroundColor: sev.signal }}
         aria-hidden
       />
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className="ow-tabular text-[15px] font-semibold leading-none"
-            style={{ color: "var(--ow-text)" }}
-          >
-            {formatHebrewCount(finding.count)}
-          </span>
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <p
-            className="text-[13px] font-medium leading-snug"
+            className="text-[14px] font-medium leading-snug"
             style={{ color: "var(--ow-text)" }}
           >
             {finding.title}
           </p>
           <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-            style={{
-              backgroundColor: sev.badgeBg,
-              color: sev.badgeFg,
-            }}
+            className="text-[11px] font-medium tracking-wide"
+            style={{ color: sev.signal }}
           >
             {sev.label}
           </span>
         </div>
         <p
-          className="mt-1 max-w-3xl text-[12px] leading-snug"
+          className="mt-1.5 max-w-2xl text-[13px] leading-relaxed"
           style={{ color: "var(--ow-text-secondary)" }}
         >
           {finding.description}
@@ -95,23 +66,26 @@ export function IntakeSummaryIssueList({
   if (summary.findings.length === 0) {
     return (
       <div
-        className="flex items-center gap-2.5 rounded-[14px] border px-3.5 py-3"
+        className="flex items-center gap-3 rounded-[var(--ow-radius-lg)] border px-4 py-3.5"
         style={{
-          borderColor: "#B7E4C7",
-          backgroundColor: "rgba(209, 250, 223, 0.4)",
+          borderColor: "var(--ow-border)",
+          backgroundColor: "var(--ow-success-soft)",
         }}
         role="status"
       >
         <CheckCircle2
           className="h-4 w-4 shrink-0"
-          style={{ color: "#0F7A45" }}
+          style={{ color: "var(--ow-success)" }}
           aria-hidden
         />
         <div className="min-w-0 text-[13px]">
-          <p className="font-medium" style={{ color: "#0F7A45" }}>
+          <p className="font-medium" style={{ color: "var(--ow-success)" }}>
             לא נמצאו פערים שדורשים טיפול
           </p>
-          <p style={{ color: "var(--ow-text-secondary)" }}>
+          <p
+            className="mt-0.5"
+            style={{ color: "var(--ow-text-secondary)" }}
+          >
             הנתונים מוכנים לבדיקה ולאישור בטבלה המאוחדת.
           </p>
         </div>
@@ -120,27 +94,20 @@ export function IntakeSummaryIssueList({
   }
 
   return (
-    <section className="space-y-2" aria-labelledby="initial-findings-heading">
-      <div>
-        <h2
-          id="initial-findings-heading"
-          className="text-[14px] font-semibold"
-          style={{ color: "var(--ow-text)" }}
-        >
-          ממצאים ראשוניים
-        </h2>
-        <p
-          className="mt-0.5 text-[12px]"
-          style={{ color: "var(--ow-text-secondary)" }}
-        >
-          פירוט מלא זמין בטבלת הבדיקה המאוחדת.
-        </p>
-      </div>
+    <section className="space-y-3" aria-labelledby="initial-findings-heading">
+      <h2
+        id="initial-findings-heading"
+        className="text-[15px] font-semibold tracking-tight"
+        style={{ color: "var(--ow-text)" }}
+      >
+        מצאנו מספר פערים שדורשים התייחסות
+      </h2>
       <ul
-        className="overflow-hidden rounded-[14px] border motion-safe:opacity-100"
+        className="divide-y overflow-hidden rounded-[var(--ow-radius-lg)] border"
         style={{
           borderColor: "var(--ow-border)",
           backgroundColor: "var(--ow-surface)",
+          boxShadow: "var(--ow-shadow-sm)",
         }}
       >
         {summary.findings.map((finding) => (
@@ -166,14 +133,17 @@ export function IntakeWorkflowFailureNotice({
   if (summary.material.totalRows === 0) {
     return (
       <aside
-        className="rounded-[14px] border px-3.5 py-3"
+        className="rounded-[var(--ow-radius-lg)] border px-4 py-3.5"
         style={{
           backgroundColor: "var(--ow-error-soft)",
-          borderColor: "#FECDCA",
+          borderColor: "var(--ow-border)",
         }}
         role="alert"
       >
-        <p className="text-[14px] font-medium" style={{ color: "var(--ow-error)" }}>
+        <p
+          className="text-[14px] font-medium"
+          style={{ color: "var(--ow-error)" }}
+        >
           לא נוצרו פריטי חומר לבדיקה
         </p>
       </aside>
@@ -183,14 +153,17 @@ export function IntakeWorkflowFailureNotice({
   if (summary.showNoUsableDxfFailure) {
     return (
       <aside
-        className="rounded-[14px] border px-3.5 py-3"
+        className="rounded-[var(--ow-radius-lg)] border px-4 py-3.5"
         style={{
           backgroundColor: "var(--ow-error-soft)",
-          borderColor: "#FECDCA",
+          borderColor: "var(--ow-border)",
         }}
         role="alert"
       >
-        <p className="text-[14px] font-medium" style={{ color: "var(--ow-error)" }}>
+        <p
+          className="text-[14px] font-medium"
+          style={{ color: "var(--ow-error)" }}
+        >
           אין קובצי DXF תקינים לשימוש
         </p>
       </aside>
@@ -200,18 +173,21 @@ export function IntakeWorkflowFailureNotice({
   if (summary.showMissingIdentifiersWarning) {
     return (
       <aside
-        className="rounded-[14px] border px-3.5 py-3"
+        className="rounded-[var(--ow-radius-lg)] border px-4 py-3.5"
         style={{
-          backgroundColor: "rgba(254, 243, 199, 0.55)",
-          borderColor: "#F9DBAF",
+          backgroundColor: "var(--ow-attention-soft)",
+          borderColor: "var(--ow-border)",
         }}
         role="status"
       >
-        <p className="text-[14px] font-medium" style={{ color: "#B45309" }}>
+        <p
+          className="text-[14px] font-medium"
+          style={{ color: "var(--ow-attention)" }}
+        >
           לא זוהו מזהי פריט ברשימת החומר
         </p>
         <p
-          className="mt-1 text-[12px]"
+          className="mt-1 text-[13px]"
           style={{ color: "var(--ow-text-secondary)" }}
         >
           ניתן להשלים מזהים בטבלת הבדיקה המאוחדת.
@@ -223,20 +199,23 @@ export function IntakeWorkflowFailureNotice({
   if (invalidDxfCount > 0) {
     return (
       <aside
-        className="flex items-center justify-between gap-3 rounded-[14px] border px-3.5 py-3"
+        className="flex items-center justify-between gap-3 rounded-[var(--ow-radius-lg)] border px-4 py-3.5"
         style={{
           backgroundColor: "var(--ow-error-soft)",
-          borderColor: "#FECDCA",
+          borderColor: "var(--ow-border)",
         }}
         role="status"
       >
-        <p className="text-[13px] font-medium" style={{ color: "var(--ow-error)" }}>
+        <p
+          className="text-[13px] font-medium"
+          style={{ color: "var(--ow-error)" }}
+        >
           {formatHebrewCount(invalidDxfCount)} קובצי DXF אינם ניתנים לשימוש
         </p>
         {onShowInvalid ? (
           <button
             type="button"
-            className="text-[12px] font-medium underline-offset-2 hover:underline"
+            className="text-[13px] font-medium underline-offset-2 hover:underline"
             style={{ color: "var(--ow-accent)" }}
             onClick={onShowInvalid}
           >

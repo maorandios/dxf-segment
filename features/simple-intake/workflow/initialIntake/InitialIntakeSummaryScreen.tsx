@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { HelpCircle, X } from "lucide-react";
 import type { SimpleDxfPart } from "../../types";
 import type { IntakeAnalysisSummary } from "../../buildIntakeAnalysisSummary";
-import { buildOneLineAnalysisSummary } from "../../buildIntakeAnalysisSummary";
 import type { FinalFilterId } from "../../results/types";
 import { ScreenHeader, OmegaSideDrawer } from "../../ui";
 import { InitialAnalysisSummary } from "./InitialAnalysisSummary";
@@ -12,10 +10,7 @@ import {
   IntakeSummaryIssueList,
   IntakeWorkflowFailureNotice,
 } from "./IntakeDiscrepancyCards";
-import { UnifiedReviewNextSteps } from "./UnifiedReviewNextSteps";
 import { UnifiedReviewActionPanel } from "./UnifiedReviewActionPanel";
-
-const HELP_KEY = "omega.initial-summary-help-dismissed";
 
 function InvalidDxfDetailsDrawer({
   open,
@@ -54,30 +49,6 @@ function InvalidDxfDetailsDrawer({
   );
 }
 
-function FirstUseHelp({ onDismiss }: { onDismiss: () => void }) {
-  return (
-    <div
-      className="relative rounded-[14px] border px-3.5 py-3"
-      style={{
-        borderColor: "var(--ow-border)",
-        backgroundColor: "var(--ow-info-soft)",
-      }}
-      role="note"
-    >
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="absolute start-2 top-2 rounded p-1"
-        aria-label="סגור הסבר"
-        style={{ color: "var(--ow-text-muted)" }}
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-      <UnifiedReviewNextSteps />
-    </div>
-  );
-}
-
 export function InitialIntakeSummaryScreen({
   analysis,
   invalidDxfParts,
@@ -92,58 +63,32 @@ export function InitialIntakeSummaryScreen({
   onBackToDxf?: () => void;
 }) {
   const [invalidOpen, setInvalidOpen] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-
-  const dismissHelp = () => {
-    setShowHelp(false);
-    try {
-      window.localStorage.setItem(HELP_KEY, "1");
-    } catch {
-      /* ignore */
-    }
-  };
 
   if (!analysis.ready) {
     return (
-      <div className="flex min-h-[calc(100vh-14rem)] flex-col" dir="rtl">
+      <div
+        className="mx-auto flex w-full max-w-[1040px] flex-col"
+        dir="rtl"
+      >
         <ScreenHeader
           title="מעבד נתונים"
           supportingText="מכינים את סיכום הניתוח הראשוני לפני טבלת הבדיקה המאוחדת."
         />
-        <div className="mt-4">
-          <InitialAnalysisSummary summary={analysis} />
-        </div>
+        <InitialAnalysisSummary summary={analysis} />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-14rem)] flex-col" dir="rtl">
-      <div
-        className="mx-auto w-full flex-1 space-y-4 pb-5"
-        style={{
-          width: "min(1120px, calc(100vw - 96px))",
-          marginInline: "auto",
-        }}
-      >
-        <div className="relative">
-          <ScreenHeader
-            title="ניתוח ראשוני הושלם"
-            supportingText={buildOneLineAnalysisSummary(analysis)}
-          />
-          {!showHelp ? (
-            <button
-              type="button"
-              className="absolute end-0 top-1 flex items-center gap-1 text-[12px]"
-              style={{ color: "var(--ow-text-muted)" }}
-              onClick={() => setShowHelp(true)}
-              aria-label="הצג הסבר קצר"
-            >
-              <HelpCircle className="h-3.5 w-3.5" aria-hidden />
-              עזרה
-            </button>
-          ) : null}
-        </div>
+    <div
+      className="mx-auto flex w-full max-w-[1040px] flex-col pb-8"
+      dir="rtl"
+    >
+      <div className="space-y-6">
+        <ScreenHeader
+          title="ניתוח רשימת החומר וקבצי DXF"
+          className="mb-8"
+        />
 
         <InitialAnalysisSummary summary={analysis} />
 
@@ -154,8 +99,6 @@ export function InitialIntakeSummaryScreen({
         />
 
         <IntakeSummaryIssueList summary={analysis} />
-
-        {showHelp ? <FirstUseHelp onDismiss={dismissHelp} /> : null}
 
         <UnifiedReviewActionPanel
           canOpen={analysis.material.totalRows > 0}

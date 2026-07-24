@@ -467,12 +467,15 @@ console.log("=== Pre-Unified Review + DXF Filename Coverage Fix v1 ===\n");
     ),
     "utf8"
   );
-  assert(summaryUi.includes("ייחודיים") || summaryUi.includes("דורש טיפול"), "unique content fact");
+  assert(summaryUi.includes("רשימת החומר"), "material metric");
+  assert(summaryUi.includes("קובצי DXF"), "dxf metric");
+  assert(summaryUi.includes("דורש בדיקה"), "review metric");
   assert(
-    summaryUi.includes("קבצים הועלו") || summaryUi.includes("קובץ הועלה"),
-    "physical fact"
+    summaryUi.includes("buildDxfDuplicateCardBadge") ||
+      summaryUi.includes("duplicate"),
+    "duplicate badge still wired"
   );
-  console.log("✓ Summary presents physical vs unique content distinctly");
+  console.log("✓ Summary presents material / DXF / review metrics");
 }
 
 {

@@ -147,7 +147,16 @@ console.log("=== Intake Analysis Summary v1 (part-ID comparison) ===\n");
     "diff name same content"
   );
   assertEq(summary.comparison.missingDxfPartIds.length, 0, "not missing");
-  assert(summary.actionableDiscrepancyCount >= 1, "actionable");
+  assert(
+    summary.issueCounts.duplicateDxfCount >= 1 ||
+      summary.findings.some((f) => f.category === "EXACT_DUPLICATE"),
+    "duplicate finding present"
+  );
+  assertEq(
+    summary.actionableDiscrepancyCount,
+    summary.reviewMetric.affectedItemCount,
+    "actionableDiscrepancy mirrors unique affected items"
+  );
   console.log("✓ Duplicate DXF group with real filenames");
 }
 
@@ -253,7 +262,8 @@ console.log("=== Intake Analysis Summary v1 (part-ID comparison) ===\n");
         message: null,
       },
       sourceOrderIndex: 0,
-      resultRowId: "1",
+      dimensionComparison: null,
+      rawDxfDimensions: { widthMm: null, lengthMm: null },
     } as FinalIntakeRow,
   ];
   assertEq(filterFinalRows(rows, "MISSING_DXF").length, 1, "missing filter");

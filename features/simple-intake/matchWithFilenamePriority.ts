@@ -96,7 +96,13 @@ export function resolveMatchLevel(
   match: SimpleMatchResult
 ): DxfMatchLevel {
   if (match.status === "MATCHED" && match.matchedDxfId) {
-    if (match.method === "EXPLICIT_FILENAME" || match.method === "MANUAL") {
+    // Exact unique identifiers (filename or part id) are certain — no manual confirm.
+    // Geometry-only suggestions remain SUGGESTED until confirmed.
+    if (
+      match.method === "EXPLICIT_FILENAME" ||
+      match.method === "MANUAL" ||
+      match.method === "EXACT_ID"
+    ) {
       return "CERTAIN";
     }
     return "SUGGESTED";
@@ -113,7 +119,10 @@ export function resolveFilenameMatchKind(
     if (match.status === "AMBIGUOUS") return "DUPLICATE_FILENAME";
     if (match.status === "UNMATCHED") return "MISSING_EXPLICIT_FILE";
   }
-  if (match.method === "EXACT_ID" || match.method === "GEOMETRY") {
+  if (match.method === "EXACT_ID" && match.status === "MATCHED") {
+    return "CERTAIN_FILENAME";
+  }
+  if (match.method === "GEOMETRY") {
     return "HEURISTIC";
   }
   return "NONE";
