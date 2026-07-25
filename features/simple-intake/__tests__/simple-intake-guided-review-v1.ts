@@ -600,11 +600,12 @@ function run(): void {
     assert(
       workflow.includes("PreUnifiedReviewSummaryScreen") ||
         workflow.includes("InitialIntakeSummaryScreen") ||
-        workflow.includes("SUMMARY"),
+        workflow.includes("ANALYSIS_SUMMARY"),
       "summary state"
     );
     assert(
-      workflow.includes("ResultsReviewScreen") && workflow.includes("TABLE"),
+      workflow.includes("ResultsReviewScreen") &&
+        workflow.includes("FINAL_TABLE"),
       "table state"
     );
     assert(!workflow.includes("/api/simple-intake/analyze"), "no re-analyze");
@@ -638,10 +639,13 @@ function run(): void {
       "utf8"
     );
     assert(
-      summaryUi.includes("ניתוח ראשוני") || summaryUi.includes("עיבוד הושלם"),
+      summaryUi.includes("ניתוח ראשוני") ||
+        summaryUi.includes("עיבוד הושלם") ||
+        summaryUi.includes("ניתוח רשימת החומר"),
       "summary heading"
     );
-    assert(actionPanel.includes("פתח טבלת בדיקה מאוחדת"), "primary CTA");
+    assert(actionPanel.includes("בואו נטפל בפערים"), "primary CTA");
+    assert(actionPanel.includes("המשך לטבלה המסכמת"), "secondary CTA");
     assert(!summaryUi.includes("AttentionInbox"), "no decision inbox");
     assert(!summaryUi.includes("התחל בדיקה"), "no start-review CTA");
 

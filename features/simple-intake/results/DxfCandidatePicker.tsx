@@ -37,6 +37,7 @@ export function DxfCandidatePicker({
   onConfirm,
   onCancel,
   allCandidates,
+  mode = "search",
 }: {
   open: boolean;
   row: FinalIntakeRow | null;
@@ -44,12 +45,14 @@ export function DxfCandidatePicker({
   onSelect: (dxfId: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
-  /** Fallback list when row has no candidates (all valid DXFs). */
+  /** Available unreserved canonical DXFs for manual search. */
   allCandidates: FinalDxfCandidate[];
+  /** candidates = top row candidates only; search = available pool. */
+  mode?: "candidates" | "search";
 }) {
   const list =
-    row && row.match.candidates.length > 0
-      ? row.match.candidates
+    mode === "candidates" && row && row.match.candidates.length > 0
+      ? row.match.candidates.slice(0, 2)
       : allCandidates;
 
   useEffect(() => {

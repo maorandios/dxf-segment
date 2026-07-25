@@ -206,12 +206,12 @@ console.log("=== Initial Analysis Summary Polish v2 ===\n");
   assert(!issues.includes("פתח בטבלה"), "no per-finding nav");
   assert(!issues.includes("PreviewIds"), "no id previews");
   assert(!issues.includes("נמצאו פערים בין רשימת החומר"), "no general gaps banner");
-  assert(action.includes("אינה מאשרת"), "reassurance");
   assert(
-    action.includes("דוח פערים") || action.includes("ייצוא"),
-    "export mention"
+    action.includes("לפי סוג פעולה") || action.includes("ישירות לטבלה"),
+    "supporting navigation copy"
   );
-  assert(action.includes("פתח טבלת בדיקה מאוחדת"), "primary CTA");
+  assert(action.includes("בואו נטפל בפערים"), "primary CTA");
+  assert(action.includes("המשך לטבלה המסכמת"), "secondary CTA");
   assert(action.includes("חזרה להעלאת DXF"), "secondary");
   console.log("✓ UI polish: focused header, findings, CTA + back buttons");
 }

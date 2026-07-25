@@ -13,6 +13,13 @@ import {
 import { simpleIntakeActions } from "../sessionStore";
 import { MANUAL_CONFLICT_CONFIRM_HE } from "../types";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
+import { classifyDxfDuplicates } from "../classifyDxfDuplicates";
+import { listRankedGeometryCandidatesForRow } from "../matchSimpleRows";
+import {
+  buildReservedDxfIds,
+  getAvailableDxfCandidates,
+  rejectedPairKey,
+} from "../smartDxfAssignment";
 import { deriveFinalRows, summarizeFinalRows } from "./deriveFinalRows";
 import { prepareVisibleRows } from "./filterFinalRows";
 import { DxfCandidatePicker } from "./DxfCandidatePicker";
@@ -64,6 +71,7 @@ export function ResultsReviewScreen({
   unresolvedCount,
   onStartGuidedReview,
   onShowSummary,
+  onBackToGaps,
   onOpenCompletionRequest,
   initialFilter = "ALL",
 }: {
@@ -72,6 +80,7 @@ export function ResultsReviewScreen({
   unresolvedCount?: number;
   onStartGuidedReview?: () => void;
   onShowSummary?: () => void;
+  onBackToGaps?: () => void;
   onOpenCompletionRequest?: () => void;
   initialFilter?: FinalFilterId;
 } = {}) {
@@ -83,6 +92,9 @@ export function ResultsReviewScreen({
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [pickerId, setPickerId] = useState<string | null>(null);
   const [pickerSelected, setPickerSelected] = useState<string | null>(null);
+  const [pickerMode, setPickerMode] = useState<"candidates" | "search">(
+    "search"
+  );
   const [confirmedManualInternal, setConfirmedManualInternal] = useState<
     Set<string>
   >(() => new Set());
@@ -98,6 +110,9 @@ export function ResultsReviewScreen({
     [confirmedManual, onConfirmedManualChange]
   );
   const [hasLocalEdits, setHasLocalEdits] = useState(false);
+  const [rejectedPairs, setRejectedPairs] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const finalRows = useMemo(
     () =>
@@ -141,25 +156,114 @@ export function ResultsReviewScreen({
     [finalRows, pickerId]
   );
 
-  const allCandidates: FinalDxfCandidate[] = useMemo(
+  const classifiedDupes = useMemo(
     () =>
-      session.dxfParts
-        .filter((d) => d.geometryStatus === "VALID")
-        .map((d) => ({
-          dxfId: d.id,
-          partId: d.partId,
-          filename: d.filename,
-          widthMm: d.widthMm,
-          lengthMm: d.lengthMm,
-          widthDifferenceMm: null,
-          lengthDifferenceMm: null,
-        })),
-    [session.dxfParts]
+      classifyDxfDuplicates(session.dxfParts, {
+        sourceRows: session.resultRows.map((r) => r.extracted),
+      }),
+    [session.dxfParts, session.resultRows]
   );
+
+  const reservedDxfIds = useMemo(
+    () =>
+      buildReservedDxfIds({
+        resultRows: session.resultRows,
+        confirmedManualMatchIds: confirmedManual,
+      }),
+    [session.resultRows, confirmedManual]
+  );
+
+  const allCandidates: FinalDxfCandidate[] = useMemo(() => {
+    const materialRowId =
+      pickerRow?.materialRowId ??
+      pickerRow?.id.replace(/^res_/, "") ??
+      "";
+    const available = getAvailableDxfCandidates({
+      dxfParts: session.dxfParts,
+      reservedDxfIds,
+      nonCanonicalDuplicateDxfIds: classifiedDupes.secondaryDuplicateFileIds,
+      rejectedCandidatePairs: rejectedPairs,
+      materialRowId,
+      includeDxfId: pickerRow?.part.matchedDxfId ?? null,
+    });
+    return available.map((d) => ({
+      dxfId: d.id,
+      partId: d.partId,
+      filename: d.filename,
+      widthMm: d.widthMm,
+      lengthMm: d.lengthMm,
+      widthDifferenceMm: null,
+      lengthDifferenceMm: null,
+    }));
+  }, [
+    session.dxfParts,
+    reservedDxfIds,
+    classifiedDupes.secondaryDuplicateFileIds,
+    rejectedPairs,
+    pickerRow,
+  ]);
 
   const noDxfFilesUploaded = session.dxfParts.length === 0;
 
   const markEdited = useCallback(() => setHasLocalEdits(true), []);
+
+  function handleSuggestAnother(resultRowId: string): void {
+    const resultRow = session.resultRows.find(
+      (r) => r.resultRowId === resultRowId
+    );
+    if (!resultRow) return;
+    const materialRowId = resultRow.extracted.rowId;
+    const currentDxfId = resultRow.match.matchedDxfId;
+    const nextRejected = new Set(rejectedPairs);
+    if (currentDxfId) {
+      nextRejected.add(rejectedPairKey(materialRowId, currentDxfId));
+    }
+    setRejectedPairs(nextRejected);
+
+    const available = getAvailableDxfCandidates({
+      dxfParts: session.dxfParts,
+      reservedDxfIds,
+      nonCanonicalDuplicateDxfIds: classifiedDupes.secondaryDuplicateFileIds,
+      rejectedCandidatePairs: nextRejected,
+      materialRowId,
+    });
+    const ranked = listRankedGeometryCandidatesForRow({
+      row: resultRow.extracted,
+      dxfParts: available,
+    });
+    const next = ranked[0] ?? null;
+    if (!next) {
+      simpleIntakeActions.selectDxf(resultRowId, null, {
+        asSuggestion: true,
+        candidates: [],
+      });
+    } else {
+      simpleIntakeActions.selectDxf(resultRowId, next.dxfId, {
+        asSuggestion: true,
+        candidates: ranked.slice(0, 5),
+        forceReassign: true,
+      });
+    }
+    updateConfirmed((prev) => {
+      const n = new Set(prev);
+      n.delete(resultRowId);
+      return n;
+    });
+    markEdited();
+  }
+
+  function handleLeaveUnassigned(resultRowId: string): void {
+    simpleIntakeActions.selectDxf(resultRowId, null, {
+      asSuggestion: true,
+      candidates: [],
+    });
+    updateConfirmed((prev) => {
+      const n = new Set(prev);
+      n.delete(resultRowId);
+      return n;
+    });
+    markEdited();
+  }
 
   function trySelectDxf(resultRowId: string, dxfId: string | null): boolean {
     if (dxfId == null) {
@@ -223,6 +327,9 @@ export function ResultsReviewScreen({
     if (action === "בחר DXF" || action === "שנה DXF") {
       const row = finalRows.find((r) => r.id === id);
       setPickerId(id);
+      setPickerMode(
+        row?.match.status === "AMBIGUOUS" ? "candidates" : "search"
+      );
       setPickerSelected(row?.part.matchedDxfId ?? null);
       return;
     }
@@ -291,6 +398,11 @@ export function ResultsReviewScreen({
         />
 
         <div className="flex flex-wrap gap-2">
+          {onBackToGaps && (
+            <Button type="button" variant="ghost" size="sm" onClick={onBackToGaps}>
+              חזרה לטיפול בפערים
+            </Button>
+          )}
           {onShowSummary && (
             <Button type="button" variant="ghost" size="sm" onClick={onShowSummary}>
               חזרה לסיכום
@@ -479,6 +591,7 @@ export function ResultsReviewScreen({
           if (!detailsId) return;
           const row = finalRows.find((r) => r.id === detailsId);
           setPickerId(detailsId);
+          setPickerMode("search");
           setPickerSelected(row?.part.matchedDxfId ?? null);
         }}
         onConfirmManual={() => {
@@ -492,7 +605,25 @@ export function ResultsReviewScreen({
         onRestore={() => {
           if (detailsId) handleRestore(detailsId);
         }}
+        onSuggestAnother={() => {
+          if (detailsId) handleSuggestAnother(detailsId);
+        }}
+        onLeaveUnassigned={() => {
+          if (detailsId) handleLeaveUnassigned(detailsId);
+        }}
         noDxfFilesUploaded={noDxfFilesUploaded}
+        matchLevelLabel={
+          detailsRow
+            ? detailsRow.match.status === "MATCHED" &&
+              (detailsRow.match.method === "EXPLICIT_FILENAME" ||
+                detailsRow.match.method === "EXACT_ID" ||
+                detailsRow.isManualMatchConfirmed)
+              ? "התאמה ודאית"
+              : detailsRow.match.status === "MATCHED"
+                ? "התאמה מוצעת"
+                : "לא שויך"
+            : null
+        }
       />
 
       <DxfCandidatePicker
@@ -506,6 +637,7 @@ export function ResultsReviewScreen({
           setPickerSelected(null);
         }}
         allCandidates={allCandidates}
+        mode={pickerMode}
       />
     </div>
   );

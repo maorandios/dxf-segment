@@ -15,6 +15,13 @@ import {
   matchSimpleRows,
 } from "./matchSimpleRows";
 import { classifyDxfDuplicates } from "./classifyDxfDuplicates";
+import {
+  assignmentSourceFromMatch,
+  buildReservedDxfIds,
+  buildSmartSuggestionDiagnostics,
+  type CandidateSuggestionSampleRow,
+  type SmartSuggestionDiagnostics,
+} from "./smartDxfAssignment";
 import type {
   SimpleDxfAvailabilityItem,
   SimpleDxfPart,
@@ -135,6 +142,7 @@ export function matchWithFilenamePriority(args: {
   extractedRows: SimpleExtractedRow[];
   dxfParts: SimpleDxfPart[];
   extractedRowCount?: number;
+  confirmedManualMatchIds?: ReadonlySet<string>;
 }): {
   resultRows: SimpleResultRow[];
   unmatchedDxfIds: string[];
@@ -143,9 +151,13 @@ export function matchWithFilenamePriority(args: {
   diagnostics: SimpleMatchingDiagnostics;
   filenameMatchingDebug: DxfFilenameMatchingDebug;
   itemFilenameDebug: Record<string, ItemFilenameMatchDebug>;
+  smartSuggestionDiagnostics: SmartSuggestionDiagnostics;
+  candidateSuggestionSample: CandidateSuggestionSampleRow[];
 } {
   const dxfById = new Map(args.dxfParts.map((d) => [d.id, d]));
-  const classified = classifyDxfDuplicates(args.dxfParts);
+  const classified = classifyDxfDuplicates(args.dxfParts, {
+    sourceRows: args.extractedRows,
+  });
   const secondaryIds = classified.secondaryDuplicateFileIds;
 
   const byKey = new Map<string, SimpleDxfPart[]>();
@@ -222,7 +234,7 @@ export function matchWithFilenamePriority(args: {
       continue;
     }
 
-    // Explicit name, no uploaded file with that key.
+    // Explicit name, no uploaded file with that key — do not geometry-substitute.
     explicitMissingFiles++;
     const match: SimpleMatchResult = {
       status: "UNMATCHED",
@@ -258,6 +270,39 @@ export function matchWithFilenamePriority(args: {
       candidates: [],
       message: null,
     });
+  });
+
+  // Invariant: certain/manual assignments must keep their method (not GEOMETRY).
+  for (const row of resultRows) {
+    if (
+      row.match.status === "MATCHED" &&
+      (row.match.method === "EXPLICIT_FILENAME" ||
+        row.match.method === "EXACT_ID" ||
+        row.match.method === "MANUAL") &&
+      !row.match.matchedDxfId
+    ) {
+      console.warn(
+        "[omega] exact/manual MATCHED without matchedDxfId",
+        row.extracted.rowId
+      );
+    }
+  }
+
+  const reservedDxfIds = buildReservedDxfIds({
+    resultRows,
+    confirmedManualMatchIds: args.confirmedManualMatchIds,
+  });
+
+  const {
+    smartSuggestionDiagnostics,
+    candidateSuggestionSample,
+  } = buildSmartSuggestionDiagnostics({
+    extractedRows: args.extractedRows,
+    resultRows,
+    dxfParts: args.dxfParts,
+    secondaryDuplicateFileIds: secondaryIds,
+    reservedDxfIds,
+    confirmedManualMatchIds: args.confirmedManualMatchIds,
   });
 
   const dxfAvailability = deriveSimpleDxfAvailability({
@@ -323,6 +368,8 @@ export function matchWithFilenamePriority(args: {
     ],
   };
 
+  void assignmentSourceFromMatch;
+
   return {
     resultRows,
     unmatchedDxfIds,
@@ -331,6 +378,8 @@ export function matchWithFilenamePriority(args: {
     diagnostics,
     filenameMatchingDebug,
     itemFilenameDebug,
+    smartSuggestionDiagnostics,
+    candidateSuggestionSample,
   };
 }
 

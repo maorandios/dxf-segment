@@ -1570,7 +1570,11 @@ export const simpleIntakeActions = {
   selectDxf(
     resultRowId: string,
     dxfId: string | null,
-    opts?: { forceReassign?: boolean }
+    opts?: {
+      forceReassign?: boolean;
+      asSuggestion?: boolean;
+      candidates?: import("./types").SimpleMatchCandidate[];
+    }
   ): { conflict: false } | {
     conflict: true;
     occupyingSourceRow: number;
@@ -1588,6 +1592,8 @@ export const simpleIntakeActions = {
       dxfId,
       dxfParts: session.dxfParts,
       forceReassign: opts?.forceReassign,
+      asSuggestion: opts?.asSuggestion,
+      candidates: opts?.candidates,
     });
     if (!result.ok) {
       return {

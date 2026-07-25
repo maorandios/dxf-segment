@@ -4,6 +4,10 @@
  */
 
 import { normalizeDxfFileKey } from "./normalizeDxfFileKey";
+import {
+  buildSourceExactIdentifierSet,
+  orderDuplicateMembersCanonicalFirst,
+} from "./smartDxfAssignment";
 import type { SimpleDxfPart } from "./types";
 
 export type DxfDuplicateClassification =
@@ -97,10 +101,25 @@ function toFile(part: PartInput): DxfDuplicateGroupFile {
  * 1. SAME_NAME_DIFFERENT_CONTENT
  * 2. SAME_NAME_SAME_CONTENT
  * 3. DIFFERENT_NAME_SAME_CONTENT
+ *
+ * For true content duplicates, canonical file preference:
+ * exact source identifier match → non-copy filename → upload order.
  */
 export function classifyDxfDuplicates(
-  dxfParts: ReadonlyArray<PartInput>
+  dxfParts: ReadonlyArray<PartInput>,
+  opts?: {
+    /** Material-source part IDs / DXF filenames for canonical preference. */
+    sourceRows?: ReadonlyArray<{
+      partId?: string | null;
+      dxfFileName?: string | null;
+    }>;
+  }
 ): ClassifiedDxfDuplicates {
+  const sourceIdentifiers = buildSourceExactIdentifierSet(opts?.sourceRows ?? []);
+  const uploadOrderIndexById = new Map(
+    dxfParts.map((p, i) => [p.id, i] as const)
+  );
+
   const byName = new Map<string, PartInput[]>();
   const byContent = new Map<string, PartInput[]>();
 
@@ -123,6 +142,13 @@ export function classifyDxfDuplicates(
   const groups: DxfDuplicateGroup[] = [];
   let groupSeq = 0;
 
+  const canonicalizeMembers = (members: PartInput[]): PartInput[] =>
+    orderDuplicateMembersCanonicalFirst(
+      members,
+      sourceIdentifiers,
+      uploadOrderIndexById
+    );
+
   const addGroup = (
     classification: DxfDuplicateClassification,
     members: PartInput[],
@@ -133,7 +159,11 @@ export function classifyDxfDuplicates(
       if (members.length < 1) return;
     }
     if (members.length < 2) return;
-    const files = members.map(toFile);
+    const ordered =
+      classification === "SAME_NAME_DIFFERENT_CONTENT"
+        ? members
+        : canonicalizeMembers(members);
+    const files = ordered.map(toFile);
     groups.push({
       groupId: `dxf-dup-${++groupSeq}`,
       classification,
@@ -188,9 +218,9 @@ export function classifyDxfDuplicates(
     // Some same-name copies already claimed; remaining alt-name files are
     // different-name content duplicates of the canonical claimed file.
     if (unclaimed.length >= 1 && unclaimed.length < files.length && nameKeys.size > 1) {
-      const canonical = files.find((f) => claimed.has(f.id)) ?? files[0]!;
-      const members = [canonical, ...unclaimed];
-      const filesMapped = members.map(toFile);
+      const claimedMembers = files.filter((f) => claimed.has(f.id));
+      const ordered = canonicalizeMembers([...claimedMembers, ...unclaimed]);
+      const filesMapped = ordered.map(toFile);
       groups.push({
         groupId: `dxf-dup-${++groupSeq}`,
         classification: "DIFFERENT_NAME_SAME_CONTENT",

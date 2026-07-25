@@ -772,7 +772,9 @@ export function buildIntakeAnalysisSummary(args: {
   const uniqueDxfPartIds = [...new Set(dxfPartIdList)];
   const dxfPartIdSet = new Set(uniqueDxfPartIds);
 
-  const classified = classifyDxfDuplicates(args.dxfParts);
+  const classified = classifyDxfDuplicates(args.dxfParts, {
+    sourceRows: args.materialRows,
+  });
   const duplicateSummary = classified.summary;
   const uniqueContentFileCount =
     args.dxfParts.length - duplicateSummary.duplicateFileCount;

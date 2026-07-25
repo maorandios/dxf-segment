@@ -377,6 +377,33 @@ function getAvailableCandidatesForRow(
   );
 }
 
+function rankedCandidatesForRow(
+  rowId: string,
+  edges: SimpleMatchEdge[],
+  usedDxfIds: Set<string>,
+  dxfById: Map<string, SimpleDxfPart>,
+  limit: number
+): SimpleMatchCandidate[] {
+  return getAvailableCandidatesForRow(rowId, edges, usedDxfIds)
+    .slice(0, limit)
+    .map((e) => toCandidate(dxfById.get(e.dxfId)!, e));
+}
+
+/** Rank eligible geometry candidates for one row against a DXF pool (suggest-another). */
+export function listRankedGeometryCandidatesForRow(args: {
+  row: SimpleExtractedRow;
+  dxfParts: SimpleDxfPart[];
+}): SimpleMatchCandidate[] {
+  const edges = buildSimpleMatchCandidates({
+    extractedRows: [args.row],
+    dxfParts: args.dxfParts,
+  }).filter((e) => e.method === "GEOMETRY" && e.eligible);
+  const dxfById = new Map(args.dxfParts.map((d) => [d.id, d]));
+  return sortGeometryEdges(edges).map((e) =>
+    toCandidate(dxfById.get(e.dxfId)!, e)
+  );
+}
+
 /**
  * Find strong mutual-best geometry assignments among remaining rows.
  * Contested DXFs that clearly prefer one row may assign even when the row
@@ -739,11 +766,23 @@ export function matchSimpleRows(args: {
     const row = rowById.get(rowId)!;
     const dxf = dxfById.get(edge.dxfId)!;
     usedDxfIds.add(edge.dxfId);
+    const usedWithoutCurrent = new Set(usedDxfIds);
+    usedWithoutCurrent.delete(edge.dxfId);
+    const ranked = rankedCandidatesForRow(
+      rowId,
+      allEdges,
+      usedWithoutCurrent,
+      dxfById,
+      5
+    );
     const match: SimpleMatchResult = {
       status: "MATCHED",
       method: "GEOMETRY",
       matchedDxfId: edge.dxfId,
-      candidates: [toCandidate(dxf, edge)],
+      candidates:
+        ranked.length > 0
+          ? ranked
+          : [toCandidate(dxf, edge)],
       message: null,
     };
     const resultRow: SimpleResultRow = {
@@ -891,12 +930,14 @@ export function matchSimpleRows(args: {
       continue;
     }
 
-    // Final ambiguity
+    // Final ambiguity — expose only the top two candidates in the UI list.
     const match: SimpleMatchResult = {
       status: "AMBIGUOUS",
       method: "GEOMETRY",
       matchedDxfId: null,
-      candidates: avail.map((e) => toCandidate(dxfById.get(e.dxfId)!, e)),
+      candidates: avail
+        .slice(0, 2)
+        .map((e) => toCandidate(dxfById.get(e.dxfId)!, e)),
       message: AMBIGUOUS_GEOMETRY_MESSAGE_HE,
     };
     const resultRow: SimpleResultRow = {
@@ -1054,6 +1095,10 @@ export function applyManualDxfSelection(args: {
   dxfId: string | null;
   dxfParts: SimpleDxfPart[];
   forceReassign?: boolean;
+  /** When true, keep GEOMETRY suggestion (not MANUAL certainty). */
+  asSuggestion?: boolean;
+  /** Optional replacement candidate list for suggestion cycling. */
+  candidates?: SimpleMatchCandidate[];
 }): ManualSelectResult {
   const target = args.resultRows.find(
     (r) => r.resultRowId === args.resultRowId
@@ -1108,13 +1153,15 @@ export function applyManualDxfSelection(args: {
     if (r.resultRowId !== args.resultRowId) return r;
 
     if (args.dxfId == null) {
-      const hasCandidates = r.match.candidates.length > 0;
+      const hasCandidates =
+        (args.candidates?.length ?? r.match.candidates.length) > 0;
+      const candidates = args.candidates ?? r.match.candidates;
       const match: SimpleMatchResult = {
         status: hasCandidates ? "AMBIGUOUS" : "UNMATCHED",
         method: hasCandidates ? "GEOMETRY" : null,
         matchedDxfId: null,
-        candidates: r.match.candidates,
-        message: "Cleared",
+        candidates,
+        message: hasCandidates ? AMBIGUOUS_GEOMETRY_MESSAGE_HE : UNMATCHED_NO_CANDIDATE_HE,
       };
       return {
         ...r,
@@ -1127,13 +1174,15 @@ export function applyManualDxfSelection(args: {
     if (!dxf) return r;
 
     const priorCandidates =
-      r.match.candidates.length > 0
-        ? r.match.candidates
-        : [toCandidate(dxf, null)];
+      args.candidates && args.candidates.length > 0
+        ? args.candidates
+        : r.match.candidates.length > 0
+          ? r.match.candidates
+          : [toCandidate(dxf, null)];
 
     const match: SimpleMatchResult = {
       status: "MATCHED",
-      method: "MANUAL",
+      method: args.asSuggestion ? "GEOMETRY" : "MANUAL",
       matchedDxfId: dxf.id,
       candidates: priorCandidates,
       message: null,

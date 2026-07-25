@@ -429,7 +429,8 @@ console.log("=== Initial Intake Summary Redesign and Notice Fix v1 ===\n");
   assert(!screen.includes("AMBIGUOUS"), "no candidates");
   assert(next.includes("ייצוא") || next.includes("טבלת הבדיקה"), "help content exists");
   assert(action.includes("אינה מאפסת") || action.includes("אינה מאשרת"), "no approve reassurance");
-  assert(action.includes("פתח טבלת בדיקה מאוחדת"), "primary CTA");
+  assert(action.includes("בואו נטפל בפערים"), "primary CTA");
+  assert(action.includes("המשך לטבלה המסכמת"), "secondary CTA");
   assert(action.includes("חזרה להעלאת DXF"), "secondary nav");
   assert(workflow.includes("InitialIntakeSummaryScreen"), "wired");
   assert(
@@ -438,7 +439,7 @@ console.log("=== Initial Intake Summary Redesign and Notice Fix v1 ===\n");
     "from analysis"
   );
   assert(workflow.includes("unifiedItemsCreated"), "readiness");
-  assert(workflow.includes("setView(\"TABLE\")"), "opens table");
+  assert(workflow.includes("setView(\"FINAL_TABLE\")"), "opens table");
   assert(!workflow.includes("approveMaterial"), "no approve on open");
   console.log("✓ Visual structure, next steps, action panel, wiring");
 }

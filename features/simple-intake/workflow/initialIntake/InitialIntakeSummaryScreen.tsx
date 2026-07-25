@@ -52,12 +52,14 @@ function InvalidDxfDetailsDrawer({
 export function InitialIntakeSummaryScreen({
   analysis,
   invalidDxfParts,
+  onResolveGaps,
   onOpenUnifiedTable,
   onBackToMaterial,
   onBackToDxf,
 }: {
   analysis: IntakeAnalysisSummary;
   invalidDxfParts: Array<Pick<SimpleDxfPart, "filename" | "error">>;
+  onResolveGaps: () => void;
   onOpenUnifiedTable: (filter?: FinalFilterId) => void;
   onBackToMaterial?: () => void;
   onBackToDxf?: () => void;
@@ -102,6 +104,7 @@ export function InitialIntakeSummaryScreen({
 
         <UnifiedReviewActionPanel
           canOpen={analysis.material.totalRows > 0}
+          onResolveGaps={onResolveGaps}
           onOpenUnifiedTable={() => onOpenUnifiedTable()}
           onBackToMaterial={onBackToMaterial}
           onBackToDxf={onBackToDxf}

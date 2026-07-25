@@ -307,14 +307,17 @@ console.log("=== Unified Summary Source-of-Truth Fix v1 ===\n");
     "summary from canonical rows"
   );
   assert(
-    analysis.includes("ייחודיים") || analysis.includes("דורש טיפול"),
-    "unique content vs physical"
+    analysis.includes("דורש בדיקה") || analysis.includes("ייחודיים"),
+    "review / unique content metric"
   );
   assert(
-    analysis.includes("קבצים הועלו") || analysis.includes("קובץ הועלה"),
+    analysis.includes("קובצי DXF") ||
+      analysis.includes("קבצים הועלו") ||
+      analysis.includes("קובץ הועלה"),
     "physical files"
   );
-  assert(action.includes("פתח טבלת בדיקה מאוחדת"), "primary CTA");
+  assert(action.includes("בואו נטפל בפערים"), "primary CTA");
+  assert(action.includes("המשך לטבלה המסכמת"), "secondary CTA");
   assert(!screen.includes("AttentionInbox"), "no inbox");
   assert(!screen.includes("התאמות מוצעות"), "no suggested");
   console.log("✓ Summary UI wired to canonical source of truth");

@@ -64,6 +64,22 @@ export type {
   ClassifiedDxfDuplicates,
 } from "./classifyDxfDuplicates";
 export {
+  getAvailableDxfCandidates,
+  buildReservedDxfIds,
+  hasCopyLikeFilenameSuffix,
+  pickCanonicalDuplicateMember,
+  buildSmartSuggestionDiagnostics,
+  assignmentSourceFromMatch,
+} from "./smartDxfAssignment";
+export type {
+  SmartSuggestionDiagnostics,
+  CandidateSuggestionSampleRow,
+  RejectedCandidatePair,
+  RankedDxfCandidate,
+  DxfDuplicateContentGroup,
+} from "./smartDxfAssignment";
+export { listRankedGeometryCandidatesForRow } from "./matchSimpleRows";
+export {
   getSourceMatchIdentifier,
   computeSourceIdentifierCoverage,
   rowHasAnyExplicitSourceIdentifier,
@@ -118,6 +134,22 @@ export type {
   ReviewIdentityDiagnostics,
   IdentityMappingSampleRow,
 } from "./results/canonicalMaterialItemId";
+export {
+  derivePrimaryResolutionCategory,
+  deriveSecondaryResolutionTags,
+  deriveRowResolutionPresentation,
+  buildGapResolutionSummary,
+  filterItemsByResolutionCategory,
+  buildGapResolutionDiagnostics,
+  selectInitialResolutionCategory,
+} from "./results/primaryResolutionCategory";
+export type {
+  PrimaryResolutionCategory,
+  SecondaryResolutionTag,
+  GapResolutionSummary,
+  RowResolutionPresentation,
+  GapResolutionDiagnostics,
+} from "./results/primaryResolutionCategory";
 export {
   getActiveReviewReasons,
   getActiveBlockingReasons,

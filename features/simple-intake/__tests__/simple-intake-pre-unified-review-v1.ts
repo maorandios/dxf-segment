@@ -343,20 +343,29 @@ console.log("=== Pre-Unified Review + DXF Filename Coverage Fix v1 ===\n");
   assert(!summaryUi.includes("AttentionInbox"), "no inbox in summary screen");
   assert(!summaryUi.includes("דורש את תשומת לבך"), "no inbox copy");
   assert(!summaryUi.includes("התחל בדיקה"), "no start review");
-  assert(summaryUi.includes("פתח טבלת בדיקה מאוחדת") || true, "primary via action panel");
+  assert(summaryUi.includes("בואו נטפל בפערים") || true, "primary via action panel");
   assert(
     fs
       .readFileSync(
         path.join(root, "workflow/initialIntake/UnifiedReviewActionPanel.tsx"),
         "utf8"
       )
-      .includes("פתח טבלת בדיקה מאוחדת"),
+      .includes("בואו נטפל בפערים"),
     "primary CTA"
+  );
+  assert(
+    fs
+      .readFileSync(
+        path.join(root, "workflow/initialIntake/UnifiedReviewActionPanel.tsx"),
+        "utf8"
+      )
+      .includes("המשך לטבלה המסכמת"),
+    "secondary CTA"
   );
   assert(!workflow.includes("ReadinessIssueCards"), "no issue cards entry");
   assert(!workflow.includes("LIST_DIMENSION_MISMATCH"), "no dim list view");
   assert(!workflow.includes("matchMetrics"), "no suggested metrics");
-  assert(workflow.includes('UnifiedReviewView'), "SUMMARY|TABLE");
+  assert(workflow.includes("ReviewWorkspaceView"), "summary|gaps|table");
   assert(workflow.includes("NEEDS_ATTENTION"), "attention filter entry");
   assert(workflow.includes("CompletionRequestDrawer"), "completion from unified");
   assert(workflow.includes("InitialIntakeSummaryScreen"), "new summary screen");

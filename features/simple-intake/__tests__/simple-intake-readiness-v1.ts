@@ -570,11 +570,13 @@ function run(): void {
     assert(
       summaryScreen.includes("ניתוח ראשוני") ||
         summaryScreen.includes("עיבוד הושלם") ||
-        summaryScreen.includes("דורש טיפול"),
+        summaryScreen.includes("דורש טיפול") ||
+        summaryScreen.includes("ניתוח רשימת החומר"),
       "opens summary"
     );
     assert(
-      actionPanel.includes("פתח טבלת בדיקה מאוחדת"),
+      actionPanel.includes("בואו נטפל בפערים") &&
+        actionPanel.includes("המשך לטבלה המסכמת"),
       "primary opens table"
     );
 

@@ -313,8 +313,12 @@ console.log("=== Initial Analysis Findings Presentation Polish v1 ===\n");
   assert(findingsUi.includes("לא נמצאו פערים שדורשים טיפול"), "success copy");
   assert(!findingsUi.includes("PreviewIds"), "no id previews");
   assert(!screen.includes("onOpenFiltered"), "screen CTA only");
-  assert(action.includes("פתח טבלת בדיקה מאוחדת"), "primary CTA");
-  assert(action.includes("אינה מאשרת"), "no approval");
+  assert(action.includes("בואו נטפל בפערים"), "primary CTA");
+  assert(action.includes("המשך לטבלה המסכמת"), "secondary CTA");
+  assert(
+    action.includes("לפי סוג פעולה") || action.includes("ישירות לטבלה"),
+    "supporting copy"
+  );
   assert(builder.includes("initialFindingsDiagnostics"), "diagnostics");
   assert(builder.includes("affectedItemCount"), "affected count");
   assert(builder.includes("EXACT_DUPLICATE"), "exact duplicate category");

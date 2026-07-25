@@ -263,18 +263,45 @@ console.log("=== Explicit DXF Filename Matching v1 ===\n");
     dxfParts: parts,
   });
   assertEq(matched.resultRows[0]!.match.status, "MATCHED", "heuristic match");
-  assert(
-    matched.resultRows[0]!.match.method === "EXACT_ID" ||
-      matched.resultRows[0]!.match.method === "GEOMETRY",
-    "heuristic method"
+  assertEq(matched.resultRows[0]!.match.method, "EXACT_ID", "exact part id");
+  assertEq(
+    resolveMatchLevel(matched.resultRows[0]!.match),
+    "CERTAIN",
+    "exact part id is certain"
   );
+  console.log("✓ Missing filename uses exact part-ID when available (CERTAIN)");
+}
+
+{
+  const rows = [
+    extracted({
+      rowId: "r1",
+      partId: null,
+      dxfFileName: null,
+      widthMm: 100,
+      lengthMm: 200,
+    }),
+  ];
+  const parts = [
+    dxf({
+      id: "d1",
+      filename: "Geom.dxf",
+      partId: "Geom",
+      widthMm: 100,
+      lengthMm: 200,
+    }),
+  ];
+  const matched = matchWithFilenamePriority({
+    extractedRows: rows,
+    dxfParts: parts,
+  });
+  assertEq(matched.resultRows[0]!.match.method, "GEOMETRY", "geometry");
   assertEq(
     resolveMatchLevel(matched.resultRows[0]!.match),
     "SUGGESTED",
     "suggested label"
   );
-  console.log("✓ Missing filename uses the existing heuristic matcher");
-  console.log("✓ Heuristic matches are labeled suggested");
+  console.log("✓ Geometry-only matches are labeled suggested");
 }
 
 {

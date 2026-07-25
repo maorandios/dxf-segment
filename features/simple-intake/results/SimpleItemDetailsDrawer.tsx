@@ -63,7 +63,10 @@ export function SimpleItemDetailsDrawer({
   onConfirmManual,
   onExclude,
   onRestore,
+  onSuggestAnother,
+  onLeaveUnassigned,
   noDxfFilesUploaded,
+  matchLevelLabel,
 }: {
   row: FinalIntakeRow | null;
   open: boolean;
@@ -72,7 +75,10 @@ export function SimpleItemDetailsDrawer({
   onConfirmManual: () => void;
   onExclude: () => void;
   onRestore: () => void;
+  onSuggestAnother?: () => void;
+  onLeaveUnassigned?: () => void;
   noDxfFilesUploaded: boolean;
+  matchLevelLabel?: string | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -263,12 +269,254 @@ export function SimpleItemDetailsDrawer({
           )}
 
           <section>
+            <h3 className="mb-2 font-medium">שיוך DXF</h3>
+            {(() => {
+              const isExact =
+                row.match.status === "MATCHED" &&
+                (row.match.method === "EXPLICIT_FILENAME" ||
+                  row.match.method === "EXACT_ID" ||
+                  row.isManualMatchConfirmed);
+              const isSuggested =
+                row.match.status === "MATCHED" &&
+                !row.isManualMatchConfirmed &&
+                (row.match.method === "GEOMETRY" ||
+                  row.issueCodes.includes("HEURISTIC_MATCH_UNCONFIRMED") ||
+                  row.issueCodes.includes("MANUAL_MATCH_NOT_CONFIRMED"));
+              const isAmbiguous = row.match.status === "AMBIGUOUS";
+              const isUnresolved =
+                row.match.status === "UNMATCHED" ||
+                row.match.status === "INVALID_DXF" ||
+                (!row.part.matchedDxfId && !isAmbiguous);
+
+              if (isExact && row.part.matchedDxfFilename) {
+                return (
+                  <div className="space-y-2">
+                    <p className="font-medium">{row.part.matchedDxfFilename}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {matchLevelLabel ?? "התאמה ודאית"}
+                      {row.match.method === "EXACT_ID"
+                        ? " · מזהה פריט"
+                        : row.match.method === "EXPLICIT_FILENAME"
+                          ? " · שם קובץ"
+                          : " · בחירה ידנית"}
+                    </p>
+                    {row.dimensionComparison ? (
+                      <DimensionComparisonNote
+                        comparison={row.dimensionComparison}
+                      />
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={onPickDxf}
+                    >
+                      חיפוש ידני
+                    </Button>
+                  </div>
+                );
+              }
+
+              if (isSuggested && row.part.matchedDxfFilename) {
+                const top = row.match.candidates[0];
+                const maxDiff =
+                  top &&
+                  top.widthDifferenceMm != null &&
+                  top.lengthDifferenceMm != null
+                    ? Math.max(top.widthDifferenceMm, top.lengthDifferenceMm)
+                    : null;
+                return (
+                  <div
+                    className="space-y-3 rounded-md border px-3 py-3"
+                    style={{
+                      borderColor: "var(--ow-border, hsl(var(--border)))",
+                      backgroundColor:
+                        "var(--ow-attention-soft, hsl(var(--muted)))",
+                    }}
+                  >
+                    <div>
+                      <p className="font-medium">{row.part.matchedDxfFilename}</p>
+                      <p className="text-xs text-muted-foreground">
+                        התאמה מוצעת לפי מידות — נדרש אישור
+                      </p>
+                    </div>
+                    <SimpleDxfThumbnail
+                      widthMm={row.dxfDimensions.widthMm}
+                      lengthMm={row.dxfDimensions.lengthMm}
+                      size="lg"
+                      label="תצוגת הצעת DXF"
+                    />
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <dt className="text-muted-foreground">מידות מקור</dt>
+                      <dd>
+                        {fmt(row.source.sourceWidthMm)} ×{" "}
+                        {fmt(row.source.sourceLengthMm)}
+                      </dd>
+                      <dt className="text-muted-foreground">מידות DXF</dt>
+                      <dd>
+                        {fmt(row.rawDxfDimensions?.widthMm)} ×{" "}
+                        {fmt(row.rawDxfDimensions?.lengthMm)}
+                      </dd>
+                      {maxDiff != null ? (
+                        <>
+                          <dt className="text-muted-foreground">הפרש מרבי</dt>
+                          <dd>{maxDiff.toFixed(1)} מ״מ</dd>
+                        </>
+                      ) : null}
+                      {row.dimensionComparison?.orientation === "ROTATED" ? (
+                        <>
+                          <dt className="text-muted-foreground">כיוון</dt>
+                          <dd>יושר אוטומטית (סיבוב)</dd>
+                        </>
+                      ) : null}
+                    </dl>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" onClick={onConfirmManual}>
+                        אשר התאמה
+                      </Button>
+                      {onSuggestAnother ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={onSuggestAnother}
+                        >
+                          הצע קובץ אחר
+                        </Button>
+                      ) : null}
+                      {onLeaveUnassigned ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={onLeaveUnassigned}
+                        >
+                          השאר ללא שיוך
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={onPickDxf}
+                      >
+                        חיפוש ידני
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isAmbiguous) {
+                const topTwo = row.match.candidates.slice(0, 2);
+                return (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      נמצאו כמה מועמדים דומים — בחרו אחד או חפשו ידנית.
+                    </p>
+                    <ul className="space-y-2">
+                      {topTwo.map((c) => (
+                        <li
+                          key={c.dxfId}
+                          className="rounded-md border border-border px-2 py-2 text-xs"
+                        >
+                          <div className="font-medium">{c.filename}</div>
+                          <div className="text-muted-foreground">
+                            {formatDxfDims(c.widthMm, c.lengthMm)}
+                            {c.widthDifferenceMm != null &&
+                            c.lengthDifferenceMm != null
+                              ? ` · הפרש עד ${Math.max(
+                                  c.widthDifferenceMm,
+                                  c.lengthDifferenceMm
+                                ).toFixed(1)} מ״מ`
+                              : null}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" onClick={onPickDxf}>
+                        בחר קובץ
+                      </Button>
+                      {onSuggestAnother ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={onSuggestAnother}
+                        >
+                          הצג אפשרות נוספת
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={onPickDxf}
+                      >
+                        חיפוש ידני
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isUnresolved) {
+                return (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      לא נמצאה התאמת DXF מתאימה
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" onClick={onPickDxf}>
+                        חיפוש ידני
+                      </Button>
+                      {onLeaveUnassigned ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={onLeaveUnassigned}
+                        >
+                          השאר ללא שיוך
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  {row.part.matchedDxfFilename ? (
+                    <p className="text-muted-foreground">
+                      {row.part.matchedDxfFilename}
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">אין שיוך DXF</p>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={onPickDxf}
+                  >
+                    חיפוש ידני
+                  </Button>
+                </div>
+              );
+            })()}
+          </section>
+
+          <section>
             <h3 className="mb-2 font-medium">בעיות ופעולות</h3>
             {row.issueCodes.length === 0 ? (
               <p className="text-muted-foreground">אין בעיות פתוחות.</p>
             ) : (
               <ul className="space-y-2">
-                {row.issueCodes.map((code) => (
+                {row.issueCodes
+                  .filter((code) => code !== "HEURISTIC_MATCH_UNCONFIRMED")
+                  .map((code) => (
                   <li
                     key={code}
                     className="rounded-md border border-border/80 px-2 py-1.5"
@@ -283,15 +531,6 @@ export function SimpleItemDetailsDrawer({
               </ul>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" size="sm" onClick={onPickDxf}>
-                שנה DXF
-              </Button>
-              {(row.issueCodes.includes("MANUAL_MATCH_NOT_CONFIRMED") ||
-                row.issueCodes.includes("HEURISTIC_MATCH_UNCONFIRMED")) && (
-                <Button type="button" size="sm" onClick={onConfirmManual}>
-                  אשר התאמה
-                </Button>
-              )}
               {row.isExcluded ? (
                 <Button type="button" size="sm" variant="outline" onClick={onRestore}>
                   החזר להצעה
