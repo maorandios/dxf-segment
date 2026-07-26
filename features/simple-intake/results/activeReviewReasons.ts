@@ -12,6 +12,7 @@ export const ACTIVE_BLOCKING_CODES: ReadonlySet<FinalIssueCode> = new Set([
   "EXPLICIT_DXF_FILE_MISSING",
   "DXF_ASSIGNED_TO_BETTER_ROW",
   "DXF_INVALID",
+  "MULTIPLE_DXF_CANDIDATES",
   "MISSING_QUANTITY",
   "MISSING_MATERIAL",
   "MISSING_THICKNESS",
@@ -20,14 +21,11 @@ export const ACTIVE_BLOCKING_CODES: ReadonlySet<FinalIssueCode> = new Set([
 
 /**
  * Review codes that require user action (not INFO).
- * HEURISTIC_MATCH_UNCONFIRMED only applies to geometry suggestions —
- * exact identifier matches are CERTAIN and must not appear here after derivation.
+ * Exact-identifier workflow: only significant dimension mismatch remains review.
+ * Stale heuristic / manual confirmation codes are stripped in reconcile.
  */
 export const ACTIVE_REVIEW_CODES: ReadonlySet<FinalIssueCode> = new Set([
-  "MULTIPLE_DXF_CANDIDATES",
   "PART_ID_DIMENSION_MISMATCH",
-  "MANUAL_MATCH_NOT_CONFIRMED",
-  "HEURISTIC_MATCH_UNCONFIRMED",
 ]);
 
 export type ActiveReasonContext = {
@@ -61,9 +59,10 @@ export function reconcileActiveIssueCodes(
       }
     }
     if (
-      code === "HEURISTIC_MATCH_UNCONFIRMED" &&
-      ctx.exactIdentifierAssignment
+      code === "HEURISTIC_MATCH_UNCONFIRMED" ||
+      code === "MANUAL_MATCH_NOT_CONFIRMED"
     ) {
+      // Exact-identifier-only: never keep stale suggestion confirmation issues.
       return false;
     }
     return true;

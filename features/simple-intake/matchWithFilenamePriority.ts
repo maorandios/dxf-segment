@@ -405,14 +405,14 @@ export function buildFilenameCoverageNotice(args: {
       kind: "NO_FILENAMES",
       headingHe: "לא נמצאו שמות קובצי DXF ברשימת החומר",
       bodyHe:
-        "כדי להתאים כל פריט לקובץ הנכון באופן מדויק, יש לכלול ברשימה את שם קובץ ה-DXF המתאים. המערכת תנסה לבצע התאמה לפי המידות והנתונים הקיימים, אך חלק מההתאמות עשויות לדרוש בדיקה.",
-      continueLabelHe: "המשך בהתאמה משוערת",
+        "כדי לשייך כל פריט לקובץ הנכון, יש לכלול ברשימה את שם קובץ ה-DXF או מזהה הפריט התואם. המערכת משייכת רק לפי מזהה מדויק — לא לפי מידות.",
+      continueLabelHe: "המשך",
       backLabelHe: "חזרה לרשימת החומר",
     };
   }
   const without = totalItemCount - itemsWithExplicitFilename;
   return {
     kind: "PARTIAL",
-    messageHe: `ל-${without} מתוך ${totalItemCount} פריטים לא צוין שם DXF. עבורם תתבצע התאמה משוערת.`,
+    messageHe: `ל-${without} מתוך ${totalItemCount} פריטים לא צוין שם DXF. עבורם תתבצע התאמה לפי מזהה פריט בלבד, אם קיים.`,
   };
 }

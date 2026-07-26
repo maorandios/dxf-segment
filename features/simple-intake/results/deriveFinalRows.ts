@@ -20,7 +20,11 @@ import { comparePlateDimensions } from "../dxfLink/dimensionMismatch";
 import { normalizeDimensionPair } from "../dxfLink/dimensionMismatch";
 import { reconcileActiveIssueCodes } from "./activeReviewReasons";
 import { deriveIssueCodes } from "./deriveIssueCodes";
-import { deriveReviewStatus } from "./deriveReviewStatus";
+import {
+  deriveMaterialResolutionCategory,
+  mapCategoryToReviewStatus,
+  type DimensionMismatchResolution,
+} from "./primaryResolutionCategory";
 import { issueMessageHe, primaryActionLabelHe } from "./issueMessages";
 import { resolvePartDisplayName } from "./resolvePartDisplayName";
 import type {
@@ -63,12 +67,6 @@ function deriveAvailableActions(args: {
     return ["VIEW_DETAILS", "RESTORE"];
   }
   const actions: FinalRowAction[] = ["VIEW_DETAILS", "PICK_DXF", "EXCLUDE"];
-  if (args.issueCodes.includes("MANUAL_MATCH_NOT_CONFIRMED")) {
-    actions.push("CONFIRM_MANUAL_MATCH");
-  }
-  if (args.issueCodes.includes("HEURISTIC_MATCH_UNCONFIRMED")) {
-    actions.push("CONFIRM_MANUAL_MATCH");
-  }
   if (args.issueCodes.includes("MISSING_MATERIAL")) {
     actions.push("ENTER_MATERIAL");
   }
@@ -79,7 +77,6 @@ function deriveAvailableActions(args: {
     actions.push("ENTER_QUANTITY");
   }
   if (args.issueCodes.includes("MISSING_REQUIRED_DIMENSIONS")) {
-    // Reuse pick-DXF path after dims are entered; details drawer for now.
     actions.push("VIEW_DETAILS");
   }
   return actions;
@@ -92,8 +89,11 @@ export function deriveFinalRows(args: {
   snapshot: SimpleWorkbookSnapshot | null;
   diagnostics?: SimpleMatchingDiagnostics | null;
   confirmedManualMatchIds?: ReadonlySet<string>;
+  /** Per result-row dimension mismatch resolution (USE_DXF_DIMENSIONS | UNRESOLVED). */
+  dimensionMismatchResolutions?: ReadonlyMap<string, DimensionMismatchResolution>;
 }): FinalIntakeRow[] {
   const confirmed = args.confirmedManualMatchIds ?? new Set<string>();
+  const dimResolutions = args.dimensionMismatchResolutions ?? new Map();
   const dxfById = new Map(args.dxfParts.map((d) => [d.id, d]));
   const unmatchedReasons = new Map(
     (args.diagnostics?.unmatchedReasons ?? []).map((u) => [u.rowId, u.reason])
@@ -102,6 +102,8 @@ export function deriveFinalRows(args: {
   const usageCount = new Map<string, number>();
   for (const r of args.resultRows) {
     if (r.excluded) continue;
+    // Skip geometry suggestions — they are not treated as assignments.
+    if (r.match.method === "GEOMETRY") continue;
     const id = r.match.matchedDxfId;
     if (!id) continue;
     usageCount.set(id, (usageCount.get(id) ?? 0) + 1);
@@ -150,12 +152,25 @@ export function deriveFinalRows(args: {
         ? null
         : String(extracted.profile).trim();
 
+    // In-memory migration: never treat geometry/heuristic suggestions as assigned.
+    const strippedGeometry = row.match.method === "GEOMETRY";
+    const effectiveMatch = strippedGeometry
+      ? {
+          ...row.match,
+          status: "UNMATCHED" as const,
+          method: null,
+          matchedDxfId: null,
+          candidates: [] as typeof row.match.candidates,
+          message: row.match.message,
+        }
+      : row.match;
+
     const dxf =
-      row.match.matchedDxfId != null
-        ? (dxfById.get(row.match.matchedDxfId) ?? null)
+      effectiveMatch.matchedDxfId != null
+        ? (dxfById.get(effectiveMatch.matchedDxfId) ?? null)
         : null;
     const hasValidMatchedDxf =
-      row.match.status === "MATCHED" &&
+      effectiveMatch.status === "MATCHED" &&
       dxf != null &&
       dxf.geometryStatus === "VALID";
 
@@ -192,29 +207,18 @@ export function deriveFinalRows(args: {
       sourceProfile,
     });
 
-    const isManuallyMatched = row.match.method === "MANUAL";
-    // Only geometry suggestions require confirmation — exact part-id / filename are CERTAIN.
-    const isGeometrySuggested = row.match.method === "GEOMETRY";
+    const isManuallyMatched = effectiveMatch.method === "MANUAL";
     const exactIdentifierAssignment =
-      row.match.status === "MATCHED" &&
-      (row.match.method === "EXPLICIT_FILENAME" ||
-        row.match.method === "EXACT_ID");
+      effectiveMatch.status === "MATCHED" &&
+      (effectiveMatch.method === "EXPLICIT_FILENAME" ||
+        effectiveMatch.method === "EXACT_ID" ||
+        effectiveMatch.method === "MANUAL");
     const isManualMatchConfirmed =
-      (isManuallyMatched || isGeometrySuggested) &&
-      confirmed.has(row.resultRowId);
-    const manualMatchUnconfirmed =
-      isManuallyMatched &&
-      row.match.matchedDxfId != null &&
-      !confirmed.has(row.resultRowId);
-    const heuristicMatchUnconfirmed =
-      isGeometrySuggested &&
-      row.match.status === "MATCHED" &&
-      row.match.matchedDxfId != null &&
-      !confirmed.has(row.resultRowId);
+      isManuallyMatched && confirmed.has(row.resultRowId);
 
     const duplicateDxf =
-      row.match.matchedDxfId != null &&
-      (usageCount.get(row.match.matchedDxfId) ?? 0) > 1;
+      effectiveMatch.matchedDxfId != null &&
+      (usageCount.get(effectiveMatch.matchedDxfId) ?? 0) > 1;
 
     const unmatchedReason =
       unmatchedReasons.get(extracted.rowId) ??
@@ -233,8 +237,18 @@ export function deriveFinalRows(args: {
         )
       : null;
 
+    const dimensionMismatchResolution: DimensionMismatchResolution | null =
+      dimensionComparison?.hasSignificantMismatch === true
+        ? (dimResolutions.get(row.resultRowId) ?? "UNRESOLVED")
+        : null;
+
+    const rowForIssues = {
+      ...row,
+      match: effectiveMatch,
+    };
+
     const rawCodes = deriveIssueCodes({
-      row,
+      row: rowForIssues,
       dxf,
       material,
       thicknessMm,
@@ -243,41 +257,109 @@ export function deriveFinalRows(args: {
       sourceLengthMm,
       unmatchedReason,
       duplicateDxf,
-      manualMatchUnconfirmed,
-      heuristicMatchUnconfirmed,
+      manualMatchUnconfirmed: false,
+      heuristicMatchUnconfirmed: false,
       dxfFilesUploaded,
       dimensionComparison,
     });
-    const issueCodes = reconcileActiveIssueCodes(rawCodes, {
+
+    // Strip stale suggestion / unconfirmed codes; drop mismatch when resolved.
+    let issueCodes = reconcileActiveIssueCodes(rawCodes, {
       dimensionComparison,
       exactIdentifierAssignment,
-    });
+    }).filter(
+      (c) =>
+        c !== "HEURISTIC_MATCH_UNCONFIRMED" &&
+        c !== "MANUAL_MATCH_NOT_CONFIRMED"
+    );
 
-    const status = deriveReviewStatus({
-      excluded: row.excluded,
-      hasValidMatchedDxf,
-      issueCodes,
-      dimensionComparison,
-      exactIdentifierAssignment,
-    });
-
-    if (
-      status === "NEEDS_REVIEW" &&
-      !issueCodes.some(
-        (c) =>
-          c === "MULTIPLE_DXF_CANDIDATES" ||
-          c === "PART_ID_DIMENSION_MISMATCH" ||
-          c === "MANUAL_MATCH_NOT_CONFIRMED" ||
-          c === "HEURISTIC_MATCH_UNCONFIRMED"
-      )
-    ) {
-      if (typeof console !== "undefined") {
-        console.warn(
-          "[omega] NEEDS_REVIEW without active review reason — forcing READY if DXF valid",
-          { id: row.resultRowId, issueCodes }
-        );
-      }
+    if (dimensionMismatchResolution === "USE_DXF_DIMENSIONS") {
+      issueCodes = issueCodes.filter((c) => c !== "PART_ID_DIMENSION_MISMATCH");
     }
+
+    // Build a provisional row for category → status mapping
+    const provisional: FinalIntakeRow = {
+      id: row.resultRowId,
+      materialRowId: extracted.rowId,
+      status: "BLOCKED",
+      reviewStatus: "BLOCKED",
+      part: {
+        displayName,
+        displayNameSource,
+        sourcePartId,
+        sourceProfile,
+        matchedDxfId: dxf?.id ?? null,
+        matchedDxfPartId: dxf?.partId ?? null,
+        matchedDxfFilename: dxf?.filename ?? null,
+      },
+      preview: {
+        dxfId: hasValidMatchedDxf ? dxf!.id : null,
+        geometryAvailable: hasValidMatchedDxf,
+      },
+      material:
+        material == null || String(material).trim() === ""
+          ? null
+          : String(material).trim(),
+      thicknessMm,
+      quantity,
+      dxfDimensions: {
+        widthMm: commercialWidth,
+        lengthMm: commercialLength,
+      },
+      commercial: {
+        areaM2: commercialAreaM2,
+        unitWeightKg: commercialUnitWeightKg,
+        totalWeightKg: commercialTotalWeightKg,
+      },
+      source: {
+        workbookFilename: args.workbookFilename ?? "—",
+        sheetName: extracted.sheetName,
+        sourceRow: extracted.sourceRow,
+        sourceCell: extracted.sourceCell ?? "—",
+        sourceText: null,
+        sourceWidthMm,
+        sourceLengthMm,
+        sourceAreaM2: extracted.sourceAreaM2,
+        sourceWeightKg: extracted.sourceWeightKg,
+        sourceType: /SOURCE_TYPE:PDF/.test(extracted.note ?? "")
+          ? "PDF"
+          : "EXCEL",
+        sourcePage: (() => {
+          const m = (extracted.note ?? "").match(/PDF_PAGE:(\d+)/);
+          return m ? Number(m[1]) : null;
+        })(),
+        sourceAnchorText:
+          (extracted.note ?? "").match(/PDF_ANCHOR:([^|]*)/)?.[1]?.trim() ??
+          null,
+      },
+      issueCodes,
+      primaryMessage: null,
+      availableActions: [],
+      isManuallyMatched,
+      isManualMatchConfirmed,
+      isExcluded: row.excluded,
+      dimensionComparison,
+      rawDxfDimensions,
+      dimensionMismatchResolution,
+      match: {
+        status: effectiveMatch.status,
+        method: effectiveMatch.method,
+        candidates: effectiveMatch.candidates.map((c) => ({
+          dxfId: c.dxfId,
+          partId: c.partId,
+          filename: c.filename,
+          widthMm: c.widthMm,
+          lengthMm: c.lengthMm,
+          widthDifferenceMm: c.widthDifferenceMm,
+          lengthDifferenceMm: c.lengthDifferenceMm,
+        })),
+        message: effectiveMatch.message,
+      },
+      sourceOrderIndex: index,
+    };
+
+    const category = deriveMaterialResolutionCategory(provisional);
+    const status = mapCategoryToReviewStatus(category, row.excluded);
 
     const materialClean =
       material == null || String(material).trim() === ""
@@ -295,93 +377,33 @@ export function deriveFinalRows(args: {
           });
 
     void primaryLabel;
+    void exactIdentifierAssignment;
+
+    const sourceText = (() => {
+      const note = extracted.note ?? "";
+      const anchor = note.match(/PDF_ANCHOR:([^|]*)/)?.[1]?.trim();
+      if (anchor) return anchor;
+      return sourceTextForRow(
+        args.snapshot,
+        extracted.sheetName,
+        extracted.sourceRow
+      );
+    })();
 
     return {
-      id: row.resultRowId,
-      materialRowId: extracted.rowId,
+      ...provisional,
       status,
       reviewStatus: status,
-      part: {
-        displayName,
-        displayNameSource,
-        sourcePartId,
-        sourceProfile,
-        matchedDxfId: dxf?.id ?? null,
-        matchedDxfPartId: dxf?.partId ?? null,
-        matchedDxfFilename: dxf?.filename ?? null,
-      },
-      preview: {
-        dxfId: hasValidMatchedDxf ? dxf!.id : null,
-        geometryAvailable: hasValidMatchedDxf,
-      },
       material: materialClean,
-      thicknessMm,
-      quantity,
-      dxfDimensions: {
-        widthMm: commercialWidth,
-        lengthMm: commercialLength,
-      },
-      commercial: {
-        areaM2: commercialAreaM2,
-        unitWeightKg: commercialUnitWeightKg,
-        totalWeightKg: commercialTotalWeightKg,
-      },
-      source: {
-        workbookFilename: args.workbookFilename ?? "—",
-        sheetName: extracted.sheetName,
-        sourceRow: extracted.sourceRow,
-        sourceCell: extracted.sourceCell ?? "—",
-        sourceText: (() => {
-          const note = extracted.note ?? "";
-          const anchor = note.match(/PDF_ANCHOR:([^|]*)/)?.[1]?.trim();
-          if (anchor) return anchor;
-          return sourceTextForRow(
-            args.snapshot,
-            extracted.sheetName,
-            extracted.sourceRow
-          );
-        })(),
-        sourceWidthMm,
-        sourceLengthMm,
-        sourceAreaM2: extracted.sourceAreaM2,
-        sourceWeightKg: extracted.sourceWeightKg,
-        sourceType: /SOURCE_TYPE:PDF/.test(extracted.note ?? "")
-          ? "PDF"
-          : "EXCEL",
-        sourcePage: (() => {
-          const m = (extracted.note ?? "").match(/PDF_PAGE:(\d+)/);
-          return m ? Number(m[1]) : null;
-        })(),
-        sourceAnchorText:
-          (extracted.note ?? "").match(/PDF_ANCHOR:([^|]*)/)?.[1]?.trim() ??
-          null,
-      },
-      issueCodes,
       primaryMessage,
       availableActions: deriveAvailableActions({
         excluded: row.excluded,
         issueCodes,
       }),
-      isManuallyMatched,
-      isManualMatchConfirmed,
-      isExcluded: row.excluded,
-      dimensionComparison,
-      rawDxfDimensions,
-      match: {
-        status: row.match.status,
-        method: row.match.method,
-        candidates: row.match.candidates.map((c) => ({
-          dxfId: c.dxfId,
-          partId: c.partId,
-          filename: c.filename,
-          widthMm: c.widthMm,
-          lengthMm: c.lengthMm,
-          widthDifferenceMm: c.widthDifferenceMm,
-          lengthDifferenceMm: c.lengthDifferenceMm,
-        })),
-        message: row.match.message,
+      source: {
+        ...provisional.source,
+        sourceText,
       },
-      sourceOrderIndex: index,
     };
   });
 }

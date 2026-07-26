@@ -136,20 +136,37 @@ export type {
 } from "./results/canonicalMaterialItemId";
 export {
   derivePrimaryResolutionCategory,
+  deriveMaterialResolutionCategory,
   deriveSecondaryResolutionTags,
   deriveRowResolutionPresentation,
   buildGapResolutionSummary,
   filterItemsByResolutionCategory,
   buildGapResolutionDiagnostics,
   selectInitialResolutionCategory,
+  mapCategoryToReviewStatus,
 } from "./results/primaryResolutionCategory";
 export type {
   PrimaryResolutionCategory,
+  MaterialResolutionCategory,
   SecondaryResolutionTag,
   GapResolutionSummary,
+  SimplifiedGapSummary,
   RowResolutionPresentation,
   GapResolutionDiagnostics,
+  SimplifiedMatchingDiagnostics,
+  DimensionMismatchResolution,
 } from "./results/primaryResolutionCategory";
+export { getSourceItemIdentifier } from "./sourceItemIdentifier";
+export type { SourceItemIdentifier } from "./sourceItemIdentifier";
+export { resolveExactDxfAssignment } from "./resolveExactDxfAssignment";
+export type { ExactDxfAssignmentResult } from "./resolveExactDxfAssignment";
+export {
+  deriveMissingRequiredItemFields,
+  usesDxfDimensionsAsSourceFallback,
+} from "./missingRequiredItemFields";
+export type { MissingRequiredItemField } from "./missingRequiredItemFields";
+export { deriveDxfFileFindings } from "./dxfFileFindings";
+export type { DxfFileFinding, DxfFileFindingType } from "./dxfFileFindings";
 export {
   getActiveReviewReasons,
   getActiveBlockingReasons,

@@ -109,6 +109,21 @@ export type FinalTableRow = {
   isExcluded: boolean;
 };
 
+export type FinalFilterId =
+  | "ALL"
+  | "NEEDS_ATTENTION"
+  | "READY"
+  | "NEEDS_REVIEW"
+  | "BLOCKED"
+  | "EXCLUDED"
+  | "MISSING_DXF"
+  | "DUPLICATE_DXF"
+  | "CONFLICTING_DATA";
+
+export type DimensionMismatchResolution =
+  | "USE_DXF_DIMENSIONS"
+  | "UNRESOLVED";
+
 /**
  * Runtime row used by the review screen (canonical table row + picker data).
  */
@@ -137,6 +152,11 @@ export type FinalIntakeRow = FinalTableRow & {
     widthMm: number | null;
     lengthMm: number | null;
   };
+  /**
+   * User resolution for significant source↔DXF dimension mismatch.
+   * Default UNRESOLVED when a significant mismatch exists.
+   */
+  dimensionMismatchResolution?: DimensionMismatchResolution | null;
 };
 
 export type FinalResultsSummary = {
@@ -153,17 +173,6 @@ export type FinalResultsSummary = {
   excluded: number;
   needsAttention: number;
 };
-
-export type FinalFilterId =
-  | "ALL"
-  | "NEEDS_ATTENTION"
-  | "READY"
-  | "NEEDS_REVIEW"
-  | "BLOCKED"
-  | "EXCLUDED"
-  | "MISSING_DXF"
-  | "DUPLICATE_DXF"
-  | "CONFLICTING_DATA";
 
 export type FinalSortId =
   | "DEFAULT"

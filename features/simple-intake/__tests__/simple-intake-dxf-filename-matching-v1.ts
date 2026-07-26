@@ -295,13 +295,14 @@ console.log("=== Explicit DXF Filename Matching v1 ===\n");
     extractedRows: rows,
     dxfParts: parts,
   });
-  assertEq(matched.resultRows[0]!.match.method, "GEOMETRY", "geometry");
+  assertEq(matched.resultRows[0]!.match.status, "UNMATCHED", "no geometry fallback");
+  assertEq(matched.resultRows[0]!.match.method, null, "no geometry method");
   assertEq(
     resolveMatchLevel(matched.resultRows[0]!.match),
-    "SUGGESTED",
-    "suggested label"
+    "UNASSIGNED",
+    "unassigned without identifier"
   );
-  console.log("✓ Geometry-only matches are labeled suggested");
+  console.log("✓ No identifier → UNASSIGNED (no geometry suggestion)");
 }
 
 {
@@ -312,7 +313,8 @@ console.log("=== Explicit DXF Filename Matching v1 ===\n");
   assertEq(none.kind, "NO_FILENAMES", "no filenames notice");
   if (none.kind === "NO_FILENAMES") {
     assert(none.headingHe.includes("לא נמצאו שמות"), "heading");
-    assert(none.continueLabelHe.includes("התאמה משוערת"), "continue");
+    assert(none.continueLabelHe.includes("המשך"), "continue");
+    assert(none.bodyHe.includes("מזהה מדויק"), "exact identifier copy");
   }
   const partial = buildFilenameCoverageNotice({
     totalItemCount: 10,
@@ -466,7 +468,7 @@ console.log("=== Explicit DXF Filename Matching v1 ===\n");
   );
   void matchSrc;
   console.log("✓ No AI call occurs during DXF matching");
-  console.log("✓ Existing DXF parser and heuristic matcher remain unchanged");
+  console.log("✓ Existing DXF parser remains unchanged; matcher is exact-identifier-only");
 }
 
 {

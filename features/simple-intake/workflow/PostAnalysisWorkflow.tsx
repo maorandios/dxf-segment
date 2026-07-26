@@ -9,17 +9,15 @@ import { categorizeReadinessIssues } from "../readiness";
 import { buildDxfLinkedMaterialItems } from "../dxfLink";
 import { CompletionRequestDrawer } from "../dxfLink/CompletionRequestDrawer";
 import { buildIntakeAnalysisSummary } from "../buildIntakeAnalysisSummary";
-import { classifyDxfDuplicates } from "../classifyDxfDuplicates";
-import { listRankedGeometryCandidatesForRow } from "../matchSimpleRows";
-import {
-  buildReservedDxfIds,
-  getAvailableDxfCandidates,
-  rejectedPairKey,
-} from "../smartDxfAssignment";
 import { MANUAL_CONFLICT_CONFIRM_HE } from "../types";
 import { InitialIntakeSummaryScreen } from "./initialIntake";
 import { GapResolutionWorkspace } from "./GapResolutionWorkspace";
-import type { FinalDxfCandidate, FinalFilterId, FinalIntakeRow } from "../results/types";
+import type {
+  DimensionMismatchResolution,
+  FinalDxfCandidate,
+  FinalFilterId,
+  FinalIntakeRow,
+} from "../results/types";
 
 /** Internal review subviews — not main workflow stages. */
 export type ReviewWorkspaceView =
@@ -37,9 +35,9 @@ export function PostAnalysisWorkflow() {
   const [confirmedManual, setConfirmedManual] = useState<Set<string>>(
     () => new Set()
   );
-  const [rejectedPairs, setRejectedPairs] = useState<Set<string>>(
-    () => new Set()
-  );
+  const [dimensionResolutions, setDimensionResolutions] = useState<
+    Map<string, DimensionMismatchResolution>
+  >(() => new Map());
   const [completionOpen, setCompletionOpen] = useState(false);
 
   const finalRows = useMemo(
@@ -51,6 +49,7 @@ export function PostAnalysisWorkflow() {
         snapshot: session.workbookSnapshot,
         diagnostics: session.matchingDiagnostics,
         confirmedManualMatchIds: confirmedManual,
+        dimensionMismatchResolutions: dimensionResolutions,
       }),
     [
       session.resultRows,
@@ -59,6 +58,7 @@ export function PostAnalysisWorkflow() {
       session.workbookSnapshot,
       session.matchingDiagnostics,
       confirmedManual,
+      dimensionResolutions,
     ]
   );
 
@@ -133,23 +133,6 @@ export function PostAnalysisWorkflow() {
     [session.dxfParts]
   );
 
-  const classifiedDupes = useMemo(
-    () =>
-      classifyDxfDuplicates(session.dxfParts, {
-        sourceRows: session.resultRows.map((r) => r.extracted),
-      }),
-    [session.dxfParts, session.resultRows]
-  );
-
-  const reservedDxfIds = useMemo(
-    () =>
-      buildReservedDxfIds({
-        resultRows: session.resultRows,
-        confirmedManualMatchIds: confirmedManual,
-      }),
-    [session.resultRows, confirmedManual]
-  );
-
   const openUnifiedTable = useCallback(
     (filter?: FinalFilterId) => {
       const nextFilter: FinalFilterId =
@@ -195,96 +178,33 @@ export function PostAnalysisWorkflow() {
           forceReassign: true,
         });
       }
-      setConfirmedManual((prev) => {
-        const next = new Set(prev);
-        next.delete(resultRowId);
-        return next;
-      });
+      setConfirmedManual((prev) => new Set(prev).add(resultRowId));
       return true;
     },
     []
   );
 
-  const handleSuggestAnother = useCallback(
-    (resultRowId: string) => {
-      const resultRow = session.resultRows.find(
-        (r) => r.resultRowId === resultRowId
-      );
-      if (!resultRow) return;
-      const materialRowId = resultRow.extracted.rowId;
-      const currentDxfId = resultRow.match.matchedDxfId;
-      const nextRejected = new Set(rejectedPairs);
-      if (currentDxfId) {
-        nextRejected.add(rejectedPairKey(materialRowId, currentDxfId));
-      }
-      setRejectedPairs(nextRejected);
-
-      const available = getAvailableDxfCandidates({
-        dxfParts: session.dxfParts,
-        reservedDxfIds,
-        nonCanonicalDuplicateDxfIds: classifiedDupes.secondaryDuplicateFileIds,
-        rejectedCandidatePairs: nextRejected,
-        materialRowId,
-      });
-      const ranked = listRankedGeometryCandidatesForRow({
-        row: resultRow.extracted,
-        dxfParts: available,
-      });
-      const next = ranked[0] ?? null;
-      if (!next) {
-        simpleIntakeActions.selectDxf(resultRowId, null, {
-          asSuggestion: true,
-          candidates: [],
-        });
-      } else {
-        simpleIntakeActions.selectDxf(resultRowId, next.dxfId, {
-          asSuggestion: true,
-          candidates: ranked.slice(0, 5),
-          forceReassign: true,
-        });
-      }
-      setConfirmedManual((prev) => {
-        const n = new Set(prev);
-        n.delete(resultRowId);
-        return n;
+  const handleDimensionResolution = useCallback(
+    (resultRowId: string, resolution: DimensionMismatchResolution) => {
+      setDimensionResolutions((prev) => {
+        const next = new Map(prev);
+        next.set(resultRowId, resolution);
+        return next;
       });
     },
-    [
-      session.resultRows,
-      session.dxfParts,
-      rejectedPairs,
-      reservedDxfIds,
-      classifiedDupes.secondaryDuplicateFileIds,
-    ]
+    []
   );
 
+  /** Exact conflict candidates only — never unrelated DXFs. */
   const availableCandidatesForRow = useCallback(
     (row: FinalIntakeRow | null): FinalDxfCandidate[] => {
-      const materialRowId = row?.materialRowId ?? "";
-      const available = getAvailableDxfCandidates({
-        dxfParts: session.dxfParts,
-        reservedDxfIds,
-        nonCanonicalDuplicateDxfIds: classifiedDupes.secondaryDuplicateFileIds,
-        rejectedCandidatePairs: rejectedPairs,
-        materialRowId,
-        includeDxfId: row?.part.matchedDxfId ?? null,
-      });
-      return available.map((d) => ({
-        dxfId: d.id,
-        partId: d.partId,
-        filename: d.filename,
-        widthMm: d.widthMm,
-        lengthMm: d.lengthMm,
-        widthDifferenceMm: null,
-        lengthDifferenceMm: null,
-      }));
+      if (!row) return [];
+      if (row.match.status === "AMBIGUOUS" && row.match.candidates.length > 0) {
+        return row.match.candidates;
+      }
+      return [];
     },
-    [
-      session.dxfParts,
-      reservedDxfIds,
-      classifiedDupes.secondaryDuplicateFileIds,
-      rejectedPairs,
-    ]
+    []
   );
 
   if (session.resultRows.length === 0 && session.materialListRows.length === 0) {
@@ -316,12 +236,8 @@ export function PostAnalysisWorkflow() {
           onPickDxfAction={() => {
             /* picker opened inside workspace */
           }}
-          onSuggestAnother={handleSuggestAnother}
           onLeaveUnassigned={(id) => {
-            simpleIntakeActions.selectDxf(id, null, {
-              asSuggestion: true,
-              candidates: [],
-            });
+            simpleIntakeActions.selectDxf(id, null);
             setConfirmedManual((prev) => {
               const n = new Set(prev);
               n.delete(id);
@@ -343,6 +259,7 @@ export function PostAnalysisWorkflow() {
           onRestore={(id) => {
             simpleIntakeActions.excludeRow(id, false);
           }}
+          onDimensionResolution={handleDimensionResolution}
           trySelectDxf={trySelectDxf}
           availableCandidatesForRow={availableCandidatesForRow}
           noDxfFilesUploaded={session.dxfParts.length === 0}
@@ -359,6 +276,8 @@ export function PostAnalysisWorkflow() {
           onShowSummary={() => setView("ANALYSIS_SUMMARY")}
           onBackToGaps={openGapResolution}
           onOpenCompletionRequest={() => setCompletionOpen(true)}
+          dimensionMismatchResolutions={dimensionResolutions}
+          onDimensionResolution={handleDimensionResolution}
         />
       )}
 

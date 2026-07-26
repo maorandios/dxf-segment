@@ -1,5 +1,5 @@
 /**
- * OMEGA — Guided Gap Resolution Workspace v1
+ * OMEGA — Guided Gap Resolution Workspace (exact-identifier categories)
  * Run: npx tsx features/simple-intake/__tests__/simple-intake-gap-resolution-workspace-v1.ts
  */
 import assert from "node:assert/strict";
@@ -15,7 +15,7 @@ import {
   deriveSecondaryResolutionTags,
   filterItemsByResolutionCategory,
   selectInitialResolutionCategory,
-  type PrimaryResolutionCategory,
+  type MaterialResolutionCategory,
 } from "../results/primaryResolutionCategory";
 import type { FinalIntakeRow } from "../results/types";
 
@@ -100,10 +100,13 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
   assert(workflow.includes("ANALYSIS_SUMMARY"), "summary view");
   assert(workflow.includes("FINAL_TABLE"), "table view");
   assert(workflow.includes("onResolveGaps"), "resolve gaps wired");
-  assert(workspace.includes("טיפול בפערים"), "workspace heading");
+  assert(workspace.includes("פערים להתייחסות"), "workspace heading");
   assert(workspace.includes("המשך לטבלה המסכמת"), "continue always");
   assert(workspace.includes("aria-pressed"), "card a11y");
+  assert(workspace.includes("<table"), "table layout");
+  assert(!workspace.includes("מצב קובצי DXF"), "no dxf status strip");
   assert(!workflow.includes("GuidedIssueReview"), "no one-by-one wizard");
+  assert(!workflow.includes("onSuggestAnother"), "no suggest-another");
   console.log("✓ Summary CTAs + subview architecture wiring");
 }
 
@@ -129,18 +132,28 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
       matchedDxfPartId: "P1",
       matchedDxfFilename: "P1.dxf",
     },
+    preview: { dxfId: "d1", geometryAvailable: true },
   });
   assertEq(
     derivePrimaryResolutionCategory(missingQty),
-    "MISSING_REQUIRED_DATA",
+    "MISSING_ITEM_DATA",
     "missing qty"
   );
 
-  const noDxf = baseRow({
+  const noId = baseRow({
     id: "res_2",
     materialRowId: "2",
     status: "BLOCKED",
     issueCodes: ["NO_DXF_FOUND"],
+    part: {
+      displayName: "—",
+      displayNameSource: "FALLBACK",
+      sourcePartId: null,
+      sourceProfile: null,
+      matchedDxfId: null,
+      matchedDxfPartId: null,
+      matchedDxfFilename: null,
+    },
     match: {
       status: "UNMATCHED",
       method: null,
@@ -148,13 +161,17 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
       message: null,
     },
   });
-  assertEq(derivePrimaryResolutionCategory(noDxf), "NO_DXF", "no dxf");
+  assertEq(
+    derivePrimaryResolutionCategory(noId),
+    "ITEM_IDENTIFICATION",
+    "no identifier / no dxf"
+  );
 
-  const suggested = baseRow({
+  const geometryLeftover = baseRow({
     id: "res_3",
     materialRowId: "3",
-    status: "NEEDS_REVIEW",
-    issueCodes: ["HEURISTIC_MATCH_UNCONFIRMED"],
+    status: "BLOCKED",
+    issueCodes: [],
     match: {
       status: "MATCHED",
       method: "GEOMETRY",
@@ -170,14 +187,15 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
       matchedDxfPartId: "X",
       matchedDxfFilename: "X.dxf",
     },
+    preview: { dxfId: "d3", geometryAvailable: true },
   });
   assertEq(
-    derivePrimaryResolutionCategory(suggested),
-    "MATCH_CONFIRMATION",
-    "suggested"
+    derivePrimaryResolutionCategory(geometryLeftover),
+    "ITEM_IDENTIFICATION",
+    "geometry leftover not confirmed assignment"
   );
   assert(
-    deriveSecondaryResolutionTags(suggested).includes(
+    deriveSecondaryResolutionTags(geometryLeftover).includes(
       "MISSING_SOURCE_IDENTIFIER"
     ),
     "secondary missing id"
@@ -203,6 +221,8 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
       matchedDxfPartId: "P4",
       matchedDxfFilename: "P4.dxf",
     },
+    preview: { dxfId: "d4", geometryAvailable: true },
+    dimensionMismatchResolution: "UNRESOLVED",
     dimensionComparison: {
       orientation: "DIRECT",
       source: { widthMm: 100, lengthMm: 200 },
@@ -231,8 +251,8 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
   });
   assertEq(
     derivePrimaryResolutionCategory(conflict),
-    "DATA_CONFLICT",
-    "conflict"
+    "DIMENSION_REVIEW",
+    "dimension review"
   );
 
   const ready = baseRow({
@@ -249,73 +269,75 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
     part: {
       displayName: "P5",
       displayNameSource: "SOURCE_PART_ID",
-      sourcePartId: null,
+      sourcePartId: "P5",
       sourceProfile: null,
       matchedDxfId: "d5",
       matchedDxfPartId: "P5",
       matchedDxfFilename: "P5.dxf",
     },
+    preview: { dxfId: "d5", geometryAvailable: true },
   });
   assertEq(
     derivePrimaryResolutionCategory(ready),
     "READY_FOR_PRICING",
-    "ready despite missing source id"
-  );
-  assert(
-    deriveSecondaryResolutionTags(ready).includes("MISSING_SOURCE_IDENTIFIER"),
-    "tag only"
+    "ready"
   );
 
-  const rows = [missingQty, noDxf, suggested, conflict, ready];
+  const rows = [missingQty, noId, geometryLeftover, conflict, ready];
   const summary = buildGapResolutionSummary(rows);
-  assertEq(summary.totalItemCount, 5, "total");
+  assertEq(summary.totalMaterialItemCount, 5, "total");
   assertEq(
-    summary.missingRequiredDataCount +
-      summary.noDxfCount +
-      summary.matchConfirmationCount +
-      summary.dataConflictCount +
+    summary.itemIdentificationCount +
+      summary.missingItemDataCount +
+      summary.dimensionReviewCount +
       summary.readyForPricingCount,
     5,
     "sum invariant"
   );
-  assertEq(summary.missingRequiredDataCount, 1, "missing");
-  assertEq(summary.noDxfCount, 1, "nodxf");
-  assertEq(summary.matchConfirmationCount, 1, "match");
-  assertEq(summary.dataConflictCount, 1, "conflict");
+  assertEq(summary.missingItemDataCount, 1, "missing");
+  assertEq(summary.itemIdentificationCount, 2, "identification");
+  assertEq(summary.matchConfirmationCount, 0, "no match confirmation");
+  assertEq(summary.dimensionReviewCount, 1, "dim review");
   assertEq(summary.readyForPricingCount, 1, "ready");
   assertEq(
     selectInitialResolutionCategory(summary),
-    "MISSING_REQUIRED_DATA",
+    "ITEM_IDENTIFICATION",
     "initial highest priority"
   );
   assertEq(
-    filterItemsByResolutionCategory(rows, "NO_DXF").length,
-    1,
+    filterItemsByResolutionCategory(rows, "ITEM_IDENTIFICATION").length,
+    2,
     "filter"
   );
   assertEq(
-    countForCategory(summary, "NO_DXF"),
-    filterItemsByResolutionCategory(rows, "NO_DXF").length,
+    countForCategory(summary, "ITEM_IDENTIFICATION"),
+    filterItemsByResolutionCategory(rows, "ITEM_IDENTIFICATION").length,
     "card=filter"
   );
 
-  const presentation = deriveRowResolutionPresentation(suggested);
-  assert(presentation.title.includes("מוצעת"), "presentation title");
-  assertEq(presentation.actionLabel, "בדוק ואשר", "action");
+  const presentation = deriveRowResolutionPresentation(noId);
+  assert(presentation.title.includes("מזהה"), "presentation title");
 
   const diag = buildGapResolutionDiagnostics(rows);
   assert(diag.gapResolutionDiagnostics.categoryCountInvariantPassed, "diag");
   assert(diag.gapResolutionSample.length <= 20, "sample cap");
+  assertEq(
+    diag.simplifiedMatchingDiagnostics.geometrySuggestionsCreated,
+    1,
+    "synthetic geometry leftover flagged in diagnostics"
+  );
   console.log("✓ Primary categories, counts, filter, presentation, diagnostics");
 }
 
 {
-  // Priority: missing required beats suggested
+  // Geometry leftover is ITEM_IDENTIFICATION (not missing data) even with missing thickness
+  // because exact usable DXF is required first — but if matchedDxfId present with GEOMETRY,
+  // hasOneResolvedExactUsableDxf is false → ITEM_IDENTIFICATION wins.
   const both = baseRow({
     id: "res_x",
     materialRowId: "x",
     status: "BLOCKED",
-    issueCodes: ["MISSING_THICKNESS", "HEURISTIC_MATCH_UNCONFIRMED"],
+    issueCodes: ["MISSING_THICKNESS"],
     thicknessMm: null,
     match: {
       status: "MATCHED",
@@ -332,49 +354,17 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
       matchedDxfPartId: "X",
       matchedDxfFilename: "X.dxf",
     },
+    preview: { dxfId: "dx", geometryAvailable: true },
   });
   assertEq(
     derivePrimaryResolutionCategory(both),
-    "MISSING_REQUIRED_DATA",
-    "priority"
+    "ITEM_IDENTIFICATION",
+    "identification before missing data when no exact DXF"
   );
-  console.log("✓ Missing required data has highest priority");
+  console.log("✓ ITEM_IDENTIFICATION has highest priority");
 }
 
 {
-  // Confirm suggestion → READY category (simulated post-confirm row)
-  const confirmed = baseRow({
-    id: "res_c",
-    materialRowId: "c",
-    status: "READY",
-    issueCodes: [],
-    isManualMatchConfirmed: true,
-    match: {
-      status: "MATCHED",
-      method: "GEOMETRY",
-      candidates: [],
-      message: null,
-    },
-    part: {
-      displayName: "C",
-      displayNameSource: "MATCHED_DXF",
-      sourcePartId: null,
-      sourceProfile: null,
-      matchedDxfId: "dc",
-      matchedDxfPartId: "C",
-      matchedDxfFilename: "C.dxf",
-    },
-  });
-  assertEq(
-    derivePrimaryResolutionCategory(confirmed),
-    "READY_FOR_PRICING",
-    "after confirm"
-  );
-  console.log("✓ Confirming suggestion moves to READY_FOR_PRICING");
-}
-
-{
-  // Exact match is not MATCH_CONFIRMATION
   const exact = baseRow({
     id: "res_e",
     materialRowId: "e",
@@ -395,24 +385,24 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
       matchedDxfPartId: "E",
       matchedDxfFilename: "E.dxf",
     },
+    preview: { dxfId: "de", geometryAvailable: true },
   });
   assertEq(
     derivePrimaryResolutionCategory(exact),
     "READY_FOR_PRICING",
     "exact certain"
   );
-  console.log("✓ Exact ID does not enter MATCH_CONFIRMATION");
+  console.log("✓ Exact ID is READY_FOR_PRICING");
 }
 
 {
-  const cats: PrimaryResolutionCategory[] = [
-    "MISSING_REQUIRED_DATA",
-    "NO_DXF",
-    "MATCH_CONFIRMATION",
-    "DATA_CONFLICT",
+  const cats: MaterialResolutionCategory[] = [
+    "ITEM_IDENTIFICATION",
+    "MISSING_ITEM_DATA",
+    "DIMENSION_REVIEW",
     "READY_FOR_PRICING",
   ];
-  assertEq(new Set(cats).size, 5, "five categories");
+  assertEq(new Set(cats).size, 4, "four categories");
   console.log("✓ Category set complete");
 }
 

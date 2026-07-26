@@ -256,6 +256,15 @@
   }
 }
 
+@keyframes ow-drawer-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
 @keyframes ow-overlay-in {
   from {
     opacity: 0;
@@ -265,12 +274,34 @@
   }
 }
 
+@keyframes ow-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 .omega-workflow .ow-drawer-panel {
   animation: ow-drawer-in 260ms ease-out both;
 }
 
+.omega-workflow .ow-drawer-panel.ow-drawer-exit {
+  animation: ow-drawer-out 220ms ease-in both;
+}
+
 .omega-workflow .ow-drawer-overlay {
   animation: ow-overlay-in 200ms ease-out both;
+}
+
+.omega-workflow .ow-drawer-overlay.ow-drawer-exit {
+  animation: ow-overlay-out 180ms ease-in both;
+}
+
+/* Gap fix push panel helpers (layout is primarily inline in GapResolutionWorkspace) */
+.omega-workflow .ow-gap-push-rail {
+  will-change: width;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -282,5 +313,6 @@
   .omega-workflow .ow-drawer-panel,
   .omega-workflow .ow-drawer-overlay {
     animation: none !important;
+    transition: none !important;
   }
 }

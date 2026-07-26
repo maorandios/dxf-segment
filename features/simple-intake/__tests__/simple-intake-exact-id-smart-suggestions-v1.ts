@@ -12,7 +12,6 @@ import {
   resolveMatchLevel,
 } from "../matchWithFilenamePriority";
 import {
-  applyManualDxfSelection,
   listRankedGeometryCandidatesForRow,
 } from "../matchSimpleRows";
 import { deriveFinalRows, summarizeFinalRows } from "../results/deriveFinalRows";
@@ -21,7 +20,6 @@ import {
   getAvailableDxfCandidates,
   hasCopyLikeFilenameSuffix,
   pickCanonicalDuplicateMember,
-  rejectedPairKey,
 } from "../smartDxfAssignment";
 import type { SimpleDxfPart, SimpleExtractedRow } from "../types";
 
@@ -223,7 +221,7 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
 }
 
 {
-  // No-ID unique suggestion
+  // No-ID must not receive dimension-based suggestion
   const parts = [
     dxf({ id: "best", filename: "A.dxf", widthMm: 255, lengthMm: 100 }),
     dxf({ id: "far", filename: "B.dxf", widthMm: 400, lengthMm: 400 }),
@@ -242,21 +240,21 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
     dxfParts: parts,
   });
   const row = matched.resultRows[0]!;
-  assertEq(row.match.method, "GEOMETRY", "geometry suggestion");
-  assertEq(row.match.matchedDxfId, "best", "best candidate");
-  assertEq(resolveMatchLevel(row.match), "SUGGESTED", "suggested");
+  assertEq(row.match.method, null, "no geometry suggestion");
+  assertEq(row.match.matchedDxfId, null, "unassigned");
+  assertEq(resolveMatchLevel(row.match), "UNASSIGNED", "unassigned");
   const finals = deriveFinalRows({
     resultRows: matched.resultRows,
     dxfParts: parts,
     workbookFilename: "w.xlsx",
     snapshot: null,
   });
-  assertEq(finals[0]!.status, "NEEDS_REVIEW", "needs confirm");
-  console.log("✓ No-ID unique candidate → SUGGESTED / NEEDS_REVIEW");
+  assertEq(finals[0]!.status, "BLOCKED", "blocked without identifier");
+  console.log("✓ No-ID → UNASSIGNED / BLOCKED (no geometry suggestion)");
 }
 
 {
-  // Reserved exact excludes geometry for other no-ID rows
+  // Exact ID reserved; no-ID stays unassigned (no geometry fill)
   const parts = [
     dxf({ id: "p1", filename: "P1.dxf", partId: "P1", widthMm: 100, lengthMm: 200 }),
     dxf({ id: "alt", filename: "Alt.dxf", partId: "Alt", widthMm: 100, lengthMm: 200 }),
@@ -277,13 +275,12 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
   });
   assertEq(matched.resultRows[0]!.match.method, "EXACT_ID", "exact reserved");
   assertEq(matched.resultRows[0]!.match.matchedDxfId, "p1", "p1 taken");
-  assertEq(matched.resultRows[1]!.match.matchedDxfId, "alt", "noid gets alt");
-  assert(matched.resultRows[1]!.match.matchedDxfId !== "p1", "not reserved");
-  console.log("✓ Reserved exact DXF excluded from no-ID pool");
+  assertEq(matched.resultRows[1]!.match.matchedDxfId, null, "noid unassigned");
+  console.log("✓ Exact DXF reserved; no-ID not geometry-filled");
 }
 
 {
-  // Ambiguous top-two only
+  // No-ID never becomes AMBIGUOUS via geometry candidates
   const parts = [
     dxf({ id: "a", filename: "A.dxf", widthMm: 100, lengthMm: 200 }),
     dxf({ id: "b", filename: "B.dxf", widthMm: 100.1, lengthMm: 200.1 }),
@@ -303,14 +300,13 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
     dxfParts: parts,
   });
   const row = matched.resultRows[0]!;
-  if (row.match.status === "AMBIGUOUS") {
-    assert(row.match.candidates.length <= 2, "top two only");
-  }
-  console.log("✓ Ambiguous exposes at most top two candidates");
+  assertEq(row.match.status, "UNMATCHED", "no geometry ambiguity");
+  assertEq(row.match.candidates.length, 0, "no ranked candidates");
+  console.log("✓ No-ID does not create geometry ambiguity candidates");
 }
 
 {
-  // Reject suggestion → next candidate; confirm reserves
+  // listRankedGeometryCandidatesForRow returns empty (geometry edges disabled)
   const parts = [
     dxf({ id: "a", filename: "A.dxf", widthMm: 255, lengthMm: 100 }),
     dxf({ id: "b", filename: "B.dxf", widthMm: 256, lengthMm: 100 }),
@@ -324,60 +320,12 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
       lengthMm: 100,
     }),
   ];
-  const matched = matchWithFilenamePriority({
-    extractedRows: rows,
-    dxfParts: parts,
-  });
-  const firstId = matched.resultRows[0]!.match.matchedDxfId!;
-  const rejected = new Set([rejectedPairKey("noid", firstId)]);
-  const available = getAvailableDxfCandidates({
-    dxfParts: parts,
-    reservedDxfIds: new Set(),
-    nonCanonicalDuplicateDxfIds: new Set(),
-    rejectedCandidatePairs: rejected,
-    materialRowId: "noid",
-  });
   const ranked = listRankedGeometryCandidatesForRow({
     row: rows[0]!,
-    dxfParts: available,
-  });
-  assert(ranked.length >= 1, "next exists");
-  assert(ranked[0]!.dxfId !== firstId, "different from rejected");
-
-  const afterSuggest = applyManualDxfSelection({
-    resultRows: matched.resultRows,
-    resultRowId: "res_noid",
-    dxfId: ranked[0]!.dxfId,
     dxfParts: parts,
-    asSuggestion: true,
-    candidates: ranked,
   });
-  assert(afterSuggest.ok, "ok");
-  if (afterSuggest.ok) {
-    assertEq(
-      afterSuggest.resultRows[0]!.match.method,
-      "GEOMETRY",
-      "still suggestion"
-    );
-  }
-
-  const confirmed = applyManualDxfSelection({
-    resultRows: afterSuggest.ok ? afterSuggest.resultRows : matched.resultRows,
-    resultRowId: "res_noid",
-    dxfId: ranked[0]!.dxfId,
-    dxfParts: parts,
-    asSuggestion: false,
-  });
-  assert(confirmed.ok, "confirm ok");
-  if (confirmed.ok) {
-    assertEq(confirmed.resultRows[0]!.match.method, "MANUAL", "manual confirm");
-    const reserved = buildReservedDxfIds({
-      resultRows: confirmed.resultRows,
-      confirmedManualMatchIds: new Set(["res_noid"]),
-    });
-    assert(reserved.has(ranked[0]!.dxfId), "reserved after confirm");
-  }
-  console.log("✓ Reject cycles to next; confirm reserves as MANUAL");
+  assertEq(ranked.length, 0, "no ranked geometry candidates");
+  console.log("✓ Geometry candidate ranking produces empty list");
 }
 
 {
@@ -440,12 +388,17 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
     10,
     "10 exact"
   );
-  assert(
-    matched.resultRows[10]!.match.matchedDxfId !==
-      matched.resultRows[0]!.match.matchedDxfId,
-    "noid not stealing exact"
+  assertEq(
+    matched.resultRows[10]!.match.matchedDxfId,
+    null,
+    "noid unassigned (no geometry)"
   );
-  console.log("✓ Partial-ID: exact reserved before no-ID suggestions");
+  assertEq(
+    matched.resultRows[11]!.match.matchedDxfId,
+    null,
+    "noid2 unassigned"
+  );
+  console.log("✓ Partial-ID: exact reserved; no-ID stays unassigned");
 }
 
 {
@@ -454,16 +407,11 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
     path.join(root, "results/SimpleItemDetailsDrawer.tsx"),
     "utf8"
   );
-  assert(drawer.includes("הצע קובץ אחר"), "suggest another");
   assert(drawer.includes("השאר ללא שיוך"), "leave unassigned");
-  assert(drawer.includes("חיפוש ידני"), "manual search");
+  assert(drawer.includes("השתמש במידות DXF"), "use dxf dims");
   assert(drawer.includes("שיוך DXF"), "dxf section");
-  const picker = fs.readFileSync(
-    path.join(root, "results/DxfCandidatePicker.tsx"),
-    "utf8"
-  );
-  assert(picker.includes('mode === "candidates"'), "picker modes");
-  console.log("✓ Side panel UX strings present");
+  assert(!drawer.includes("הצע קובץ אחר"), "no suggest another");
+  console.log("✓ Side panel UX strings present (exact-only)");
 }
 
 {

@@ -1,44 +1,65 @@
 /**
- * Guided gap-resolution — primary category, secondary tags, presentations, diagnostics.
- * Uses canonical FinalIntakeRow + active review/blocking reasons (no second issue system).
+ * Exact-identifier-only gap classification — four mutually exclusive material categories.
  */
 
-import {
-  getActiveBlockingReasons,
-  getActiveReviewReasons,
-  reconcileActiveIssueCodes,
-} from "./activeReviewReasons";
 import { getCanonicalMaterialItemId } from "./canonicalMaterialItemId";
-import type { FinalIntakeRow, FinalIssueCode } from "./types";
+import {
+  DXF_DIMENSIONS_FALLBACK_NOTE_HE,
+  deriveMissingRequiredItemFields,
+  usesDxfDimensionsAsSourceFallback,
+  type MissingRequiredItemField,
+  type UnifiedQuoteItem,
+} from "../missingRequiredItemFields";
+import { getSourceItemIdentifier } from "../sourceItemIdentifier";
+import type {
+  DimensionMismatchResolution,
+  FinalIntakeRow,
+  FinalIssueCode,
+  FinalReviewStatus,
+} from "./types";
 
-export type PrimaryResolutionCategory =
-  | "MISSING_REQUIRED_DATA"
-  | "NO_DXF"
-  | "MATCH_CONFIRMATION"
-  | "DATA_CONFLICT"
+export type { DimensionMismatchResolution };
+
+export type MaterialResolutionCategory =
+  | "ITEM_IDENTIFICATION"
+  | "MISSING_ITEM_DATA"
+  | "DIMENSION_REVIEW"
   | "READY_FOR_PRICING";
+
+/** @deprecated Use MaterialResolutionCategory */
+export type PrimaryResolutionCategory = MaterialResolutionCategory;
 
 export type SecondaryResolutionTag =
   | "MISSING_SOURCE_IDENTIFIER"
+  | "NO_MATCHING_DXF"
+  | "MATCHING_DXF_INVALID"
+  | "MULTIPLE_CONFLICTING_DXFS"
   | "MISSING_SOURCE_DIMENSIONS"
+  | "USING_DXF_DIMENSIONS"
   | "MISSING_MATERIAL"
   | "MISSING_THICKNESS"
   | "MISSING_QUANTITY"
-  | "EXPLICIT_DXF_NOT_UPLOADED"
-  | "NO_SUITABLE_DXF"
-  | "SUGGESTED_DXF"
-  | "AMBIGUOUS_DXF"
-  | "DIMENSION_CONFLICT"
-  | "SOURCE_VALUE_CONFLICT";
+  | "MISSING_FINAL_DIMENSIONS"
+  | "DIMENSION_MISMATCH_UNRESOLVED"
+  | "DIMENSION_WITHIN_TOLERANCE";
 
-export type GapResolutionSummary = {
+export type SimplifiedGapSummary = {
+  totalMaterialItemCount: number;
+  itemIdentificationCount: number;
+  missingItemDataCount: number;
+  dimensionReviewCount: number;
+  readyForPricingCount: number;
+  dxfFileFindingCount: number;
+  remainingActionCount: number;
+};
+
+/** @deprecated Use SimplifiedGapSummary */
+export type GapResolutionSummary = SimplifiedGapSummary & {
   totalItemCount: number;
   missingRequiredDataCount: number;
   noDxfCount: number;
   matchConfirmationCount: number;
   dataConflictCount: number;
-  readyForPricingCount: number;
-  remainingActionCount: number;
 };
 
 export type RowResolutionPresentation = {
@@ -48,227 +69,164 @@ export type RowResolutionPresentation = {
 };
 
 export type GapResolutionCardConfig = {
-  category: PrimaryResolutionCategory;
+  category: MaterialResolutionCategory;
   label: string;
   explanation: string;
 };
 
 export const RESOLUTION_CARDS: ReadonlyArray<GapResolutionCardConfig> = [
   {
-    category: "MISSING_REQUIRED_DATA",
-    label: "חסרים נתוני חובה",
-    explanation: "שורות שחסר בהן חומר, עובי, כמות או מידות נדרשות",
+    category: "ITEM_IDENTIFICATION",
+    label: "זיהוי פריט",
+    explanation: "פריטים ללא שם או DXF תואם",
   },
   {
-    category: "NO_DXF",
-    label: "ללא DXF",
-    explanation: "שורות שדורשות בחירה או העלאת קובץ",
+    category: "MISSING_ITEM_DATA",
+    label: "נתוני פריט",
+    explanation: "פריטים עם מידע טכני חסר",
   },
   {
-    category: "MATCH_CONFIRMATION",
-    label: "לאישור התאמה",
-    explanation: "נמצאה התאמה מוצעת שמחכה לאישור",
-  },
-  {
-    category: "DATA_CONFLICT",
-    label: "פערים בנתונים",
-    explanation: "שורות עם פער משמעותי שדורש החלטה",
+    category: "DIMENSION_REVIEW",
+    label: "מידות פריט",
+    explanation: "אי התאמה בין טבלה ל DXF",
   },
   {
     category: "READY_FOR_PRICING",
-    label: "מוכנים לתמחור",
-    explanation: "כל הנתונים הנדרשים קיימים",
+    label: "תאימות מלא",
+    explanation: "נתוני פריט מלאים לתמחור",
   },
 ];
 
-export const PRIMARY_CATEGORY_PRIORITY: ReadonlyArray<PrimaryResolutionCategory> =
+export const PRIMARY_CATEGORY_PRIORITY: ReadonlyArray<MaterialResolutionCategory> =
   [
-    "MISSING_REQUIRED_DATA",
-    "NO_DXF",
-    "MATCH_CONFIRMATION",
-    "DATA_CONFLICT",
+    "ITEM_IDENTIFICATION",
+    "MISSING_ITEM_DATA",
+    "DIMENSION_REVIEW",
     "READY_FOR_PRICING",
   ];
 
-function isExactOrConfirmedAssignment(row: FinalIntakeRow): boolean {
-  if (row.isExcluded) return false;
-  if (row.isManualMatchConfirmed && row.match.status === "MATCHED") return true;
+export function hasOneResolvedExactUsableDxf(item: UnifiedQuoteItem): boolean {
+  if (item.isExcluded) return true;
+  if (item.part.matchedDxfId == null) return false;
+  if (!item.preview.geometryAvailable) return false;
+  if (item.match.status !== "MATCHED") return false;
+  const method = item.match.method;
+  // Geometry suggestions are never treated as resolved exact DXFs.
+  if (method === "GEOMETRY") return false;
   return (
-    row.match.status === "MATCHED" &&
-    (row.match.method === "EXPLICIT_FILENAME" ||
-      row.match.method === "EXACT_ID")
+    method === "EXPLICIT_FILENAME" ||
+    method === "EXACT_ID" ||
+    method === "MANUAL" ||
+    item.isManualMatchConfirmed
   );
 }
 
-function reasonContext(row: FinalIntakeRow) {
-  const exactIdentifierAssignment = isExactOrConfirmedAssignment(row);
-  return {
-    issueCodes: row.issueCodes,
-    dimensionComparison: row.dimensionComparison,
-    exactIdentifierAssignment,
-  };
-}
-
-function activeCodes(row: FinalIntakeRow): FinalIssueCode[] {
-  const ctx = reasonContext(row);
-  return reconcileActiveIssueCodes(row.issueCodes, ctx);
-}
-
-function hasUsableFinalDimensions(row: FinalIntakeRow): boolean {
-  const w = row.dxfDimensions.widthMm ?? row.rawDxfDimensions?.widthMm;
-  const l = row.dxfDimensions.lengthMm ?? row.rawDxfDimensions?.lengthMm;
-  return (
-    w != null &&
-    l != null &&
-    Number.isFinite(w) &&
-    Number.isFinite(l) &&
-    w > 0 &&
-    l > 0
-  );
-}
-
-function hasConfirmedUsableDxf(row: FinalIntakeRow): boolean {
-  return (
-    isExactOrConfirmedAssignment(row) &&
-    row.part.matchedDxfId != null &&
-    row.preview.geometryAvailable
-  );
-}
-
-function hasSuggestedAssignment(row: FinalIntakeRow): boolean {
-  if (row.isManualMatchConfirmed) return false;
-  if (row.match.status === "AMBIGUOUS") return true;
-  if (row.match.status !== "MATCHED") return false;
-  if (row.match.method === "GEOMETRY") return true;
-  if (row.match.method === "MANUAL" && !row.isManualMatchConfirmed) return true;
-  return (
-    row.issueCodes.includes("HEURISTIC_MATCH_UNCONFIRMED") ||
-    row.issueCodes.includes("MANUAL_MATCH_NOT_CONFIRMED") ||
-    row.issueCodes.includes("MULTIPLE_DXF_CANDIDATES")
-  );
+export function hasUnresolvedSignificantDimensionMismatch(
+  item: UnifiedQuoteItem
+): boolean {
+  if (!hasOneResolvedExactUsableDxf(item)) return false;
+  if (item.dimensionComparison?.hasSignificantMismatch !== true) return false;
+  if (item.dimensionMismatchResolution === "USE_DXF_DIMENSIONS") return false;
+  return true;
 }
 
 /**
- * Exactly one primary resolution category per row (mutual exclusion by priority).
+ * Exactly one material resolution category per row.
  */
+export function deriveMaterialResolutionCategory(
+  item: UnifiedQuoteItem
+): MaterialResolutionCategory {
+  if (item.isExcluded) return "READY_FOR_PRICING";
+
+  if (!hasOneResolvedExactUsableDxf(item)) {
+    return "ITEM_IDENTIFICATION";
+  }
+
+  if (deriveMissingRequiredItemFields(item).length > 0) {
+    return "MISSING_ITEM_DATA";
+  }
+
+  if (hasUnresolvedSignificantDimensionMismatch(item)) {
+    return "DIMENSION_REVIEW";
+  }
+
+  return "READY_FOR_PRICING";
+}
+
+/** @deprecated Prefer deriveMaterialResolutionCategory */
 export function derivePrimaryResolutionCategory(
   row: FinalIntakeRow
-): PrimaryResolutionCategory {
-  if (row.isExcluded) return "READY_FOR_PRICING";
+): MaterialResolutionCategory {
+  return deriveMaterialResolutionCategory(row);
+}
 
-  const codes = activeCodes(row);
-  const blocking = getActiveBlockingReasons(codes);
-  const review = getActiveReviewReasons(codes, reasonContext(row));
-  const confirmedDxf = hasConfirmedUsableDxf(row);
-  const suggested = hasSuggestedAssignment(row);
-
-  // 1 — Missing required commercial / dimension data
-  const missingRequired =
-    blocking.includes("MISSING_QUANTITY") ||
-    blocking.includes("MISSING_MATERIAL") ||
-    blocking.includes("MISSING_THICKNESS") ||
-    (blocking.includes("MISSING_REQUIRED_DIMENSIONS") &&
-      !hasUsableFinalDimensions(row)) ||
-    (blocking.includes("DXF_INVALID") && !hasUsableFinalDimensions(row));
-
-  if (missingRequired) return "MISSING_REQUIRED_DATA";
-
-  // 2 — No DXF (no certain/confirmed, no suggestion, no ambiguous pick)
-  const noDxfSignal =
-    blocking.includes("NO_DXF_FOUND") ||
-    blocking.includes("EXPLICIT_DXF_FILE_MISSING") ||
-    blocking.includes("DXF_ASSIGNED_TO_BETTER_ROW") ||
-    blocking.includes("DXF_INVALID") ||
-    row.match.status === "UNMATCHED" ||
-    row.match.status === "INVALID_DXF" ||
-    (row.part.matchedDxfId == null && !suggested);
-
-  if (!confirmedDxf && !suggested && noDxfSignal) {
-    return "NO_DXF";
+export function mapCategoryToReviewStatus(
+  category: MaterialResolutionCategory,
+  isExcluded: boolean
+): FinalReviewStatus {
+  if (isExcluded) return "EXCLUDED";
+  switch (category) {
+    case "ITEM_IDENTIFICATION":
+    case "MISSING_ITEM_DATA":
+      return "BLOCKED";
+    case "DIMENSION_REVIEW":
+      return "NEEDS_REVIEW";
+    case "READY_FOR_PRICING":
+      return "READY";
   }
-
-  // 3 — Match confirmation / ambiguous candidates
-  if (
-    suggested ||
-    review.includes("HEURISTIC_MATCH_UNCONFIRMED") ||
-    review.includes("MANUAL_MATCH_NOT_CONFIRMED") ||
-    review.includes("MULTIPLE_DXF_CANDIDATES") ||
-    row.match.status === "AMBIGUOUS"
-  ) {
-    return "MATCH_CONFIRMATION";
-  }
-
-  // 4 — Data conflict (assigned DXF with meaningful unresolved conflict)
-  if (
-    review.includes("PART_ID_DIMENSION_MISMATCH") ||
-    (row.part.matchedDxfId != null &&
-      row.dimensionComparison?.hasSignificantMismatch === true)
-  ) {
-    return "DATA_CONFLICT";
-  }
-
-  // Remaining active issues with an assignment → treat as conflict
-  if (
-    (blocking.length > 0 || review.length > 0) &&
-    row.part.matchedDxfId != null
-  ) {
-    return "DATA_CONFLICT";
-  }
-
-  // Still no DXF after other checks
-  if (!confirmedDxf && row.part.matchedDxfId == null) {
-    return "NO_DXF";
-  }
-
-  // 5 — Ready
-  return "READY_FOR_PRICING";
 }
 
 export function deriveSecondaryResolutionTags(
   row: FinalIntakeRow
 ): SecondaryResolutionTag[] {
   const tags: SecondaryResolutionTag[] = [];
-  const codes = activeCodes(row);
-  const hasPartId =
-    row.part.sourcePartId != null &&
-    String(row.part.sourcePartId).trim() !== "";
-  const hasSourceDims =
-    row.source.sourceWidthMm != null &&
-    row.source.sourceLengthMm != null &&
-    row.source.sourceWidthMm > 0 &&
-    row.source.sourceLengthMm > 0;
+  const category = deriveMaterialResolutionCategory(row);
+  const sourceId = getSourceItemIdentifier({
+    partId: row.part.sourcePartId,
+    dxfFileName: null,
+  });
+  const missing = deriveMissingRequiredItemFields(row);
 
-  if (!hasPartId) tags.push("MISSING_SOURCE_IDENTIFIER");
-  if (!hasSourceDims) tags.push("MISSING_SOURCE_DIMENSIONS");
-  if (codes.includes("MISSING_MATERIAL")) tags.push("MISSING_MATERIAL");
-  if (codes.includes("MISSING_THICKNESS")) tags.push("MISSING_THICKNESS");
-  if (codes.includes("MISSING_QUANTITY")) tags.push("MISSING_QUANTITY");
-  if (codes.includes("EXPLICIT_DXF_FILE_MISSING")) {
-    tags.push("EXPLICIT_DXF_NOT_UPLOADED");
+  if (category === "ITEM_IDENTIFICATION") {
+    if (!sourceId) tags.push("MISSING_SOURCE_IDENTIFIER");
+    else if (row.match.status === "AMBIGUOUS") {
+      tags.push("MULTIPLE_CONFLICTING_DXFS");
+    } else if (
+      row.match.status === "INVALID_DXF" ||
+      row.issueCodes.includes("DXF_INVALID")
+    ) {
+      tags.push("MATCHING_DXF_INVALID");
+    } else {
+      tags.push("NO_MATCHING_DXF");
+    }
   }
-  if (
-    codes.includes("NO_DXF_FOUND") ||
-    codes.includes("DXF_ASSIGNED_TO_BETTER_ROW")
+
+  if (usesDxfDimensionsAsSourceFallback(row)) {
+    tags.push("USING_DXF_DIMENSIONS");
+    tags.push("MISSING_SOURCE_DIMENSIONS");
+  } else if (
+    !(
+      row.source.sourceWidthMm != null &&
+      row.source.sourceLengthMm != null &&
+      row.source.sourceWidthMm > 0 &&
+      row.source.sourceLengthMm > 0
+    )
   ) {
-    tags.push("NO_SUITABLE_DXF");
+    tags.push("MISSING_SOURCE_DIMENSIONS");
   }
-  if (
-    codes.includes("HEURISTIC_MATCH_UNCONFIRMED") ||
-    (row.match.method === "GEOMETRY" && !row.isManualMatchConfirmed)
+
+  if (missing.includes("MATERIAL")) tags.push("MISSING_MATERIAL");
+  if (missing.includes("THICKNESS")) tags.push("MISSING_THICKNESS");
+  if (missing.includes("QUANTITY")) tags.push("MISSING_QUANTITY");
+  if (missing.includes("FINAL_DIMENSIONS")) tags.push("MISSING_FINAL_DIMENSIONS");
+
+  if (hasUnresolvedSignificantDimensionMismatch(row)) {
+    tags.push("DIMENSION_MISMATCH_UNRESOLVED");
+  } else if (
+    row.dimensionComparison != null &&
+    row.dimensionComparison.hasSignificantMismatch === false
   ) {
-    tags.push("SUGGESTED_DXF");
-  }
-  if (
-    codes.includes("MULTIPLE_DXF_CANDIDATES") ||
-    row.match.status === "AMBIGUOUS"
-  ) {
-    tags.push("AMBIGUOUS_DXF");
-  }
-  if (
-    codes.includes("PART_ID_DIMENSION_MISMATCH") ||
-    row.dimensionComparison?.hasSignificantMismatch === true
-  ) {
-    tags.push("DIMENSION_CONFLICT");
+    tags.push("DIMENSION_WITHIN_TOLERANCE");
   }
 
   return tags;
@@ -277,142 +235,121 @@ export function deriveSecondaryResolutionTags(
 export function deriveRowResolutionPresentation(
   row: FinalIntakeRow
 ): RowResolutionPresentation {
-  const category = derivePrimaryResolutionCategory(row);
-  const codes = activeCodes(row);
+  const category = deriveMaterialResolutionCategory(row);
+  const sourceId = getSourceItemIdentifier({
+    partId: row.part.sourcePartId,
+    dxfFileName: null,
+  });
 
   if (category === "READY_FOR_PRICING") {
+    const note = usesDxfDimensionsAsSourceFallback(row)
+      ? DXF_DIMENSIONS_FALLBACK_NOTE_HE
+      : "כל הנתונים הנדרשים קיימים.";
     return {
       title: "מוכן לתמחור",
-      description: "כל הנתונים הנדרשים קיימים.",
+      description: note,
       actionLabel: null,
     };
   }
 
-  if (codes.includes("MISSING_MATERIAL")) {
+  if (category === "ITEM_IDENTIFICATION") {
+    if (!sourceId) {
+      return {
+        title: "חסר שם הפריט בטבלה שצירפת",
+        description: "יש להזין מזהה פריט או שם קובץ DXF מדויק.",
+        actionLabel: "השלם מזהה",
+      };
+    }
+    if (row.match.status === "AMBIGUOUS") {
+      return {
+        title: "נמצאו כמה קובצי DXF שונים עם אותו מזהה",
+        description: "יש לבחור איזה קובץ הוא הקנוני.",
+        actionLabel: "בחר קובץ",
+      };
+    }
+    if (
+      row.match.status === "INVALID_DXF" ||
+      row.issueCodes.includes("DXF_INVALID")
+    ) {
+      return {
+        title: "קובץ ה-DXF התואם אינו תקין",
+        description: "העלה מחדש את הקובץ או תקן את המזהה.",
+        actionLabel: "תקן DXF",
+      };
+    }
     return {
-      title: "חסר סוג חומר",
-      description: "יש להשלים את סוג החומר לפני התמחור.",
-      actionLabel: "השלם חומר",
+      title: "לא נמצא קובץ DXF תואם לפריט",
+      description: "העלה את הקובץ התואם או תקן את מזהה הפריט.",
+      actionLabel: "תקן מזהה",
     };
   }
-  if (codes.includes("MISSING_THICKNESS")) {
+
+  if (category === "MISSING_ITEM_DATA") {
+    const missing = deriveMissingRequiredItemFields(row);
+    if (missing.includes("MATERIAL")) {
+      return {
+        title: "חסר סוג חומר",
+        description: "יש להשלים את סוג החומר לפני התמחור.",
+        actionLabel: "השלם חומר",
+      };
+    }
+    if (missing.includes("THICKNESS")) {
+      return {
+        title: "חסר עובי",
+        description: "יש להשלים את עובי הפלטה.",
+        actionLabel: "השלם עובי",
+      };
+    }
+    if (missing.includes("QUANTITY")) {
+      return {
+        title: "חסרה כמות",
+        description: "יש להשלים את הכמות לפני התמחור.",
+        actionLabel: "השלם כמות",
+      };
+    }
     return {
-      title: "חסר עובי",
-      description: "יש להשלים את עובי הפלטה.",
-      actionLabel: "השלם עובי",
-    };
-  }
-  if (codes.includes("MISSING_QUANTITY")) {
-    return {
-      title: "חסרה כמות",
-      description: "יש להשלים את הכמות לפני התמחור.",
-      actionLabel: "השלם כמות",
-    };
-  }
-  if (codes.includes("MISSING_REQUIRED_DIMENSIONS")) {
-    return {
-      title: "חסרות מידות",
-      description: "חסרות מידות הנדרשות להמשך.",
-      actionLabel: "השלם מידות",
-    };
-  }
-  if (codes.includes("EXPLICIT_DXF_FILE_MISSING")) {
-    return {
-      title: "קובץ ה-DXF שצוין לא הועלה",
-      description: "בדוק את שם הקובץ או העלה אותו.",
-      actionLabel: "תקן שיוך",
-    };
-  }
-  if (
-    codes.includes("MULTIPLE_DXF_CANDIDATES") ||
-    row.match.status === "AMBIGUOUS"
-  ) {
-    return {
-      title: "נמצאו כמה התאמות אפשריות",
-      description: "יש לבחור בין המועמדים המתאימים ביותר.",
-      actionLabel: "בחר התאמה",
-    };
-  }
-  if (
-    codes.includes("HEURISTIC_MATCH_UNCONFIRMED") ||
-    codes.includes("MANUAL_MATCH_NOT_CONFIRMED") ||
-    (row.match.method === "GEOMETRY" && !row.isManualMatchConfirmed)
-  ) {
-    return {
-      title: "נמצאה התאמת DXF מוצעת",
-      description: "OMEGA מצאה את הקובץ המתאים ביותר לפי המידות.",
-      actionLabel: "בדוק ואשר",
-    };
-  }
-  if (
-    codes.includes("PART_ID_DIMENSION_MISMATCH") ||
-    row.dimensionComparison?.hasSignificantMismatch === true
-  ) {
-    return {
-      title: "נמצא פער משמעותי במידות",
-      description: "מידות רשימת החומר שונות ממידות ה-DXF.",
-      actionLabel: "בדוק מידות",
-    };
-  }
-  if (category === "NO_DXF") {
-    return {
-      title: "לא נמצא DXF מתאים",
-      description: "ניתן לבחור קובץ פנוי או להשאיר את השורה ללא שיוך.",
-      actionLabel: "בחר DXF",
-    };
-  }
-  if (category === "MISSING_REQUIRED_DATA") {
-    return {
-      title: "חסרים נתוני חובה",
+      title: "חסרים נתוני פריט",
       description: "יש להשלים את השדות החסרים לפני התמחור.",
       actionLabel: "השלם נתונים",
     };
   }
-  if (category === "DATA_CONFLICT") {
-    return {
-      title: "פער בנתונים",
-      description: "יש לבדוק ולהחליט לפני המשך.",
-      actionLabel: "בדוק פער",
-    };
-  }
+
+  // DIMENSION_REVIEW
   return {
-    title: "דורש בדיקה",
-    description: "יש לבדוק את השורה.",
-    actionLabel: "צפה בפרטים",
+    title: "אי התאמה בין מידות DXF למידות טבלה שצירפת",
+    description: "יש להחליט האם להשתמש במידות ה-DXF.",
+    actionLabel: "השתמש במידות DXF",
   };
 }
 
 export function filterItemsByResolutionCategory(
   items: ReadonlyArray<FinalIntakeRow>,
-  category: PrimaryResolutionCategory
+  category: MaterialResolutionCategory
 ): FinalIntakeRow[] {
   return items.filter(
-    (item) => derivePrimaryResolutionCategory(item) === category
+    (item) => deriveMaterialResolutionCategory(item) === category
   );
 }
 
 export function buildGapResolutionSummary(
-  items: ReadonlyArray<FinalIntakeRow>
+  items: ReadonlyArray<FinalIntakeRow>,
+  dxfFileFindingCount = 0
 ): GapResolutionSummary {
-  let missingRequiredDataCount = 0;
-  let noDxfCount = 0;
-  let matchConfirmationCount = 0;
-  let dataConflictCount = 0;
+  let itemIdentificationCount = 0;
+  let missingItemDataCount = 0;
+  let dimensionReviewCount = 0;
   let readyForPricingCount = 0;
 
   for (const item of items) {
-    switch (derivePrimaryResolutionCategory(item)) {
-      case "MISSING_REQUIRED_DATA":
-        missingRequiredDataCount++;
+    switch (deriveMaterialResolutionCategory(item)) {
+      case "ITEM_IDENTIFICATION":
+        itemIdentificationCount++;
         break;
-      case "NO_DXF":
-        noDxfCount++;
+      case "MISSING_ITEM_DATA":
+        missingItemDataCount++;
         break;
-      case "MATCH_CONFIRMATION":
-        matchConfirmationCount++;
-        break;
-      case "DATA_CONFLICT":
-        dataConflictCount++;
+      case "DIMENSION_REVIEW":
+        dimensionReviewCount++;
         break;
       case "READY_FOR_PRICING":
         readyForPricingCount++;
@@ -420,26 +357,31 @@ export function buildGapResolutionSummary(
     }
   }
 
-  const totalItemCount = items.length;
+  const totalMaterialItemCount = items.length;
   const summary: GapResolutionSummary = {
-    totalItemCount,
-    missingRequiredDataCount,
-    noDxfCount,
-    matchConfirmationCount,
-    dataConflictCount,
+    totalMaterialItemCount,
+    itemIdentificationCount,
+    missingItemDataCount,
+    dimensionReviewCount,
     readyForPricingCount,
-    remainingActionCount: totalItemCount - readyForPricingCount,
+    dxfFileFindingCount,
+    remainingActionCount: totalMaterialItemCount - readyForPricingCount,
+    // Legacy aliases for gradual UI migration
+    totalItemCount: totalMaterialItemCount,
+    missingRequiredDataCount: missingItemDataCount,
+    noDxfCount: itemIdentificationCount,
+    matchConfirmationCount: 0,
+    dataConflictCount: dimensionReviewCount,
   };
 
   if (
     typeof console !== "undefined" &&
     console.warn &&
-    missingRequiredDataCount +
-      noDxfCount +
-      matchConfirmationCount +
-      dataConflictCount +
+    itemIdentificationCount +
+      missingItemDataCount +
+      dimensionReviewCount +
       readyForPricingCount !==
-      totalItemCount
+      totalMaterialItemCount
   ) {
     console.warn("[omega] gap resolution category count invariant failed", summary);
   }
@@ -449,48 +391,29 @@ export function buildGapResolutionSummary(
 
 export function selectInitialResolutionCategory(
   summary: GapResolutionSummary
-): PrimaryResolutionCategory {
+): MaterialResolutionCategory {
   for (const category of PRIMARY_CATEGORY_PRIORITY) {
-    const count =
-      category === "MISSING_REQUIRED_DATA"
-        ? summary.missingRequiredDataCount
-        : category === "NO_DXF"
-          ? summary.noDxfCount
-          : category === "MATCH_CONFIRMATION"
-            ? summary.matchConfirmationCount
-            : category === "DATA_CONFLICT"
-              ? summary.dataConflictCount
-              : summary.readyForPricingCount;
-    if (count > 0) return category;
+    if (countForCategory(summary, category) > 0) return category;
   }
   return "READY_FOR_PRICING";
 }
 
 export function nextNonEmptyActionableCategory(
   summary: GapResolutionSummary,
-  current: PrimaryResolutionCategory
-): PrimaryResolutionCategory | null {
-  const actionable: PrimaryResolutionCategory[] = [
-    "MISSING_REQUIRED_DATA",
-    "NO_DXF",
-    "MATCH_CONFIRMATION",
-    "DATA_CONFLICT",
+  current: MaterialResolutionCategory
+): MaterialResolutionCategory | null {
+  const actionable: MaterialResolutionCategory[] = [
+    "ITEM_IDENTIFICATION",
+    "MISSING_ITEM_DATA",
+    "DIMENSION_REVIEW",
   ];
-  const start = actionable.indexOf(current as (typeof actionable)[number]);
+  const start = actionable.indexOf(current);
   const ordered =
     start >= 0
       ? [...actionable.slice(start + 1), ...actionable.slice(0, start)]
       : actionable;
   for (const category of ordered) {
-    const count =
-      category === "MISSING_REQUIRED_DATA"
-        ? summary.missingRequiredDataCount
-        : category === "NO_DXF"
-          ? summary.noDxfCount
-          : category === "MATCH_CONFIRMATION"
-            ? summary.matchConfirmationCount
-            : summary.dataConflictCount;
-    if (count > 0) return category;
+    if (countForCategory(summary, category) > 0) return category;
   }
   if (summary.readyForPricingCount > 0) return "READY_FOR_PRICING";
   return null;
@@ -498,29 +421,59 @@ export function nextNonEmptyActionableCategory(
 
 export function countForCategory(
   summary: GapResolutionSummary,
-  category: PrimaryResolutionCategory
+  category: MaterialResolutionCategory
 ): number {
   switch (category) {
-    case "MISSING_REQUIRED_DATA":
-      return summary.missingRequiredDataCount;
-    case "NO_DXF":
-      return summary.noDxfCount;
-    case "MATCH_CONFIRMATION":
-      return summary.matchConfirmationCount;
-    case "DATA_CONFLICT":
-      return summary.dataConflictCount;
+    case "ITEM_IDENTIFICATION":
+      return summary.itemIdentificationCount;
+    case "MISSING_ITEM_DATA":
+      return summary.missingItemDataCount;
+    case "DIMENSION_REVIEW":
+      return summary.dimensionReviewCount;
     case "READY_FOR_PRICING":
       return summary.readyForPricingCount;
   }
 }
 
-export type GapResolutionDiagnostics = {
+export type SimplifiedMatchingDiagnostics = {
+  totalMaterialRows: number;
+  rowsWithSourceIdentifier: number;
+  rowsWithoutSourceIdentifier: number;
+  exactFilenameMatches: number;
+  exactPartIdMatches: number;
+  rowsWithoutMatchingDxf: number;
+  rowsWithInvalidMatchingDxf: number;
+  rowsWithConflictingExactDxfs: number;
+  heuristicAssignmentsCreated: number;
+  geometrySuggestionsCreated: number;
+  itemIdentificationCount: number;
+  missingItemDataCount: number;
+  dimensionReviewCount: number;
+  readyForPricingCount: number;
+  unreferencedDxfCount: number;
+  duplicateContentFindingCount: number;
+  sameIdentifierDifferentContentCount: number;
+  invalidDxfCount: number;
+  categoryInvariantPassed: boolean;
+};
+
+export type SimplifiedMatchingSampleRow = {
+  materialRowId: string;
+  sourceIdentifier: string | null;
+  exactMatchedDxfFilename: string | null;
+  category: MaterialResolutionCategory;
+  missingFields: MissingRequiredItemField[];
+  dimensionMismatchSignificant: boolean | null;
+  dimensionResolution: DimensionMismatchResolution | null;
+};
+
+/** @deprecated */
+export type GapResolutionDiagnostics = SimplifiedMatchingDiagnostics & {
   totalItemCount: number;
   missingRequiredDataCount: number;
   noDxfCount: number;
   matchConfirmationCount: number;
   dataConflictCount: number;
-  readyForPricingCount: number;
   rowsWithoutPrimaryCategory: number;
   rowsWithMultiplePrimaryCategories: number;
   readyRowsWithActiveBlockingReasons: number;
@@ -528,11 +481,12 @@ export type GapResolutionDiagnostics = {
   categoryCountInvariantPassed: boolean;
 };
 
+/** @deprecated */
 export type GapResolutionSampleRow = {
   materialRowId: string;
   partId: string | null;
   finalStatus: string;
-  primaryCategory: PrimaryResolutionCategory;
+  primaryCategory: MaterialResolutionCategory;
   secondaryTags: SecondaryResolutionTag[];
   activeReviewReasonTypes: string[];
   activeBlockingReasonTypes: string[];
@@ -541,120 +495,200 @@ export type GapResolutionSampleRow = {
 };
 
 export function buildGapResolutionDiagnostics(
-  items: ReadonlyArray<FinalIntakeRow>
+  items: ReadonlyArray<FinalIntakeRow>,
+  opts?: {
+    dxfFileFindings?: ReadonlyArray<{ type: string }>;
+  }
 ): {
   gapResolutionDiagnostics: GapResolutionDiagnostics;
   gapResolutionSample: GapResolutionSampleRow[];
+  simplifiedMatchingDiagnostics: SimplifiedMatchingDiagnostics;
+  simplifiedMatchingSample: SimplifiedMatchingSampleRow[];
 } {
-  const summary = buildGapResolutionSummary(items);
-  let readyRowsWithActiveBlockingReasons = 0;
-  let readyRowsWithActiveReviewReasons = 0;
+  const findings = opts?.dxfFileFindings ?? [];
+  const summary = buildGapResolutionSummary(items, findings.length);
   const sample: GapResolutionSampleRow[] = [];
+  const simplifiedSample: SimplifiedMatchingSampleRow[] = [];
+
+  let rowsWithSourceIdentifier = 0;
+  let exactFilenameMatches = 0;
+  let exactPartIdMatches = 0;
+  let rowsWithoutMatchingDxf = 0;
+  let rowsWithInvalidMatchingDxf = 0;
+  let rowsWithConflictingExactDxfs = 0;
+  let heuristicAssignmentsCreated = 0;
+  let geometrySuggestionsCreated = 0;
 
   for (const row of items) {
-    const category = derivePrimaryResolutionCategory(row);
-    const codes = activeCodes(row);
-    const blocking = getActiveBlockingReasons(codes);
-    const review = getActiveReviewReasons(codes, reasonContext(row));
+    const category = deriveMaterialResolutionCategory(row);
+    const sourceId = getSourceItemIdentifier({
+      partId: row.part.sourcePartId,
+      dxfFileName: null,
+    });
+    if (sourceId) rowsWithSourceIdentifier++;
 
-    if (category === "READY_FOR_PRICING") {
-      if (blocking.length > 0) readyRowsWithActiveBlockingReasons++;
-      if (review.length > 0) readyRowsWithActiveReviewReasons++;
+    if (row.match.method === "GEOMETRY" && row.match.status === "MATCHED") {
+      heuristicAssignmentsCreated++;
+      geometrySuggestionsCreated++;
+    }
+    if (row.match.method === "EXPLICIT_FILENAME" && row.match.status === "MATCHED") {
+      exactFilenameMatches++;
+    }
+    if (row.match.method === "EXACT_ID" && row.match.status === "MATCHED") {
+      exactPartIdMatches++;
+    }
+    if (
+      category === "ITEM_IDENTIFICATION" &&
+      sourceId &&
+      row.match.status === "UNMATCHED"
+    ) {
+      rowsWithoutMatchingDxf++;
+    }
+    if (
+      category === "ITEM_IDENTIFICATION" &&
+      (row.match.status === "INVALID_DXF" ||
+        row.issueCodes.includes("DXF_INVALID"))
+    ) {
+      rowsWithInvalidMatchingDxf++;
+    }
+    if (
+      category === "ITEM_IDENTIFICATION" &&
+      row.match.status === "AMBIGUOUS"
+    ) {
+      rowsWithConflictingExactDxfs++;
     }
 
     if (sample.length < 20) {
-      const suggested =
-        !row.isManualMatchConfirmed &&
-        (row.match.method === "GEOMETRY" || row.match.status === "AMBIGUOUS");
       sample.push({
         materialRowId: getCanonicalMaterialItemId(row) ?? row.id,
         partId: row.part.sourcePartId,
         finalStatus: row.status,
         primaryCategory: category,
         secondaryTags: deriveSecondaryResolutionTags(row),
-        activeReviewReasonTypes: review,
-        activeBlockingReasonTypes: blocking,
-        assignedDxfFilename: row.isManualMatchConfirmed
-          ? row.part.matchedDxfFilename
-          : isExactOrConfirmedAssignment(row)
-            ? row.part.matchedDxfFilename
-            : null,
-        suggestedDxfFilename: suggested
+        activeReviewReasonTypes: [],
+        activeBlockingReasonTypes: [],
+        assignedDxfFilename: hasOneResolvedExactUsableDxf(row)
           ? row.part.matchedDxfFilename
           : null,
+        suggestedDxfFilename: null,
+      });
+    }
+
+    if (simplifiedSample.length < 20) {
+      simplifiedSample.push({
+        materialRowId: getCanonicalMaterialItemId(row) ?? row.id,
+        sourceIdentifier: sourceId?.rawValue ?? null,
+        exactMatchedDxfFilename: hasOneResolvedExactUsableDxf(row)
+          ? row.part.matchedDxfFilename
+          : null,
+        category,
+        missingFields: deriveMissingRequiredItemFields(row),
+        dimensionMismatchSignificant:
+          row.dimensionComparison?.hasSignificantMismatch ?? null,
+        dimensionResolution: row.dimensionMismatchResolution ?? null,
       });
     }
   }
 
-  const categoryCountInvariantPassed =
-    summary.missingRequiredDataCount +
-      summary.noDxfCount +
-      summary.matchConfirmationCount +
-      summary.dataConflictCount +
+  const categoryInvariantPassed =
+    summary.itemIdentificationCount +
+      summary.missingItemDataCount +
+      summary.dimensionReviewCount +
       summary.readyForPricingCount ===
-    summary.totalItemCount;
+    summary.totalMaterialItemCount;
+
+  const simplifiedMatchingDiagnostics: SimplifiedMatchingDiagnostics = {
+    totalMaterialRows: summary.totalMaterialItemCount,
+    rowsWithSourceIdentifier,
+    rowsWithoutSourceIdentifier:
+      summary.totalMaterialItemCount - rowsWithSourceIdentifier,
+    exactFilenameMatches,
+    exactPartIdMatches,
+    rowsWithoutMatchingDxf,
+    rowsWithInvalidMatchingDxf,
+    rowsWithConflictingExactDxfs,
+    heuristicAssignmentsCreated,
+    geometrySuggestionsCreated,
+    itemIdentificationCount: summary.itemIdentificationCount,
+    missingItemDataCount: summary.missingItemDataCount,
+    dimensionReviewCount: summary.dimensionReviewCount,
+    readyForPricingCount: summary.readyForPricingCount,
+    unreferencedDxfCount: findings.filter((f) => f.type === "UNREFERENCED_DXF")
+      .length,
+    duplicateContentFindingCount: findings.filter(
+      (f) => f.type === "DUPLICATE_CONTENT"
+    ).length,
+    sameIdentifierDifferentContentCount: findings.filter(
+      (f) => f.type === "SAME_IDENTIFIER_DIFFERENT_CONTENT"
+    ).length,
+    invalidDxfCount: findings.filter((f) => f.type === "INVALID_DXF").length,
+    categoryInvariantPassed,
+  };
 
   const gapResolutionDiagnostics: GapResolutionDiagnostics = {
-    totalItemCount: summary.totalItemCount,
-    missingRequiredDataCount: summary.missingRequiredDataCount,
-    noDxfCount: summary.noDxfCount,
-    matchConfirmationCount: summary.matchConfirmationCount,
-    dataConflictCount: summary.dataConflictCount,
-    readyForPricingCount: summary.readyForPricingCount,
+    ...simplifiedMatchingDiagnostics,
+    totalItemCount: summary.totalMaterialItemCount,
+    missingRequiredDataCount: summary.missingItemDataCount,
+    noDxfCount: summary.itemIdentificationCount,
+    matchConfirmationCount: 0,
+    dataConflictCount: summary.dimensionReviewCount,
     rowsWithoutPrimaryCategory: 0,
     rowsWithMultiplePrimaryCategories: 0,
-    readyRowsWithActiveBlockingReasons,
-    readyRowsWithActiveReviewReasons,
-    categoryCountInvariantPassed,
+    readyRowsWithActiveBlockingReasons: 0,
+    readyRowsWithActiveReviewReasons: 0,
+    categoryCountInvariantPassed: categoryInvariantPassed,
   };
 
   if (typeof console !== "undefined" && console.warn) {
-    if (!categoryCountInvariantPassed) {
+    if (!categoryInvariantPassed) {
       console.warn(
-        "[omega] gapResolution categoryCountInvariantPassed=false",
-        gapResolutionDiagnostics
+        "[omega] simplified categoryCountInvariantPassed=false",
+        simplifiedMatchingDiagnostics
       );
     }
-    if (readyRowsWithActiveBlockingReasons > 0) {
+    if (heuristicAssignmentsCreated > 0 || geometrySuggestionsCreated > 0) {
       console.warn(
-        "[omega] READY_FOR_PRICING rows with active blocking reasons",
-        readyRowsWithActiveBlockingReasons
-      );
-    }
-    if (readyRowsWithActiveReviewReasons > 0) {
-      console.warn(
-        "[omega] READY_FOR_PRICING rows with active review reasons",
-        readyRowsWithActiveReviewReasons
+        "[omega] exact-identifier-only invariant failed: heuristic/geometry assignments present",
+        { heuristicAssignmentsCreated, geometrySuggestionsCreated }
       );
     }
   }
 
-  return { gapResolutionDiagnostics, gapResolutionSample: sample };
+  void (null as FinalIssueCode | null);
+
+  return {
+    gapResolutionDiagnostics,
+    gapResolutionSample: sample,
+    simplifiedMatchingDiagnostics,
+    simplifiedMatchingSample: simplifiedSample,
+  };
 }
 
 export function secondaryTagLabelHe(tag: SecondaryResolutionTag): string {
   switch (tag) {
     case "MISSING_SOURCE_IDENTIFIER":
-      return "חסר מזהה מקור";
+      return "חסר מזהה פריט";
+    case "NO_MATCHING_DXF":
+      return "לא נמצא DXF תואם";
+    case "MATCHING_DXF_INVALID":
+      return "DXF תואם אינו תקין";
+    case "MULTIPLE_CONFLICTING_DXFS":
+      return "כמה קבצים שונים עם אותו מזהה";
     case "MISSING_SOURCE_DIMENSIONS":
       return "חסרות מידות מקור";
+    case "USING_DXF_DIMENSIONS":
+      return "נעשה שימוש במידות DXF";
     case "MISSING_MATERIAL":
       return "חסר חומר";
     case "MISSING_THICKNESS":
       return "חסר עובי";
     case "MISSING_QUANTITY":
       return "חסרה כמות";
-    case "EXPLICIT_DXF_NOT_UPLOADED":
-      return "קובץ שצוין לא הועלה";
-    case "NO_SUITABLE_DXF":
-      return "אין DXF מתאים";
-    case "SUGGESTED_DXF":
-      return "התאמה מוצעת";
-    case "AMBIGUOUS_DXF":
-      return "כמה מועמדים";
-    case "DIMENSION_CONFLICT":
-      return "פער מידות";
-    case "SOURCE_VALUE_CONFLICT":
-      return "פער ערכי מקור";
+    case "MISSING_FINAL_DIMENSIONS":
+      return "חסרות מידות סופיות";
+    case "DIMENSION_MISMATCH_UNRESOLVED":
+      return "פער מידות פתוח";
+    case "DIMENSION_WITHIN_TOLERANCE":
+      return "פער המידות נמצא בתוך הטולרנס";
   }
 }

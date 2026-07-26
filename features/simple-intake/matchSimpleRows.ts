@@ -24,7 +24,6 @@ import {
   type SimpleMatchingPass,
   type SimpleResultRow,
   type SimpleResultRowStatus,
-  type SimpleUnmatchedReason,
 } from "./types";
 
 function dimTolerance(dim: number): number {
@@ -202,38 +201,12 @@ export function buildSimpleMatchCandidates(args: {
       }
     }
 
-    const w = row.widthMm;
-    const l = row.lengthMm;
-    if (
-      w == null ||
-      l == null ||
-      !Number.isFinite(w) ||
-      !Number.isFinite(l) ||
-      w <= 0 ||
-      l <= 0
-    ) {
-      continue;
-    }
-
-    for (const dxf of validDxfs) {
-      if (dxf.widthMm == null || dxf.lengthMm == null) continue;
-      const scored = geometryScore(w, l, dxf.widthMm, dxf.lengthMm);
-      if (!scored || !scored.eligible) continue;
-      edges.push({
-        extractedRowId: row.rowId,
-        dxfId: dxf.id,
-        method: "GEOMETRY",
-        rotated: scored.rotated,
-        widthDifferenceMm: scored.wDiff,
-        lengthDifferenceMm: scored.lDiff,
-        normalizedWidthError: scored.normW,
-        normalizedLengthError: scored.normL,
-        totalScore: scored.totalScore,
-        eligible: true,
-      });
-    }
+    // Geometry edges are intentionally not generated for production matching.
+    // Exact-identifier-only workflow — no dimension/geometry candidate ranking.
   }
 
+  void validDxfs;
+  void geometryScore;
   return edges;
 }
 
@@ -745,251 +718,55 @@ export function matchSimpleRows(args: {
       continue;
     }
 
-    geometryEligibleRowIds.push(row.rowId);
-  }
-
-  // --- Geometry: strong + propagation (no early ambiguity) ---
-  const tStrong = Date.now();
-  const geomResult = resolveStrongGeometryMatches({
-    rowIds: geometryEligibleRowIds,
-    candidateEdges: allEdges,
-    usedDxfIds,
-    dxfById,
-  });
-  const strongAssignmentMs = Date.now() - tStrong;
-  const propagationMs = geomResult.matchingPasses.filter(
-    (p) => p.phase === "SINGLE_REMAINING_CANDIDATE"
-  ).length; // count used below for timing split approximation
-  void propagationMs;
-
-  for (const [rowId, edge] of geomResult.assignments) {
-    const row = rowById.get(rowId)!;
-    const dxf = dxfById.get(edge.dxfId)!;
-    usedDxfIds.add(edge.dxfId);
-    const usedWithoutCurrent = new Set(usedDxfIds);
-    usedWithoutCurrent.delete(edge.dxfId);
-    const ranked = rankedCandidatesForRow(
-      rowId,
-      allEdges,
-      usedWithoutCurrent,
-      dxfById,
-      5
-    );
+    // Exact-identifier-only: no geometry / dimension assignment.
+    unmatchedReasons.push({ rowId: row.rowId, reason: "NO_ELIGIBLE_CANDIDATE" });
     const match: SimpleMatchResult = {
-      status: "MATCHED",
-      method: "GEOMETRY",
-      matchedDxfId: edge.dxfId,
-      candidates:
-        ranked.length > 0
-          ? ranked
-          : [toCandidate(dxf, edge)],
-      message: null,
-    };
-    const resultRow: SimpleResultRow = {
-      resultRowId: `res_${row.rowId}`,
-      extracted: row,
-      match,
-      status: "READY",
-      excluded: false,
-      edits: {},
-    };
-    resultRow.status = deriveResultRowStatus(resultRow);
-    resultByRowId.set(rowId, resultRow);
-  }
-
-  for (const p of geomResult.matchingPasses) {
-    assignmentOrder.push({
-      sequence: ++sequence,
-      extractedRowId: p.assignedRowId,
-      dxfId: p.assignedDxfId,
-      totalScore: p.score,
-      decision: "GEOMETRY",
-    });
-  }
-
-  // Sync used set from resolve (includes assignments)
-  for (const id of geomResult.usedDxfIds) usedDxfIds.add(id);
-
-  const tFinal = Date.now();
-  const thr = SIMPLE_GEOMETRY_AMBIGUITY_SCORE_GAP;
-
-  for (const rowId of geomResult.remainingRowIds) {
-    const row = rowById.get(rowId)!;
-    const avail = getAvailableCandidatesForRow(
-      rowId,
-      allEdges.filter((e) => e.method === "GEOMETRY"),
-      usedDxfIds
-    );
-
-    if (avail.length === 0) {
-      const reason: SimpleUnmatchedReason = geomResult.everHadCandidates.has(
-        rowId
-      )
-        ? "CANDIDATES_ASSIGNED_TO_BETTER_ROWS"
-        : "NO_ELIGIBLE_CANDIDATE";
-      unmatchedReasons.push({ rowId, reason });
-      const match: SimpleMatchResult = {
-        status: onlyInvalidDxfs ? "INVALID_DXF" : "UNMATCHED",
-        method: null,
-        matchedDxfId: null,
-        candidates: [],
-        message: onlyInvalidDxfs
-          ? "No valid DXF geometry"
-          : reason === "CANDIDATES_ASSIGNED_TO_BETTER_ROWS"
-            ? COLLISION_MESSAGE_HE
-            : UNMATCHED_NO_CANDIDATE_HE,
-      };
-      const resultRow: SimpleResultRow = {
-        resultRowId: `res_${row.rowId}`,
-        extracted: row,
-        match,
-        status: deriveResultRowStatus({
-          extracted: row,
-          match,
-          excluded: false,
-          edits: {},
-        }),
-        excluded: false,
-        edits: {},
-      };
-      resultByRowId.set(rowId, resultRow);
-      assignmentOrder.push({
-        sequence: ++sequence,
-        extractedRowId: rowId,
-        dxfId: null,
-        totalScore: null,
-        decision: onlyInvalidDxfs ? "INVALID_DXF" : "UNMATCHED",
-      });
-      continue;
-    }
-
-    if (avail.length === 1) {
-      // Should have been caught by propagation; assign defensively
-      const edge = avail[0]!;
-      const dxf = dxfById.get(edge.dxfId)!;
-      usedDxfIds.add(edge.dxfId);
-      const match: SimpleMatchResult = {
-        status: "MATCHED",
-        method: "GEOMETRY",
-        matchedDxfId: edge.dxfId,
-        candidates: [toCandidate(dxf, edge)],
-        message: null,
-      };
-      const resultRow: SimpleResultRow = {
-        resultRowId: `res_${row.rowId}`,
-        extracted: row,
-        match,
-        status: "READY",
-        excluded: false,
-        edits: {},
-      };
-      resultRow.status = deriveResultRowStatus(resultRow);
-      resultByRowId.set(rowId, resultRow);
-      assignmentOrder.push({
-        sequence: ++sequence,
-        extractedRowId: rowId,
-        dxfId: edge.dxfId,
-        totalScore: edge.totalScore,
-        decision: "GEOMETRY",
-      });
-      continue;
-    }
-
-    // 2+ available — check if clearly superior best remains
-    const best = avail[0]!;
-    const second = avail[1]!;
-    const scoreGap = second.totalScore - best.totalScore;
-    if (scoreGap > thr) {
-      // Clear winner left after others assigned — assign it
-      const dxf = dxfById.get(best.dxfId)!;
-      usedDxfIds.add(best.dxfId);
-      const match: SimpleMatchResult = {
-        status: "MATCHED",
-        method: "GEOMETRY",
-        matchedDxfId: best.dxfId,
-        candidates: [toCandidate(dxf, best)],
-        message: null,
-      };
-      const resultRow: SimpleResultRow = {
-        resultRowId: `res_${row.rowId}`,
-        extracted: row,
-        match,
-        status: "READY",
-        excluded: false,
-        edits: {},
-      };
-      resultRow.status = deriveResultRowStatus(resultRow);
-      resultByRowId.set(rowId, resultRow);
-      assignmentOrder.push({
-        sequence: ++sequence,
-        extractedRowId: rowId,
-        dxfId: best.dxfId,
-        totalScore: best.totalScore,
-        decision: "GEOMETRY",
-      });
-      continue;
-    }
-
-    // Final ambiguity — expose only the top two candidates in the UI list.
-    const match: SimpleMatchResult = {
-      status: "AMBIGUOUS",
-      method: "GEOMETRY",
+      status: onlyInvalidDxfs ? "INVALID_DXF" : "UNMATCHED",
+      method: null,
       matchedDxfId: null,
-      candidates: avail
-        .slice(0, 2)
-        .map((e) => toCandidate(dxfById.get(e.dxfId)!, e)),
-      message: AMBIGUOUS_GEOMETRY_MESSAGE_HE,
+      candidates: [],
+      message: onlyInvalidDxfs
+        ? "No valid DXF geometry"
+        : UNMATCHED_NO_CANDIDATE_HE,
     };
     const resultRow: SimpleResultRow = {
       resultRowId: `res_${row.rowId}`,
       extracted: row,
       match,
-      status: "NEEDS_DXF",
+      status: deriveResultRowStatus({
+        extracted: row,
+        match,
+        excluded: false,
+        edits: {},
+      }),
       excluded: false,
       edits: {},
     };
-    resultByRowId.set(rowId, resultRow);
-    ambiguousDebug.push({
-      extractedRowId: rowId,
-      bestScore: best.totalScore,
-      secondBestScore: second.totalScore,
-      scoreGap,
-      candidateDxfIds: avail.map((e) => e.dxfId),
-    });
-    finalAmbiguities.push({
-      rowId,
-      candidateDxfIds: avail.map((e) => e.dxfId),
-      scores: avail.map((e) => e.totalScore),
-      scoreGap,
-    });
+    resultByRowId.set(row.rowId, resultRow);
     assignmentOrder.push({
       sequence: ++sequence,
-      extractedRowId: rowId,
+      extractedRowId: row.rowId,
       dxfId: null,
-      totalScore: best.totalScore,
-      decision: "AMBIGUOUS",
+      totalScore: null,
+      decision: onlyInvalidDxfs ? "INVALID_DXF" : "UNMATCHED",
     });
   }
 
-  const finalClassificationMs = Date.now() - tFinal;
-  const automaticAssignmentMs = Date.now() - tAssign;
+  // Legacy geometry helpers remain exported but are not used for assignment.
+  void geometryEligibleRowIds;
+  void getAvailableCandidatesForRow;
+  void rankedCandidatesForRow;
+  void resolveStrongGeometryMatches;
+  void AMBIGUOUS_GEOMETRY_MESSAGE_HE;
+  void COLLISION_MESSAGE_HE;
+  void SIMPLE_GEOMETRY_AMBIGUITY_SCORE_GAP;
+  void rowById;
 
-  // Split strong vs propagation timing proportionally by pass counts
-  const strongPasses = geomResult.matchingPasses.filter(
-    (p) => p.phase === "STRONG_MUTUAL_BEST"
-  ).length;
-  const propPasses = geomResult.matchingPasses.filter(
-    (p) => p.phase === "SINGLE_REMAINING_CANDIDATE"
-  ).length;
-  const assignMs = Math.max(0, automaticAssignmentMs - finalClassificationMs);
-  const strongAssignmentMsFinal =
-    strongPasses + propPasses > 0
-      ? Math.round((assignMs * strongPasses) / (strongPasses + propPasses))
-      : strongAssignmentMs;
-  const propagationMsFinal =
-    strongPasses + propPasses > 0
-      ? assignMs - strongAssignmentMsFinal
-      : 0;
+  const finalClassificationMs = 0;
+  const automaticAssignmentMs = Date.now() - tAssign;
+  const strongAssignmentMsFinal = 0;
+  const propagationMsFinal = 0;
+  void finalClassificationMs;
 
   const resultRows = args.extractedRows.map(
     (r) => resultByRowId.get(r.rowId)!
@@ -1014,7 +791,7 @@ export function matchSimpleRows(args: {
   const diagnostics: SimpleMatchingDiagnostics = {
     candidateEdges: allEdges,
     assignmentOrder,
-    matchingPasses: geomResult.matchingPasses,
+    matchingPasses: [],
     ambiguousRows: ambiguousDebug,
     finalAmbiguities,
     unmatchedReasons,
@@ -1153,15 +930,12 @@ export function applyManualDxfSelection(args: {
     if (r.resultRowId !== args.resultRowId) return r;
 
     if (args.dxfId == null) {
-      const hasCandidates =
-        (args.candidates?.length ?? r.match.candidates.length) > 0;
-      const candidates = args.candidates ?? r.match.candidates;
       const match: SimpleMatchResult = {
-        status: hasCandidates ? "AMBIGUOUS" : "UNMATCHED",
-        method: hasCandidates ? "GEOMETRY" : null,
+        status: "UNMATCHED",
+        method: null,
         matchedDxfId: null,
-        candidates,
-        message: hasCandidates ? AMBIGUOUS_GEOMETRY_MESSAGE_HE : UNMATCHED_NO_CANDIDATE_HE,
+        candidates: [],
+        message: UNMATCHED_NO_CANDIDATE_HE,
       };
       return {
         ...r,
@@ -1180,9 +954,12 @@ export function applyManualDxfSelection(args: {
           ? r.match.candidates
           : [toCandidate(dxf, null)];
 
+    // Exact-identifier workflow: user picks among exact conflicts only → MANUAL certainty.
+    // asSuggestion is ignored (heuristic suggestions removed).
+    void args.asSuggestion;
     const match: SimpleMatchResult = {
       status: "MATCHED",
-      method: args.asSuggestion ? "GEOMETRY" : "MANUAL",
+      method: "MANUAL",
       matchedDxfId: dxf.id,
       candidates: priorCandidates,
       message: null,
