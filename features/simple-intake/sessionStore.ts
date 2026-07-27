@@ -215,6 +215,17 @@ export const simpleIntakeActions = {
     setSession(createEmptySession());
   },
 
+  /** Developer diagnostics merge — does not change workflow state. */
+  patchLastDebug(patch: Record<string, unknown>): void {
+    setSession({
+      ...session,
+      lastDebug: {
+        ...(session.lastDebug ?? {}),
+        ...patch,
+      },
+    });
+  },
+
   createQuote(details: {
     projectName: string;
     customerName: string;
@@ -550,6 +561,21 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       dxfFiles: merged,
+      status,
+    });
+  },
+
+  /** Clears selected DXF uploads only — does not reset the quote session. */
+  clearDxfFiles(): void {
+    const status =
+      session.status === "DXF_UPLOAD" ||
+      session.status === "READY" ||
+      session.status === "MATERIAL_LIST_REVIEW"
+        ? session.status
+        : recomputeReadyStatus(session.workbookFile);
+    setSession({
+      ...session,
+      dxfFiles: [],
       status,
     });
   },

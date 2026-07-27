@@ -432,14 +432,20 @@ console.log("=== Initial Intake Summary Redesign and Notice Fix v1 ===\n");
   assert(action.includes("בואו נטפל בפערים"), "primary CTA");
   assert(action.includes("המשך לטבלה המסכמת"), "secondary CTA");
   assert(action.includes("חזרה להעלאת DXF"), "secondary nav");
-  assert(workflow.includes("InitialIntakeSummaryScreen"), "wired");
+  assert(
+    !workflow.includes("InitialIntakeSummaryScreen"),
+    "summary not in active flow"
+  );
   assert(
     workflow.includes("buildIntakeAnalysisSummary") ||
       workflow.includes("buildInitialIntakeSummary"),
     "from analysis"
   );
   assert(workflow.includes("unifiedItemsCreated"), "readiness");
-  assert(workflow.includes("setView(\"FINAL_TABLE\")"), "opens table");
+  assert(
+    workflow.includes("FINAL_TABLE") && workflow.includes("claimPostAnalysisRoute"),
+    "auto opens table or gaps"
+  );
   assert(!workflow.includes("approveMaterial"), "no approve on open");
   console.log("✓ Visual structure, next steps, action panel, wiring");
 }

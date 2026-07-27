@@ -342,10 +342,10 @@ function run(): void {
       "utf8"
     );
     assert(
-      wf.includes("PreUnifiedReviewSummaryScreen") ||
-        wf.includes("InitialIntakeSummaryScreen"),
-      "summary"
+      wf.includes("claimPostAnalysisRoute") || wf.includes("GAP_RESOLUTION"),
+      "auto routing"
     );
+    assert(!wf.includes("InitialIntakeSummaryScreen"), "summary disconnected");
     assert(wf.includes("ResultsReviewScreen"), "unified table");
     assert(!wf.includes("/api/simple-intake/analyze"), "no AI rerun");
     assert(!wf.includes("AttentionInbox"), "no decision inbox");

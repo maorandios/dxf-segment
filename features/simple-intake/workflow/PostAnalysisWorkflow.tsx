@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { simpleIntakeActions } from "../sessionStore";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
 import { deriveFinalRows, summarizeFinalRows } from "../results/deriveFinalRows";
@@ -10,7 +10,16 @@ import { buildDxfLinkedMaterialItems } from "../dxfLink";
 import { CompletionRequestDrawer } from "../dxfLink/CompletionRequestDrawer";
 import { buildIntakeAnalysisSummary } from "../buildIntakeAnalysisSummary";
 import { MANUAL_CONFLICT_CONFIRM_HE } from "../types";
-import { InitialIntakeSummaryScreen } from "./initialIntake";
+import { deriveDxfFileFindings } from "../dxfFileFindings";
+import {
+  assertPostAnalysisRoutingInvariants,
+  buildPostAnalysisRoutingDiagnostics,
+  buildRoutingDxfFindingSample,
+  buildRoutingGapSample,
+  claimPostAnalysisRoute,
+  deriveActionableGapDecision,
+  deriveAnalysisRoutingReadiness,
+} from "../postAnalysisRouting";
 import { GapResolutionWorkspace } from "./GapResolutionWorkspace";
 import type {
   DimensionMismatchResolution,
@@ -19,18 +28,20 @@ import type {
   FinalIntakeRow,
 } from "../results/types";
 
-/** Internal review subviews — not main workflow stages. */
-export type ReviewWorkspaceView =
-  | "ANALYSIS_SUMMARY"
-  | "GAP_RESOLUTION"
-  | "FINAL_TABLE";
+/**
+ * Active review subviews after analysis.
+ * ANALYSIS_SUMMARY is intentionally omitted from the active workflow.
+ */
+export type ReviewWorkspaceView = "GAP_RESOLUTION" | "FINAL_TABLE";
 
-/** @deprecated Prefer ReviewWorkspaceView */
+/** @deprecated Prefer ReviewWorkspaceView — summary removed from active flow */
 export type UnifiedReviewView = "SUMMARY" | "TABLE";
 
 export function PostAnalysisWorkflow() {
   const session = useSimpleIntakeSession();
-  const [view, setView] = useState<ReviewWorkspaceView>("ANALYSIS_SUMMARY");
+  const [manualView, setManualView] = useState<ReviewWorkspaceView | null>(
+    null
+  );
   const [tableFilter, setTableFilter] = useState<FinalFilterId>("ALL");
   const [confirmedManual, setConfirmedManual] = useState<Set<string>>(
     () => new Set()
@@ -39,6 +50,7 @@ export function PostAnalysisWorkflow() {
     Map<string, DimensionMismatchResolution>
   >(() => new Map());
   const [completionOpen, setCompletionOpen] = useState(false);
+  const diagnosticsWrittenForRun = useRef<string | null>(null);
 
   const finalRows = useMemo(
     () =>
@@ -78,6 +90,11 @@ export function PostAnalysisWorkflow() {
       session.matchingDiagnostics,
       confirmedManual,
     ]
+  );
+
+  const dxfFileFindings = useMemo(
+    () => deriveDxfFileFindings(session.dxfParts, finalRows),
+    [session.dxfParts, finalRows]
   );
 
   const tableSummary = useMemo(
@@ -125,13 +142,87 @@ export function PostAnalysisWorkflow() {
     ]
   );
 
-  const invalidDxfParts = useMemo(
+  const readiness = useMemo(
     () =>
-      session.dxfParts
-        .filter((d) => d.geometryStatus === "INVALID")
-        .map((d) => ({ filename: d.filename, error: d.error })),
-    [session.dxfParts]
+      deriveAnalysisRoutingReadiness({
+        status: session.status,
+        runId: session.runId,
+        error: session.error,
+        materialListRows: session.materialListRows,
+        resultRows: session.resultRows,
+        dxfParts: session.dxfParts,
+        matchingDiagnostics: session.matchingDiagnostics,
+        finalRowsReady:
+          finalRows.length > 0 &&
+          finalRows.length === session.materialListRows.length,
+        categoriesReady: finalRows.length === session.materialListRows.length,
+        dxfFindingsReady: true,
+      }),
+    [
+      session.status,
+      session.runId,
+      session.error,
+      session.materialListRows,
+      session.resultRows,
+      session.dxfParts,
+      session.matchingDiagnostics,
+      finalRows,
+    ]
   );
+
+  const gapDecision = useMemo(
+    () => deriveActionableGapDecision(finalRows, dxfFileFindings),
+    [finalRows, dxfFileFindings]
+  );
+
+  const runId = session.runId ?? "idle";
+
+  const routedDestination = useMemo(() => {
+    return claimPostAnalysisRoute({
+      runId,
+      readiness,
+      decision: gapDecision,
+    });
+  }, [runId, readiness, gapDecision]);
+
+  const view: ReviewWorkspaceView | null = manualView ?? routedDestination;
+
+  useLayoutEffect(() => {
+    if (!readiness.isReady || !routedDestination) return;
+    if (diagnosticsWrittenForRun.current === runId) return;
+    diagnosticsWrittenForRun.current = runId;
+
+    const diagnostics = buildPostAnalysisRoutingDiagnostics({
+      runId,
+      items: finalRows,
+      dxfFindings: dxfFileFindings,
+      decision: gapDecision,
+      readinessPassed: true,
+    });
+    if (process.env.NODE_ENV !== "production") {
+      assertPostAnalysisRoutingInvariants(diagnostics);
+    }
+
+    simpleIntakeActions.patchLastDebug({
+      postAnalysisRoutingDiagnostics: diagnostics,
+      routingGapSample: buildRoutingGapSample(
+        finalRows,
+        gapDecision.materialRowIds
+      ),
+      routingDxfFindingSample: buildRoutingDxfFindingSample(dxfFileFindings),
+    });
+
+    if (routedDestination === "FINAL_TABLE") {
+      simpleIntakeActions.enterFinalPricingTable();
+    }
+  }, [
+    readiness.isReady,
+    routedDestination,
+    runId,
+    finalRows,
+    dxfFileFindings,
+    gapDecision,
+  ]);
 
   const openUnifiedTable = useCallback(
     (filter?: FinalFilterId) => {
@@ -143,7 +234,7 @@ export function PostAnalysisWorkflow() {
           ? "NEEDS_ATTENTION"
           : "ALL");
       setTableFilter(nextFilter);
-      setView("FINAL_TABLE");
+      setManualView("FINAL_TABLE");
       simpleIntakeActions.enterFinalPricingTable();
     },
     [
@@ -154,7 +245,11 @@ export function PostAnalysisWorkflow() {
   );
 
   const openGapResolution = useCallback(() => {
-    setView("GAP_RESOLUTION");
+    setManualView("GAP_RESOLUTION");
+  }, []);
+
+  const backToUpload = useCallback(() => {
+    simpleIntakeActions.backToDxfIntake();
   }, []);
 
   const trySelectDxf = useCallback(
@@ -211,19 +306,21 @@ export function PostAnalysisWorkflow() {
     return <ResultsReviewScreen />;
   }
 
+  // Analysis failed — preserve existing error behavior (shell shows FailedStep).
+  // Never fall through to the final table after an error.
+  if (session.status === "FAILED" || session.error) {
+    return null;
+  }
+
+  if (!view) {
+    return null;
+  }
+
+  // Live decision for nav affordances only — never auto-navigate after edits.
+  const liveDecision = gapDecision;
+
   return (
     <div className="space-y-4" dir="rtl">
-      {view === "ANALYSIS_SUMMARY" && (
-        <InitialIntakeSummaryScreen
-          analysis={analysis}
-          invalidDxfParts={invalidDxfParts}
-          onResolveGaps={openGapResolution}
-          onOpenUnifiedTable={openUnifiedTable}
-          onBackToMaterial={() => simpleIntakeActions.backToMaterialList()}
-          onBackToDxf={() => simpleIntakeActions.backToDxfIntake()}
-        />
-      )}
-
       {view === "GAP_RESOLUTION" && (
         <GapResolutionWorkspace
           finalRows={finalRows}
@@ -232,7 +329,7 @@ export function PostAnalysisWorkflow() {
           materialListRows={session.materialListRows}
           dxfParts={session.dxfParts}
           onContinueToTable={() => openUnifiedTable()}
-          onBackToSummary={() => setView("ANALYSIS_SUMMARY")}
+          onBackToUpload={backToUpload}
           onConfirmManual={(id) => {
             setConfirmedManual((prev) => new Set(prev).add(id));
           }}
@@ -276,8 +373,9 @@ export function PostAnalysisWorkflow() {
           confirmedManual={confirmedManual}
           onConfirmedManualChange={setConfirmedManual}
           unresolvedCount={actionableCount}
-          onShowSummary={() => setView("ANALYSIS_SUMMARY")}
-          onBackToGaps={openGapResolution}
+          onBackToGaps={
+            liveDecision.hasActionableGaps ? openGapResolution : undefined
+          }
           onOpenCompletionRequest={() => setCompletionOpen(true)}
           dimensionMismatchResolutions={dimensionResolutions}
           onDimensionResolution={handleDimensionResolution}

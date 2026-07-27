@@ -94,12 +94,16 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
     path.join(root, "workflow/GapResolutionWorkspace.tsx"),
     "utf8"
   );
-  assert(action.includes("בואו נטפל בפערים"), "primary CTA gaps");
+  assert(action.includes("בואו נטפל בפערים"), "legacy summary CTA still in unused panel");
   assert(action.includes("המשך לטבלה המסכמת"), "secondary CTA table");
   assert(workflow.includes("GAP_RESOLUTION"), "gap view");
-  assert(workflow.includes("ANALYSIS_SUMMARY"), "summary view");
+  assert(
+    !workflow.includes("InitialIntakeSummaryScreen"),
+    "summary removed from active flow"
+  );
+  assert(workflow.includes("claimPostAnalysisRoute"), "auto routing");
   assert(workflow.includes("FINAL_TABLE"), "table view");
-  assert(workflow.includes("onResolveGaps"), "resolve gaps wired");
+  assert(workflow.includes("onBackToUpload") || workflow.includes("backToDxfIntake"), "upload back");
   assert(workspace.includes("פערים להתייחסות"), "workspace heading");
   assert(
     workspace.includes("המשך לטבלה המסכמת") ||

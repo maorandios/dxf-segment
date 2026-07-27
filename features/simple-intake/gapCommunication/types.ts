@@ -7,7 +7,7 @@ import type { DimensionMismatchResolution } from "../results/types";
 import type { MaterialResolutionCategory } from "../results/primaryResolutionCategory";
 
 export type GapWorkspaceAction =
-  | "BACK_TO_SUMMARY"
+  | "BACK_TO_UPLOAD"
   | "CREATE_GAP_EMAIL"
   | "EXPORT_ROUND_TRIP_EXCEL"
   | "CONTINUE_TO_FINAL_TABLE";

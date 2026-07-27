@@ -73,9 +73,9 @@ export function GapWorkspaceToolbar({
         backgroundColor: "var(--ow-surface, #ffffff)",
       }}
     >
-      <Segment action="BACK_TO_SUMMARY" onAction={onAction}>
+      <Segment action="BACK_TO_UPLOAD" onAction={onAction}>
         <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-        חזרה לסיכום
+        חזרה להעלאת הקבצים
       </Segment>
       <Sep />
       <Segment action="CREATE_GAP_EMAIL" onAction={onAction}>

@@ -245,6 +245,18 @@ export {
 } from "./workflow";
 export type { SimpleIntakeView, GuidedQueueItem } from "./workflow";
 export {
+  claimPostAnalysisRoute,
+  deriveActionableGapDecision,
+  deriveAnalysisRoutingReadiness,
+  isActionableDxfFinding,
+  resolveDeprecatedSummaryRedirect,
+} from "./postAnalysisRouting";
+export type {
+  ActionableGapDecision,
+  AnalysisRoutingReadiness,
+  PostAnalysisRoutingDiagnostics,
+} from "./postAnalysisRouting";
+export {
   categorizeReadinessIssues,
   rowHasCriticalIssue,
   ReadinessSummary,

@@ -225,7 +225,7 @@ export function GapResolutionWorkspace({
   finalRows,
   analysis,
   onContinueToTable,
-  onBackToSummary,
+  onBackToUpload,
   onConfirmManual,
   onPickDxfAction,
   onLeaveUnassigned,
@@ -242,7 +242,7 @@ export function GapResolutionWorkspace({
   finalRows: FinalIntakeRow[];
   analysis: IntakeAnalysisSummary;
   onContinueToTable: () => void;
-  onBackToSummary: () => void;
+  onBackToUpload: () => void;
   onConfirmManual: (resultRowId: string) => void;
   onPickDxfAction: (resultRowId: string) => void;
   onLeaveUnassigned: (resultRowId: string) => void;
@@ -309,7 +309,7 @@ export function GapResolutionWorkspace({
   const [exportBusy, setExportBusy] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [panelSlideIn, setPanelSlideIn] = useState(false);
-  /** Animate spacer/main only on close so open stays a clean panel slide. */
+  /** Ease spacer/main width with the panel on both open and close. */
   const [layoutMotion, setLayoutMotion] = useState(false);
   const [panelRow, setPanelRow] = useState<FinalIntakeRow | null>(null);
   const [panelBox, setPanelBox] = useState<StagePanelBox>({
@@ -320,6 +320,7 @@ export function GapResolutionWorkspace({
   const [panelHost, setPanelHost] = useState<HTMLElement | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const openRafRef = useRef<number | null>(null);
+  const trackRafRef = useRef<number | null>(null);
   const slideInRef = useRef(false);
   const contentColRef = useRef<HTMLDivElement | null>(null);
 
@@ -345,6 +346,29 @@ export function GapResolutionWorkspace({
     setPanelHost(document.querySelector(".omega-workflow") as HTMLElement | null);
   }, []);
 
+  function stopPanelBoxTracking(): void {
+    if (trackRafRef.current != null) {
+      window.cancelAnimationFrame(trackRafRef.current);
+      trackRafRef.current = null;
+    }
+  }
+
+  /** Keep fixed panel glued to the content column while the spacer width eases. */
+  function trackPanelBoxDuringMotion(): void {
+    stopPanelBoxTracking();
+    const startedAt = performance.now();
+    const tick = (now: number): void => {
+      setPanelBox(readStagePanelBox(contentColRef.current));
+      if (now - startedAt < GAP_FIX_PANEL_MS + 48) {
+        trackRafRef.current = window.requestAnimationFrame(tick);
+      } else {
+        trackRafRef.current = null;
+        setPanelBox(readStagePanelBox(contentColRef.current));
+      }
+    };
+    trackRafRef.current = window.requestAnimationFrame(tick);
+  }
+
   useEffect(() => {
     if (closeTimerRef.current != null) {
       window.clearTimeout(closeTimerRef.current);
@@ -357,18 +381,19 @@ export function GapResolutionWorkspace({
 
     if (detailsId != null && detailsRow) {
       setPanelRow(detailsRow);
-      // Expand layout immediately (no width tween) so the slide has a stable target.
-      setLayoutMotion(false);
-      setRailOpen(true);
+      setLayoutMotion(true);
 
       if (!slideInRef.current) {
+        // Start closed so the next paint can ease width 0 → panel width.
         setPanelSlideIn(false);
+        setRailOpen(false);
         openRafRef.current = window.requestAnimationFrame(() => {
           openRafRef.current = window.requestAnimationFrame(() => {
             openRafRef.current = null;
-            setPanelBox(readStagePanelBox(contentColRef.current));
             slideInRef.current = true;
+            setRailOpen(true);
             setPanelSlideIn(true);
+            trackPanelBoxDuringMotion();
           });
         });
       } else {
@@ -382,17 +407,19 @@ export function GapResolutionWorkspace({
       };
     }
 
-    // Close: enable layout easing, then collapse so main view slides with the panel.
+    // Close: ease layout + panel together so the main view slides back left.
     setLayoutMotion(true);
     setPanelSlideIn(false);
     slideInRef.current = false;
     openRafRef.current = window.requestAnimationFrame(() => {
       openRafRef.current = null;
       setRailOpen(false);
+      trackPanelBoxDuringMotion();
     });
     closeTimerRef.current = window.setTimeout(() => {
       setPanelRow(null);
       setLayoutMotion(false);
+      stopPanelBoxTracking();
       closeTimerRef.current = null;
     }, GAP_FIX_PANEL_MS);
     return () => {
@@ -406,6 +433,8 @@ export function GapResolutionWorkspace({
       }
     };
   }, [detailsId, detailsRow]);
+
+  useEffect(() => () => stopPanelBoxTracking(), []);
 
   // Keep panel content fresh while open (e.g. after rematch).
   useEffect(() => {
@@ -440,8 +469,8 @@ export function GapResolutionWorkspace({
 
   function handleToolbarAction(action: GapWorkspaceAction): void {
     switch (action) {
-      case "BACK_TO_SUMMARY":
-        onBackToSummary();
+      case "BACK_TO_UPLOAD":
+        onBackToUpload();
         return;
       case "CREATE_GAP_EMAIL":
         setEmailOpen(true);
@@ -507,7 +536,7 @@ export function GapResolutionWorkspace({
             : undefined,
         }}
       >
-        {/* In-flow spacer — eases with the panel on close so the main view slides back */}
+        {/* In-flow spacer — eases with the panel so the main view slides open/closed */}
         <div
           aria-hidden
           className="shrink-0"

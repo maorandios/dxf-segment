@@ -529,9 +529,13 @@ function run(): void {
       "utf8"
     );
     assert(
-      workflow.includes("PreUnifiedReviewSummaryScreen") ||
-        workflow.includes("InitialIntakeSummaryScreen"),
-      "summary screen"
+      workflow.includes("claimPostAnalysisRoute") ||
+        workflow.includes("GAP_RESOLUTION"),
+      "auto routing"
+    );
+    assert(
+      !workflow.includes("InitialIntakeSummaryScreen"),
+      "summary disconnected"
     );
     assert(workflow.includes("ResultsReviewScreen"), "unified table");
     assert(workflow.includes("CompletionRequestDrawer"), "completion drawer");
@@ -572,12 +576,12 @@ function run(): void {
         summaryScreen.includes("עיבוד הושלם") ||
         summaryScreen.includes("דורש טיפול") ||
         summaryScreen.includes("ניתוח רשימת החומר"),
-      "opens summary"
+      "legacy summary still on disk"
     );
     assert(
       actionPanel.includes("בואו נטפל בפערים") &&
         actionPanel.includes("המשך לטבלה המסכמת"),
-      "primary opens table"
+      "legacy CTAs preserved on disk"
     );
 
     const cat = fs.readFileSync(

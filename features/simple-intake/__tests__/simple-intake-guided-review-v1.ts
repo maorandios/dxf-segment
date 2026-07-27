@@ -598,10 +598,13 @@ function run(): void {
       "utf8"
     );
     assert(
-      workflow.includes("PreUnifiedReviewSummaryScreen") ||
-        workflow.includes("InitialIntakeSummaryScreen") ||
-        workflow.includes("ANALYSIS_SUMMARY"),
-      "summary state"
+      workflow.includes("claimPostAnalysisRoute") &&
+        workflow.includes("GAP_RESOLUTION"),
+      "auto-routes by actionable gaps"
+    );
+    assert(
+      !workflow.includes("InitialIntakeSummaryScreen"),
+      "summary removed from active flow"
     );
     assert(
       workflow.includes("ResultsReviewScreen") &&
@@ -662,7 +665,7 @@ function run(): void {
       review.includes("confirmedManual?: Set<string>"),
       "shared confirmed prop"
     );
-    assert(review.includes("onShowSummary"), "nav back to summary");
+    assert(review.includes("onBackToGaps"), "nav back to gaps");
     assert(review.includes("onOpenCompletionRequest"), "completion from table");
     console.log("✓ Table navigation preserves shared local state API");
   }

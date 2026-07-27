@@ -365,10 +365,14 @@ console.log("=== Pre-Unified Review + DXF Filename Coverage Fix v1 ===\n");
   assert(!workflow.includes("ReadinessIssueCards"), "no issue cards entry");
   assert(!workflow.includes("LIST_DIMENSION_MISMATCH"), "no dim list view");
   assert(!workflow.includes("matchMetrics"), "no suggested metrics");
-  assert(workflow.includes("ReviewWorkspaceView"), "summary|gaps|table");
+  assert(workflow.includes("ReviewWorkspaceView"), "gaps|table");
   assert(workflow.includes("NEEDS_ATTENTION"), "attention filter entry");
   assert(workflow.includes("CompletionRequestDrawer"), "completion from unified");
-  assert(workflow.includes("InitialIntakeSummaryScreen"), "new summary screen");
+  assert(
+    !workflow.includes("InitialIntakeSummaryScreen"),
+    "summary disconnected from active flow"
+  );
+  assert(workflow.includes("claimPostAnalysisRoute"), "auto routing");
 
   assert(
     !summaryUi.toLowerCase().includes("dimension mismatch") &&
