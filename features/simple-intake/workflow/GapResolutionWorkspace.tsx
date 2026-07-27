@@ -32,6 +32,18 @@ import {
 import type { FinalDxfCandidate, FinalIntakeRow } from "../results/types";
 import { ScreenHeader } from "../ui";
 import type { IntakeAnalysisSummary } from "../buildIntakeAnalysisSummary";
+import type { MaterialListRow } from "../materialList/types";
+import type { SimpleDxfPart } from "../types";
+import {
+  buildGapCommunicationRows,
+  buildGapEmailDraft,
+  buildRoundTripExcelWorkbook,
+  downloadBytes,
+  type GapWorkspaceAction,
+} from "../gapCommunication";
+import { deriveDxfFileFindings } from "../dxfFileFindings";
+import { GapEmailModal } from "./GapEmailModal";
+import { GapWorkspaceToolbar } from "./GapWorkspaceToolbar";
 
 const MUTED_GRAY = "var(--ow-text-muted)";
 const DOT_GREEN = "#16a34a";
@@ -223,6 +235,9 @@ export function GapResolutionWorkspace({
   trySelectDxf,
   availableCandidatesForRow,
   noDxfFilesUploaded,
+  quotationName = "הצעת מחיר",
+  materialListRows = [],
+  dxfParts = [],
 }: {
   finalRows: FinalIntakeRow[];
   analysis: IntakeAnalysisSummary;
@@ -240,6 +255,9 @@ export function GapResolutionWorkspace({
   trySelectDxf: (resultRowId: string, dxfId: string | null) => boolean;
   availableCandidatesForRow: (row: FinalIntakeRow | null) => FinalDxfCandidate[];
   noDxfFilesUploaded: boolean;
+  quotationName?: string;
+  materialListRows?: MaterialListRow[];
+  dxfParts?: SimpleDxfPart[];
 }) {
   void analysis;
   void onConfirmManual;
@@ -258,6 +276,24 @@ export function GapResolutionWorkspace({
   );
   void diagnosticsPack;
 
+  const communicationRows = useMemo(
+    () => buildGapCommunicationRows(finalRows, materialListRows),
+    [finalRows, materialListRows]
+  );
+  const dxfFindings = useMemo(
+    () => deriveDxfFileFindings(dxfParts, finalRows),
+    [dxfParts, finalRows]
+  );
+  const emailDraft = useMemo(
+    () =>
+      buildGapEmailDraft({
+        quotationName,
+        rows: communicationRows,
+        dxfFindings,
+      }),
+    [quotationName, communicationRows, dxfFindings]
+  );
+
   const [selectedCategory, setSelectedCategory] =
     useState<PrimaryResolutionCategory>(() =>
       selectInitialResolutionCategory(summary)
@@ -269,6 +305,8 @@ export function GapResolutionWorkspace({
     "search"
   );
   const [continueWarnOpen, setContinueWarnOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [panelSlideIn, setPanelSlideIn] = useState(false);
   /** Animate spacer/main only on close so open stays a clean panel slide. */
@@ -304,7 +342,7 @@ export function GapResolutionWorkspace({
   );
 
   useEffect(() => {
-    setPanelHost(document.querySelector(".omega-workflow"));
+    setPanelHost(document.querySelector(".omega-workflow") as HTMLElement | null);
   }, []);
 
   useEffect(() => {
@@ -384,6 +422,37 @@ export function GapResolutionWorkspace({
       return;
     }
     onContinueToTable();
+  }
+
+  async function exportRoundTripExcel(): Promise<void> {
+    if (exportBusy) return;
+    setExportBusy(true);
+    try {
+      const result = await buildRoundTripExcelWorkbook({
+        rows: communicationRows,
+        quotationName,
+      });
+      downloadBytes(result.filename, result.bytes);
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  function handleToolbarAction(action: GapWorkspaceAction): void {
+    switch (action) {
+      case "BACK_TO_SUMMARY":
+        onBackToSummary();
+        return;
+      case "CREATE_GAP_EMAIL":
+        setEmailOpen(true);
+        return;
+      case "EXPORT_ROUND_TRIP_EXCEL":
+        void exportRoundTripExcel();
+        return;
+      case "CONTINUE_TO_FINAL_TABLE":
+        requestContinue();
+        return;
+    }
   }
 
   function openPicker(rowId: string, mode: "candidates" | "search"): void {
@@ -509,29 +578,9 @@ export function GapResolutionWorkspace({
           className="min-w-0 flex-1"
           style={{ direction: "rtl" }}
         >
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <ScreenHeader title="פערים להתייחסות" className="mb-0" />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 rounded-2xl px-4 text-[13px]"
-                onClick={onBackToSummary}
-              >
-                חזרה לסיכום
-              </Button>
-              <Button
-                type="button"
-                className="h-10 rounded-2xl px-5 text-[13px] font-medium shadow-none"
-                style={{
-                  backgroundColor: "var(--ow-accent)",
-                  color: "var(--ow-accent-fg)",
-                }}
-                onClick={requestContinue}
-              >
-                המשך לטבלה המסכמת
-              </Button>
-            </div>
+            <GapWorkspaceToolbar onAction={handleToolbarAction} />
           </div>
 
           <div
@@ -840,6 +889,12 @@ export function GapResolutionWorkspace({
           </div>
         </div>
       ) : null}
+
+      <GapEmailModal
+        open={emailOpen}
+        draft={emailDraft}
+        onClose={() => setEmailOpen(false)}
+      />
 
       <DxfCandidatePicker
         open={pickerId != null}

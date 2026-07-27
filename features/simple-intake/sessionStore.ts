@@ -3,6 +3,10 @@
  */
 
 import { buildSimpleWorkbookSnapshot } from "./buildSimpleWorkbookSnapshot";
+import {
+  isOmegaRoundTripWorkbook,
+  parseOmegaRoundTripWorkbookWithMeta,
+} from "./gapCommunication";
 import { buildSimpleIntakeDebug } from "./buildSimpleDebug";
 import {
   applyManualDxfSelection,
@@ -1219,6 +1223,129 @@ export const simpleIntakeActions = {
           analyzingLabel: "מארגנים את הנתונים לטבלה אחידה...",
           timing: { ...timing },
         });
+
+        // OMEGA round-trip workbook → deterministic parse, no AI call.
+        if (isOmegaRoundTripWorkbook(snapResult.snapshot)) {
+          const parsed = parseOmegaRoundTripWorkbookWithMeta(
+            snapResult.snapshot,
+            { sourceFileName: workbookFile.name }
+          );
+          const materialListRows = parsed.rows;
+          if (materialListRows.length === 0) {
+            const error: SimpleIntakeError = {
+              stage: "VALIDATION",
+              message: "לא נמצאו שורות חומר בקובץ OMEGA",
+              retryable: false,
+            };
+            timing.totalMs = Date.now() - t0;
+            fail(
+              error,
+              timing,
+              runId,
+              startedAt,
+              [],
+              snapResult.snapshot,
+              {
+                ok: true,
+                roundTripWorkbookDetected: true,
+                roundTripRowsParsed: 0,
+              },
+              0,
+              snapResult.coverage
+            );
+            return;
+          }
+
+          timing.aiCallMs = 0;
+          timing.totalMs = Date.now() - t0;
+          const completedAt = new Date().toISOString();
+          const snapshot = snapResult.snapshot;
+          const coverage = snapResult.coverage;
+          const debug = buildSimpleIntakeDebug({
+            runId,
+            startedAt,
+            completedAt,
+            timing,
+            workbookFileName: workbookFile.name,
+            dxfFileNames: [],
+            snapshot,
+            providerCallCount: 0,
+            aiRawResult: {
+              ok: true,
+              materialListRowCount: materialListRows.length,
+              roundTripWorkbookDetected: true,
+              roundTripRowsParsed: materialListRows.length,
+              ignoredInformationalDxfDimensionCells:
+                parsed.ignoredInformationalDxfDimensionCells,
+              ignoredNotesCells: parsed.ignoredNotesCells,
+              usage: null,
+              model: null,
+              costs: null,
+              sourceType,
+            },
+            validatedRows: materialListToExtractedRows(materialListRows),
+            dxfParts: [],
+            resultRows: [],
+            unmatchedDxfIds: [],
+            diagnostics: null,
+            snapshotCoverage: coverage,
+            error: null,
+            extractionProviderDebug: {
+              provider: "omega-round-trip",
+              purpose: "ROUND_TRIP_DETERMINISTIC_PARSE",
+            },
+          });
+          (debug as Record<string, unknown>).materialListStage = {
+            provider: "omega-round-trip",
+            model: null,
+            schemaVersion: "omega-round-trip-v1",
+            extractedRowCount: materialListRows.length,
+            validatedRowCount: materialListRows.length,
+            completeRowCount: summarizeMaterialList(materialListRows)
+              .completeRows,
+            incompleteRowCount: summarizeMaterialList(materialListRows)
+              .incompleteRows,
+          };
+          (debug as Record<string, unknown>).providerCall = {
+            provider: "omega-round-trip",
+            count: 0,
+            purpose: "ROUND_TRIP_DETERMINISTIC_PARSE",
+          };
+
+          const phaseCount =
+            getSimpleIntakeSession().dxfParts.length > 0 ||
+            getSimpleIntakeSession().dxfFiles.length > 0
+              ? 6
+              : 5;
+          const minMs = workbookActivityMinDurationMs(phaseCount);
+          const remaining = minMs - (Date.now() - t0);
+          if (remaining > 0) {
+            await new Promise((r) => setTimeout(r, remaining));
+          }
+
+          setSession({
+            ...getSimpleIntakeSession(),
+            analyzingLabel: null,
+            materialListRows,
+            materialListApproved: true,
+            materialListShowUnresolvedOnly: false,
+            extractedRows: materialListToExtractedRows(materialListRows),
+            workbookSnapshot: snapshot,
+            timing,
+            completedAt,
+            lastDebug: debug,
+            providerCallCount: 0,
+            error: null,
+            quoteStage: "MATERIAL_INTAKE",
+            enteredQuoteStages: markEntered(
+              getSimpleIntakeSession().enteredQuoteStages,
+              "MATERIAL_INTAKE"
+            ),
+          });
+
+          await simpleIntakeActions.runDxfStageFromApprovedList();
+          return;
+        }
       } else {
         timing.workbookSnapshotMs = 0;
         setSession({

@@ -198,6 +198,26 @@ export {
   assertSnapshotCoverageComplete,
 } from "./buildSimpleWorkbookSnapshot";
 export {
+  buildGapCommunicationRows,
+  deriveCustomerFacingGapText,
+  buildGapEmailDraft,
+  buildRoundTripExcelWorkbook,
+  buildRoundTripExcelNote,
+  isOmegaRoundTripWorkbook,
+  parseOmegaRoundTripWorkbook,
+  parseOmegaRoundTripWorkbookWithMeta,
+  OMEGA_ROUND_TRIP_HEADERS,
+  deriveRoundTripActionHighlights,
+  copyGapEmailToClipboard,
+  buildGapCommunicationDiagnostics,
+  assertGapCommunicationInvariants,
+} from "./gapCommunication";
+export type {
+  GapCommunicationRow,
+  GapWorkspaceAction,
+  GapCommunicationDiagnostics,
+} from "./gapCommunication";
+export {
   findExactDxfIdsInWorkbookSnapshot,
   cellHasExactNormalizedPartId,
 } from "./findExactDxfIdsInWorkbookSnapshot";

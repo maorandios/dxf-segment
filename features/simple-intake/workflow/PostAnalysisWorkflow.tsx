@@ -228,6 +228,9 @@ export function PostAnalysisWorkflow() {
         <GapResolutionWorkspace
           finalRows={finalRows}
           analysis={analysis}
+          quotationName={session.quoteDetails?.projectName ?? "הצעת מחיר"}
+          materialListRows={session.materialListRows}
+          dxfParts={session.dxfParts}
           onContinueToTable={() => openUnifiedTable()}
           onBackToSummary={() => setView("ANALYSIS_SUMMARY")}
           onConfirmManual={(id) => {
