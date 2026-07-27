@@ -8,7 +8,15 @@ import type { GapCommunicationRow } from "./types";
 export type GapEmailDraft = {
   subject: string;
   body: string;
+  bodyHtml: string;
 };
+
+const SECTION_TITLES = new Set([
+  "זיהוי פריטים",
+  "נתוני פריטים חסרים",
+  "פערי מידות",
+  "מצב קובצי DXF",
+]);
 
 function formatMm(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -23,9 +31,9 @@ function formatMm(value: number | null | undefined): string {
 function itemLabel(row: GapCommunicationRow): string {
   if (row.sourcePartId) return `פריט ${row.sourcePartId}`;
   if (row.sourceRowNumber != null) {
-    return `פריט ללא מזהה – שורה ${row.sourceRowNumber.toLocaleString("he-IL")}`;
+    return `פריט ללא שם – שורה ${row.sourceRowNumber.toLocaleString("he-IL")}`;
   }
-  return "פריט ללא מזהה";
+  return "פריט ללא שם";
 }
 
 function findingLine(finding: DxfFileFinding): string {
@@ -41,6 +49,35 @@ function findingLine(finding: DxfFileFinding): string {
   }
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function isItemTitleLine(line: string): boolean {
+  return /^\d+\.\s+/.test(line.trim());
+}
+
+function isSectionTitleLine(line: string): boolean {
+  return SECTION_TITLES.has(line.trim());
+}
+
+/** Convert plain email body to HTML with bold section/item titles. */
+export function formatGapEmailBodyHtml(body: string): string {
+  const blocks = body.split("\n").map((line) => {
+    const trimmed = line.trimEnd();
+    if (trimmed === "") return "<br/>";
+    if (isSectionTitleLine(trimmed) || isItemTitleLine(trimmed)) {
+      return `<div><strong>${escapeHtml(trimmed)}</strong></div>`;
+    }
+    return `<div>${escapeHtml(trimmed)}</div>`;
+  });
+  return `<div dir="rtl" style="font-family:inherit;line-height:1.5">${blocks.join("")}</div>`;
+}
+
 /**
  * Build editable email draft from unresolved communication rows + DXF findings.
  */
@@ -49,7 +86,8 @@ export function buildGapEmailDraft(args: {
   rows: ReadonlyArray<GapCommunicationRow>;
   dxfFindings?: ReadonlyArray<DxfFileFinding>;
 }): GapEmailDraft {
-  const subject = `השלמת נתונים לצורך הכנת הצעת מחיר – ${args.quotationName}`;
+  const project = args.quotationName.trim() || "הצעת מחיר";
+  const subject = `${project} - השלמת נתונים לצורך הצעת מחיר`;
   const unresolved = args.rows.filter((r) => r.category !== "READY_FOR_PRICING");
 
   if (unresolved.length === 0) {
@@ -68,7 +106,7 @@ export function buildGapEmailDraft(args: {
     ]
       .filter((line) => line != null)
       .join("\n");
-    return { subject, body };
+    return { subject, body, bodyHtml: formatGapEmailBodyHtml(body) };
   }
 
   const identification = unresolved.filter(
@@ -102,7 +140,7 @@ export function buildGapEmailDraft(args: {
       row.customerFacingProblem ?? "נדרש טיפול בזיהוי הפריט.";
     const action =
       row.customerFacingRequiredAction ??
-      "יש להשלים מזהה או לצרף קובץ DXF תואם.";
+      "יש להשלים שם פריט או לצרף קובץ DXF תואם.";
     return `${n}. ${itemLabel(row)}\n${problem}\nנדרש: ${action}`;
   });
 
@@ -140,7 +178,7 @@ export function buildGapEmailDraft(args: {
     "תודה.",
   ].join("\n");
 
-  return { subject, body };
+  return { subject, body, bodyHtml: formatGapEmailBodyHtml(body) };
 }
 
 /** Clipboard payload from the currently edited subject/body (not regenerated). */
@@ -153,13 +191,9 @@ export function formatGapEmailClipboardPayload(
 
 export function formatGapEmailClipboardHtml(
   subject: string,
-  body: string
+  body: string,
+  bodyHtml?: string
 ): string {
-  const escape = (s: string) =>
-    s
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  return `<div dir="rtl"><p><strong>נושא:</strong> ${escape(subject)}</p><pre style="white-space:pre-wrap;font-family:inherit">${escape(body)}</pre></div>`;
+  const htmlBody = bodyHtml ?? formatGapEmailBodyHtml(body);
+  return `<div dir="rtl"><p><strong>נושא:</strong> ${escapeHtml(subject)}</p>${htmlBody}</div>`;
 }

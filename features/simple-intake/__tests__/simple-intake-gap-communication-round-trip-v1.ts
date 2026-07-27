@@ -173,7 +173,7 @@ async function main(): Promise<void> {
     match: { status: "UNMATCHED", method: null, candidates: [], message: null },
   });
   const t1 = deriveCustomerFacingGapText(missingId);
-  assertEq(t1.problem, "חסר מזהה פריט ברשימת החומר.", "missing id problem");
+  assertEq(t1.problem, "חסר שם הפריט ברשימת החומר.", "missing id problem");
 
   const missingDxf = baseRow({
     id: "r2",
@@ -251,6 +251,11 @@ async function main(): Promise<void> {
     ],
   });
   assert(email.subject.includes("פרויקט א"), "subject has quotation name");
+  assert(
+    email.subject.startsWith("פרויקט א - השלמת נתונים לצורך הצעת מחיר"),
+    "subject format"
+  );
+  assert(email.bodyHtml.includes("<strong>"), "html bold titles");
   assert(email.body.includes("p1010"), "email includes unresolved");
   assert(!email.body.includes("pReady"), "email omits ready part id as item");
   assert(email.body.includes("מצב קובצי DXF"), "dxf findings section");
@@ -375,6 +380,7 @@ async function main(): Promise<void> {
   assertEq(wb.dataRowCount, rows.length, "all material rows");
   assertEq(wb.columnCount, OMEGA_ROUND_TRIP_HEADERS.length, "10 columns");
   assert(!OMEGA_ROUND_TRIP_HEADERS.includes("סטטוס" as never), "no status header");
+  assertEq(OMEGA_ROUND_TRIP_HEADERS[0], "שם הפריט", "part name header");
   assertEq(OMEGA_ROUND_TRIP_HEADERS[9], "הערות", "notes last");
 
   // Source dims preserved separately from DXF

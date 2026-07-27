@@ -10,12 +10,13 @@ export type {
 
 export { buildGapCommunicationRows } from "./buildGapCommunicationRows";
 export { deriveCustomerFacingGapText } from "./deriveCustomerFacingGapText";
-export type { GapEmailDraft } from "./buildGapEmail";
 export {
   buildGapEmailDraft,
   formatGapEmailClipboardPayload,
   formatGapEmailClipboardHtml,
+  formatGapEmailBodyHtml,
 } from "./buildGapEmail";
+export type { GapEmailDraft } from "./buildGapEmail";
 export { buildRoundTripExcelNote } from "./buildRoundTripExcelNote";
 export {
   OMEGA_ROUND_TRIP_HEADERS,

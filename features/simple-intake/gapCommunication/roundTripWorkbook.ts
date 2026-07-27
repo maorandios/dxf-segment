@@ -5,7 +5,11 @@
 import { deriveApprovalStatus } from "../materialList/completeness";
 import type { MaterialListRow } from "../materialList/types";
 import type { SimpleWorkbookSnapshot } from "../types";
-import { OMEGA_ROUND_TRIP_HEADERS, OMEGA_ROUND_TRIP_SHEET_NAME } from "./buildRoundTripExcel";
+import {
+  OMEGA_ROUND_TRIP_HEADERS,
+  OMEGA_ROUND_TRIP_PART_HEADER_ALIASES,
+  OMEGA_ROUND_TRIP_SHEET_NAME,
+} from "./buildRoundTripExcel";
 
 /** Minimal sheet shape shared by SimpleWorkbookSnapshot and lib WorkbookSnapshot. */
 export type RoundTripSnapshotLike = {
@@ -51,6 +55,15 @@ function rowCellTexts(
   return row.cells.map((c) => cellText(c));
 }
 
+function headerMatchesExpected(actual: string, columnIndex: number): boolean {
+  if (columnIndex === 0) {
+    return OMEGA_ROUND_TRIP_PART_HEADER_ALIASES.some((alias) =>
+      headerEquals(actual, alias)
+    );
+  }
+  return headerEquals(actual, OMEGA_ROUND_TRIP_HEADERS[columnIndex]!);
+}
+
 function findHeaderRow(
   sheet: RoundTripSnapshotLike["sheets"][number]
 ): { rowIndex: number; texts: string[] } | null {
@@ -59,7 +72,7 @@ function findHeaderRow(
     if (texts.length < OMEGA_ROUND_TRIP_HEADERS.length) continue;
     let ok = true;
     for (let c = 0; c < OMEGA_ROUND_TRIP_HEADERS.length; c++) {
-      if (!headerEquals(texts[c] ?? "", OMEGA_ROUND_TRIP_HEADERS[c]!)) {
+      if (!headerMatchesExpected(texts[c] ?? "", c)) {
         ok = false;
         break;
       }

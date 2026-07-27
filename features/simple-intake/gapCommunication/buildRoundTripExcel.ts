@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 export const OMEGA_ROUND_TRIP_HEADERS = [
-  "מזהה פריט",
+  "שם הפריט",
   "שם קובץ DXF",
   "סוג חומר",
   'עובי (מ"מ)',
@@ -21,6 +21,12 @@ export const OMEGA_ROUND_TRIP_HEADERS = [
   'רוחב DXF (מ"מ)',
   'אורך DXF (מ"מ)',
   "הערות",
+] as const;
+
+/** Accept current + legacy first-column header for re-import. */
+export const OMEGA_ROUND_TRIP_PART_HEADER_ALIASES = [
+  "שם הפריט",
+  "מזהה פריט",
 ] as const;
 
 export const OMEGA_ROUND_TRIP_SHEET_NAME = "רשימת פריטים";
@@ -200,17 +206,24 @@ export async function buildRoundTripExcelWorkbook(args: {
       notes,
     ]);
 
-    // Numeric types for measure columns; blank stays empty.
+    // Numeric types — integers without trailing decimal dots.
     for (const col of [4, 5, 6, 7, 8, 9] as const) {
       const cell = excelRow.getCell(col);
       if (cell.value == null || cell.value === "") {
         cell.value = null;
-      } else if (typeof cell.value === "number") {
-        cell.numFmt = "0.##";
+      } else if (typeof cell.value === "number" && Number.isFinite(cell.value)) {
+        const n = cell.value;
+        cell.value = n;
+        cell.numFmt = Number.isInteger(n) ? "0" : "0.##";
       }
     }
 
-    excelRow.getCell(10).alignment = { wrapText: true, vertical: "top" };
+    excelRow.getCell(10).alignment = {
+      wrapText: false,
+      vertical: "middle",
+      horizontal: "right",
+    };
+    excelRow.height = 22;
 
     for (const key of COLUMN_KEYS) {
       if (!highlightSet.has(`${rowIndex}:${key}`)) continue;
@@ -223,12 +236,15 @@ export async function buildRoundTripExcelWorkbook(args: {
     }
   });
 
+  sheet.getRow(1).height = 22;
+
   sheet.autoFilter = {
     from: { row: 1, column: 1 },
     to: { row: 1, column: OMEGA_ROUND_TRIP_HEADERS.length },
   };
 
-  const widths = [14, 22, 14, 12, 10, 16, 16, 14, 14, 42];
+  // Wide notes column so text fits on one line; uniform row heights above.
+  const widths = [16, 22, 14, 12, 10, 16, 16, 14, 14, 96];
   widths.forEach((w, i) => {
     sheet.getColumn(i + 1).width = w;
   });

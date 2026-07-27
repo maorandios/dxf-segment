@@ -18,12 +18,17 @@ export type CopyGapEmailResult =
 export async function copyGapEmailToClipboard(args: {
   subject: string;
   body: string;
+  bodyHtml?: string;
   deps?: CopyTextToClipboardDeps & {
     write?: (data: ClipboardItem[]) => Promise<void>;
   };
 }): Promise<CopyGapEmailResult> {
   const plain = formatGapEmailClipboardPayload(args.subject, args.body);
-  const html = formatGapEmailClipboardHtml(args.subject, args.body);
+  const html = formatGapEmailClipboardHtml(
+    args.subject,
+    args.body,
+    args.bodyHtml
+  );
 
   try {
     const write =

@@ -42,9 +42,9 @@ export function deriveCustomerFacingGapText(
 
   if (!sourceId) {
     return {
-      problem: "חסר מזהה פריט ברשימת החומר.",
+      problem: "חסר שם הפריט ברשימת החומר.",
       requiredAction:
-        "יש להוסיף מזהה פריט או שם קובץ DXF התואם בדיוק לקובץ שיועלה.",
+        "יש להוסיף שם פריט או שם קובץ DXF התואם בדיוק לקובץ שיועלה.",
       note: null,
     };
   }
@@ -72,7 +72,7 @@ export function deriveCustomerFacingGapText(
     }
     return {
       problem: `לא נמצא קובץ DXF עם מזהה תואם לפריט ${sourceId.rawValue}.`,
-      requiredAction: "יש לצרף קובץ DXF תואם או לתקן את מזהה הפריט ברשימה.",
+      requiredAction: "יש לצרף קובץ DXF תואם או לתקן את שם הפריט ברשימה.",
       note: null,
     };
   }

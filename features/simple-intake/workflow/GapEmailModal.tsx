@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   copyGapEmailToClipboard,
   type GapEmailDraft,
 } from "../gapCommunication";
+
+const LIGHT = {
+  surface: "#ffffff",
+  border: "#e4e7ec",
+  text: "#101828",
+  textSecondary: "#475467",
+  textMuted: "#667085",
+  accent: "#0f766e",
+  accentFg: "#ffffff",
+  success: "#15803d",
+  error: "#b42318",
+} as const;
 
 function GapEmailModalForm({
   draft,
@@ -17,14 +29,41 @@ function GapEmailModalForm({
   onClose: () => void;
 }) {
   const [subject, setSubject] = useState(draft.subject);
-  const [body, setBody] = useState(draft.body);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (bodyRef.current) {
+      bodyRef.current.innerHTML = draft.bodyHtml;
+    }
+  }, [draft.bodyHtml]);
+
+  useEffect(() => {
+    const stage = document.querySelector("main > .ow-stage-enter");
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevStageOverflow =
+      stage instanceof HTMLElement ? stage.style.overflow : "";
+    document.body.style.overflow = "hidden";
+    if (stage instanceof HTMLElement) stage.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      if (stage instanceof HTMLElement) stage.style.overflow = prevStageOverflow;
+    };
+  }, []);
 
   async function handleCopy(): Promise<void> {
     setCopyState("idle");
     setErrorMessage(null);
-    const result = await copyGapEmailToClipboard({ subject, body });
+    const liveHtml = bodyRef.current?.innerHTML ?? draft.bodyHtml;
+    const liveText = (bodyRef.current?.innerText ?? draft.body)
+      .replace(/\r\n/g, "\n")
+      .trimEnd();
+    const result = await copyGapEmailToClipboard({
+      subject,
+      body: liveText,
+      bodyHtml: liveHtml,
+    });
     if (result.ok) {
       setCopyState("ok");
       return;
@@ -34,10 +73,15 @@ function GapEmailModalForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50" dir="rtl" role="presentation">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      dir="rtl"
+      role="presentation"
+    >
       <button
         type="button"
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 backdrop-blur-[6px]"
+        style={{ backgroundColor: "rgba(16, 24, 40, 0.35)" }}
         aria-label="סגור"
         onClick={onClose}
       />
@@ -45,75 +89,119 @@ function GapEmailModalForm({
         role="dialog"
         aria-modal="true"
         aria-label="מייל פערים"
-        className="absolute left-1/2 top-1/2 flex max-h-[min(90vh,40rem)] w-[min(94vw,40rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--ow-radius-lg)] border bg-background shadow-xl"
-        style={{ borderColor: "var(--ow-border)" }}
+        className="omega-workflow relative z-[1] flex max-h-[min(90vh,40rem)] w-[min(94vw,40rem)] flex-col overflow-hidden rounded-[14px] border shadow-xl"
+        style={{
+          borderColor: LIGHT.border,
+          backgroundColor: LIGHT.surface,
+          color: LIGHT.text,
+          colorScheme: "light",
+        }}
       >
-        <header className="shrink-0 border-b px-5 py-4">
+        <header
+          className="shrink-0 border-b px-5 py-4"
+          style={{
+            borderColor: LIGHT.border,
+            backgroundColor: LIGHT.surface,
+          }}
+        >
           <h2
             className="text-[16px] font-semibold"
-            style={{ color: "var(--ow-text)" }}
+            style={{ color: LIGHT.text }}
           >
             מייל פערים ללקוח
           </h2>
-          <p
-            className="mt-1 text-[12px]"
-            style={{ color: "var(--ow-text-muted)" }}
-          >
+          <p className="mt-1 text-[12px]" style={{ color: LIGHT.textMuted }}>
             ניתן לערוך את הנושא והגוף לפני ההעתקה. OMEGA לא שולחת את המייל.
           </p>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+        <div
+          className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4"
+          style={{ backgroundColor: LIGHT.surface }}
+        >
           <label className="block space-y-1.5">
             <span
               className="text-[12px] font-medium"
-              style={{ color: "var(--ow-text-secondary)" }}
+              style={{ color: LIGHT.textSecondary }}
             >
               נושא
             </span>
             <Input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="h-10 rounded-xl bg-white text-[13px]"
+              className="h-10 rounded-xl text-[13px] shadow-none"
+              style={{
+                backgroundColor: LIGHT.surface,
+                color: LIGHT.text,
+                borderColor: LIGHT.border,
+              }}
             />
           </label>
-          <label className="block space-y-1.5">
+          <div className="block space-y-1.5">
             <span
               className="text-[12px] font-medium"
-              style={{ color: "var(--ow-text-secondary)" }}
+              style={{ color: LIGHT.textSecondary }}
             >
               גוף המייל
             </span>
-            <Textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={14}
-              className="min-h-[16rem] rounded-xl bg-white text-[13px] leading-relaxed"
+            <div
+              ref={bodyRef}
+              role="textbox"
+              aria-multiline="true"
+              contentEditable
+              suppressContentEditableWarning
+              dir="rtl"
+              className="gap-email-body min-h-[16rem] rounded-xl border px-3 py-2.5 text-[13px] leading-relaxed outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{
+                borderColor: LIGHT.border,
+                backgroundColor: LIGHT.surface,
+                color: LIGHT.text,
+                outlineColor: LIGHT.accent,
+              }}
             />
-          </label>
+            <style>{`
+              .gap-email-body,
+              .gap-email-body * {
+                background: transparent !important;
+                background-color: transparent !important;
+                color: ${LIGHT.text} !important;
+              }
+              .gap-email-body strong {
+                font-weight: 700;
+              }
+            `}</style>
+          </div>
           {copyState === "ok" ? (
             <p
               className="text-[13px] font-medium"
-              style={{ color: "var(--ow-success, #15803d)" }}
+              style={{ color: LIGHT.success }}
             >
               המייל הועתק
             </p>
           ) : null}
           {copyState === "error" && errorMessage ? (
-            <p
-              className="text-[13px]"
-              style={{ color: "var(--ow-error, #b42318)" }}
-            >
+            <p className="text-[13px]" style={{ color: LIGHT.error }}>
               {errorMessage}
             </p>
           ) : null}
         </div>
 
-        <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t px-5 py-3">
+        <footer
+          className="flex shrink-0 flex-wrap justify-end gap-2 border-t px-5 py-3"
+          style={{
+            borderColor: LIGHT.border,
+            backgroundColor: LIGHT.surface,
+          }}
+        >
           <Button
             type="button"
             variant="outline"
-            className="h-10 rounded-2xl px-4"
+            className="h-10 rounded-2xl px-4 shadow-none"
+            style={{
+              backgroundColor: LIGHT.surface,
+              color: LIGHT.text,
+              borderColor: LIGHT.border,
+            }}
             onClick={onClose}
           >
             סגור
@@ -122,8 +210,8 @@ function GapEmailModalForm({
             type="button"
             className="h-10 rounded-2xl px-5 font-medium shadow-none"
             style={{
-              backgroundColor: "var(--ow-accent)",
-              color: "var(--ow-accent-fg)",
+              backgroundColor: LIGHT.accent,
+              color: LIGHT.accentFg,
             }}
             onClick={() => void handleCopy()}
           >
@@ -144,12 +232,13 @@ export function GapEmailModal({
   draft: GapEmailDraft;
   onClose: () => void;
 }) {
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
     <GapEmailModalForm
       key={`${draft.subject}::${draft.body.slice(0, 64)}`}
       draft={draft}
       onClose={onClose}
-    />
+    />,
+    document.body
   );
 }

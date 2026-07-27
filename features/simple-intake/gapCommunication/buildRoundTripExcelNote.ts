@@ -27,7 +27,7 @@ export function buildRoundTripExcelNote(row: GapCommunicationRow): string {
   if (row.category === "ITEM_IDENTIFICATION") {
     if (row.missingFields.includes("PART_IDENTIFIER")) {
       lines.push(
-        "יש למלא לפחות מזהה פריט או שם קובץ DXF התואם לקובץ שיועלה."
+        "יש למלא לפחות שם פריט או שם קובץ DXF התואם לקובץ שיועלה."
       );
     } else if (
       row.issueCodes.includes("DXF_INVALID") ||
