@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle2,
   ClipboardList,
@@ -11,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DxfCandidatePicker } from "../results/DxfCandidatePicker";
 import {
+  GAP_FIX_PANEL_EASE,
   GAP_FIX_PANEL_GUTTER_PX,
   GAP_FIX_PANEL_MS,
   GAP_FIX_PANEL_WIDTH_PX,
@@ -36,6 +38,63 @@ const DOT_GREEN = "#16a34a";
 const DOT_ORANGE = "#ea580c";
 /** Vertical separator between subject groups — muted like row borders. */
 const GROUP_SEPARATOR = "1px solid var(--ow-border)";
+const PANEL_EDGE_PAD = 16;
+const MAIN_CONTENT_MAX_PX = 1200;
+
+type StagePanelBox = {
+  top: number;
+  left: number;
+  maxHeight: number;
+};
+
+function getStageScrollEl(): HTMLElement | null {
+  const stage = document.querySelector("main > .ow-stage-enter");
+  return stage instanceof HTMLElement ? stage : null;
+}
+
+function getPanelBoundsEl(): HTMLElement | null {
+  const main = document.querySelector(".omega-workflow main");
+  if (main instanceof HTMLElement) return main;
+  return getStageScrollEl();
+}
+
+/**
+ * Viewport-fixed box: vertically clamped to <main>, horizontally
+ * parked beside the main content column with a fixed gutter (not flush to screen edge).
+ */
+function readStagePanelBox(contentEl: HTMLElement | null): StagePanelBox {
+  const bounds = getPanelBoundsEl();
+  const viewportH = window.innerHeight;
+  const viewportW = window.innerWidth;
+  if (!bounds) {
+    return {
+      top: PANEL_EDGE_PAD,
+      left: PANEL_EDGE_PAD,
+      maxHeight: Math.max(280, viewportH - PANEL_EDGE_PAD * 2),
+    };
+  }
+  const boundsRect = bounds.getBoundingClientRect();
+  const top = Math.round(boundsRect.top + PANEL_EDGE_PAD);
+  const bottomLimit =
+    Math.min(viewportH, Math.round(boundsRect.bottom)) - PANEL_EDGE_PAD;
+  const maxHeight = Math.max(240, Math.floor(bottomLimit - top));
+
+  const contentRect = contentEl?.getBoundingClientRect();
+  const contentLeft = contentRect?.left ?? boundsRect.left + PANEL_EDGE_PAD;
+  // Sit to the left of the main column with a fixed gap (the red square).
+  const idealLeft = Math.round(
+    contentLeft - GAP_FIX_PANEL_GUTTER_PX - GAP_FIX_PANEL_WIDTH_PX
+  );
+  const maxLeft = Math.max(
+    PANEL_EDGE_PAD,
+    viewportW - GAP_FIX_PANEL_WIDTH_PX - PANEL_EDGE_PAD
+  );
+  return {
+    top,
+    left: Math.min(Math.max(idealLeft, PANEL_EDGE_PAD), maxLeft),
+    maxHeight,
+  };
+}
 
 function cellNumber(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -211,8 +270,20 @@ export function GapResolutionWorkspace({
   );
   const [continueWarnOpen, setContinueWarnOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
+  const [panelSlideIn, setPanelSlideIn] = useState(false);
+  /** Animate spacer/main only on close so open stays a clean panel slide. */
+  const [layoutMotion, setLayoutMotion] = useState(false);
   const [panelRow, setPanelRow] = useState<FinalIntakeRow | null>(null);
+  const [panelBox, setPanelBox] = useState<StagePanelBox>({
+    top: PANEL_EDGE_PAD,
+    left: PANEL_EDGE_PAD,
+    maxHeight: 560,
+  });
+  const [panelHost, setPanelHost] = useState<HTMLElement | null>(null);
   const closeTimerRef = useRef<number | null>(null);
+  const openRafRef = useRef<number | null>(null);
+  const slideInRef = useRef(false);
+  const contentColRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (countForCategory(summary, selectedCategory) > 0) return;
@@ -233,21 +304,64 @@ export function GapResolutionWorkspace({
   );
 
   useEffect(() => {
+    setPanelHost(document.querySelector(".omega-workflow"));
+  }, []);
+
+  useEffect(() => {
     if (closeTimerRef.current != null) {
       window.clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
     }
+    if (openRafRef.current != null) {
+      window.cancelAnimationFrame(openRafRef.current);
+      openRafRef.current = null;
+    }
+
     if (detailsId != null && detailsRow) {
       setPanelRow(detailsRow);
-      const frame = window.requestAnimationFrame(() => setRailOpen(true));
-      return () => window.cancelAnimationFrame(frame);
+      // Expand layout immediately (no width tween) so the slide has a stable target.
+      setLayoutMotion(false);
+      setRailOpen(true);
+
+      if (!slideInRef.current) {
+        setPanelSlideIn(false);
+        openRafRef.current = window.requestAnimationFrame(() => {
+          openRafRef.current = window.requestAnimationFrame(() => {
+            openRafRef.current = null;
+            setPanelBox(readStagePanelBox(contentColRef.current));
+            slideInRef.current = true;
+            setPanelSlideIn(true);
+          });
+        });
+      } else {
+        setPanelBox(readStagePanelBox(contentColRef.current));
+      }
+      return () => {
+        if (openRafRef.current != null) {
+          window.cancelAnimationFrame(openRafRef.current);
+          openRafRef.current = null;
+        }
+      };
     }
-    setRailOpen(false);
+
+    // Close: enable layout easing, then collapse so main view slides with the panel.
+    setLayoutMotion(true);
+    setPanelSlideIn(false);
+    slideInRef.current = false;
+    openRafRef.current = window.requestAnimationFrame(() => {
+      openRafRef.current = null;
+      setRailOpen(false);
+    });
     closeTimerRef.current = window.setTimeout(() => {
       setPanelRow(null);
+      setLayoutMotion(false);
       closeTimerRef.current = null;
     }, GAP_FIX_PANEL_MS);
     return () => {
+      if (openRafRef.current != null) {
+        window.cancelAnimationFrame(openRafRef.current);
+        openRafRef.current = null;
+      }
       if (closeTimerRef.current != null) {
         window.clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
@@ -287,71 +401,114 @@ export function GapResolutionWorkspace({
   const railWidth = railOpen ? GAP_FIX_PANEL_WIDTH_PX : 0;
   const gutter = railOpen ? GAP_FIX_PANEL_GUTTER_PX : 0;
 
+  // Keep fixed panel beside the main column after the slide has settled.
+  useEffect(() => {
+    if (!panelMounted || !panelSlideIn) return;
+
+    function syncPanelBox(): void {
+      setPanelBox(readStagePanelBox(contentColRef.current));
+    }
+    syncPanelBox();
+    window.addEventListener("resize", syncPanelBox);
+    window.addEventListener("scroll", syncPanelBox, true);
+    const stage = getStageScrollEl();
+    stage?.addEventListener("scroll", syncPanelBox, { passive: true });
+    return () => {
+      window.removeEventListener("resize", syncPanelBox);
+      window.removeEventListener("scroll", syncPanelBox, true);
+      stage?.removeEventListener("scroll", syncPanelBox);
+    };
+  }, [panelMounted, panelSlideIn]);
+
+  const clusterMaxWidth = railOpen
+    ? GAP_FIX_PANEL_WIDTH_PX + GAP_FIX_PANEL_GUTTER_PX + MAIN_CONTENT_MAX_PX
+    : MAIN_CONTENT_MAX_PX;
+
   return (
-    <div
-      className="flex self-stretch items-start -ml-4 w-[calc(100%+1rem)] sm:-ml-6 sm:w-[calc(100%+1.5rem)] lg:-ml-8 lg:w-[calc(100%+2rem)]"
-      style={{
-        direction: "ltr",
-        columnGap: gutter,
-        transition: "column-gap 320ms cubic-bezier(0.22, 1, 0.36, 1)",
-      }}
-    >
-      {/* Far-left screen rail — slides open and pushes main view right, with a clear gap */}
-      <aside
-        aria-hidden={!railOpen}
-        className="sticky top-0 shrink-0 self-start"
+    <div className="flex w-full justify-center self-stretch">
+      <div
+        className="flex items-start"
         style={{
-          width: railWidth,
-          overflow: "hidden",
-          transition: "width 320ms cubic-bezier(0.22, 1, 0.36, 1)",
+          direction: "ltr",
+          width: "100%",
+          maxWidth: clusterMaxWidth,
+          columnGap: gutter,
+          transition: layoutMotion
+            ? `max-width ${GAP_FIX_PANEL_MS}ms ${GAP_FIX_PANEL_EASE}, column-gap ${GAP_FIX_PANEL_MS}ms ${GAP_FIX_PANEL_EASE}`
+            : undefined,
         }}
       >
-        {panelMounted ? (
-          <div
-            dir="rtl"
-            style={{
-              boxSizing: "border-box",
-              width: GAP_FIX_PANEL_WIDTH_PX,
-              minHeight: "min(70vh, 36rem)",
-              transform: railOpen ? "translateX(0)" : "translateX(-100%)",
-              transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)",
-            }}
-          >
-            <GapResolutionFixDrawer
-              row={panelRow}
-              open={railOpen}
-              onClose={closeFixPanel}
-              onPickDxf={() => {
-                if (!panelRow) return;
-                openPicker(
-                  panelRow.id,
-                  panelRow.match.status === "AMBIGUOUS"
-                    ? "candidates"
-                    : "search"
-                );
-                onPickDxfAction(panelRow.id);
-              }}
-              onUseDxfDimensions={() => {
-                if (panelRow)
-                  onDimensionResolution(panelRow.id, "USE_DXF_DIMENSIONS");
-              }}
-              onKeepDimensionReview={() => {
-                if (panelRow)
-                  onDimensionResolution(panelRow.id, "UNRESOLVED");
-              }}
-              trySelectDxf={trySelectDxf}
-              candidates={availableCandidatesForRow(panelRow)}
-            />
-          </div>
-        ) : null}
-      </aside>
+        {/* In-flow spacer — eases with the panel on close so the main view slides back */}
+        <div
+          aria-hidden
+          className="shrink-0"
+          style={{
+            width: railWidth,
+            transition: layoutMotion
+              ? `width ${GAP_FIX_PANEL_MS}ms ${GAP_FIX_PANEL_EASE}`
+              : undefined,
+          }}
+        />
 
-      {/* Main view — stays its own block, shifted right when panel is open */}
-      <div
-        className="min-w-0 flex-1 pr-4 sm:pr-6 lg:pr-8"
-        style={{ direction: "rtl" }}
-      >
-        <div className="mx-auto w-full max-w-[1200px]">
+        {panelMounted && panelHost
+          ? createPortal(
+              <div
+                dir="rtl"
+                style={{
+                  position: "fixed",
+                  top: panelBox.top,
+                  left: panelBox.left,
+                  zIndex: 40,
+                  width: GAP_FIX_PANEL_WIDTH_PX,
+                  maxHeight: panelBox.maxHeight,
+                  overflowX: "hidden",
+                  overflowY: "auto",
+                  boxSizing: "border-box",
+                  transform: panelSlideIn
+                    ? "translate3d(0, 0, 0)"
+                    : "translate3d(calc(-100% - 24px), 0, 0)",
+                  opacity: panelSlideIn ? 1 : 0,
+                  transition: `transform ${GAP_FIX_PANEL_MS}ms ${GAP_FIX_PANEL_EASE}, opacity ${Math.round(GAP_FIX_PANEL_MS * 0.7)}ms ${GAP_FIX_PANEL_EASE}`,
+                  willChange: "transform, opacity",
+                  pointerEvents: panelSlideIn ? "auto" : "none",
+                }}
+              >
+                <GapResolutionFixDrawer
+                  row={panelRow}
+                  open={panelSlideIn}
+                  onClose={closeFixPanel}
+                  onPickDxf={() => {
+                    if (!panelRow) return;
+                    openPicker(
+                      panelRow.id,
+                      panelRow.match.status === "AMBIGUOUS"
+                        ? "candidates"
+                        : "search"
+                    );
+                    onPickDxfAction(panelRow.id);
+                  }}
+                  onUseDxfDimensions={() => {
+                    if (panelRow)
+                      onDimensionResolution(panelRow.id, "USE_DXF_DIMENSIONS");
+                  }}
+                  onKeepDimensionReview={() => {
+                    if (panelRow)
+                      onDimensionResolution(panelRow.id, "UNRESOLVED");
+                  }}
+                  trySelectDxf={trySelectDxf}
+                  candidates={availableCandidatesForRow(panelRow)}
+                />
+              </div>,
+              panelHost
+            )
+          : null}
+
+        {/* Main view — clustered with the panel on wide screens */}
+        <div
+          ref={contentColRef}
+          className="min-w-0 flex-1"
+          style={{ direction: "rtl" }}
+        >
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <ScreenHeader title="פערים להתייחסות" className="mb-0" />
             <div className="flex flex-wrap gap-2">
@@ -532,13 +689,26 @@ export function GapResolutionWorkspace({
                     const hasDxf =
                       row.part.matchedDxfId != null &&
                       row.preview.geometryAvailable;
+                    const isActiveRow =
+                      panelMounted && panelRow?.id === row.id;
                     return (
                       <tr
                         key={row.id}
+                        aria-selected={isActiveRow}
                         style={{
                           borderBottom: "1px solid var(--ow-border)",
+                          backgroundColor: isActiveRow
+                            ? "color-mix(in srgb, var(--ow-accent) 12%, white)"
+                            : undefined,
+                          boxShadow: isActiveRow
+                            ? "inset -3px 0 0 var(--ow-accent)"
+                            : undefined,
                         }}
-                        className="hover:bg-[color-mix(in_srgb,var(--ow-surface-muted)_55%,transparent)]"
+                        className={
+                          isActiveRow
+                            ? undefined
+                            : "hover:bg-[color-mix(in_srgb,var(--ow-surface-muted)_55%,transparent)]"
+                        }
                       >
                         <Td
                           className="px-3 py-3 text-center tabular-nums"

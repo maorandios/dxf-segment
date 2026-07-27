@@ -264,9 +264,10 @@ console.log("=== Exact-Identifier-Only DXF Workflow v1 ===\n");
     workbookFilename: "t.xlsx",
     snapshot: null,
   });
-  assert(
-    deriveMaterialResolutionCategory(final[0]!) !== "MISSING_ITEM_DATA",
-    "missing source dims not MISSING_ITEM_DATA when DXF dims exist"
+  assertEq(
+    deriveMaterialResolutionCategory(final[0]!),
+    "MISSING_ITEM_DATA",
+    "missing source dims stay MISSING_ITEM_DATA even when DXF dims exist"
   );
   assert(
     usesDxfDimensionsAsSourceFallback(final[0]!),

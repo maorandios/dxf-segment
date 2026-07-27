@@ -162,9 +162,14 @@ export { resolveExactDxfAssignment } from "./resolveExactDxfAssignment";
 export type { ExactDxfAssignmentResult } from "./resolveExactDxfAssignment";
 export {
   deriveMissingRequiredItemFields,
+  derivePanelMissingItemDetails,
+  describePanelMissingDetailsHe,
   usesDxfDimensionsAsSourceFallback,
 } from "./missingRequiredItemFields";
-export type { MissingRequiredItemField } from "./missingRequiredItemFields";
+export type {
+  MissingRequiredItemField,
+  PanelMissingItemDetail,
+} from "./missingRequiredItemFields";
 export { deriveDxfFileFindings } from "./dxfFileFindings";
 export type { DxfFileFinding, DxfFileFindingType } from "./dxfFileFindings";
 export {

@@ -6,6 +6,8 @@ import { getCanonicalMaterialItemId } from "./canonicalMaterialItemId";
 import {
   DXF_DIMENSIONS_FALLBACK_NOTE_HE,
   deriveMissingRequiredItemFields,
+  derivePanelMissingItemDetails,
+  describePanelMissingDetailsHe,
   usesDxfDimensionsAsSourceFallback,
   type MissingRequiredItemField,
   type UnifiedQuoteItem,
@@ -203,21 +205,17 @@ export function deriveSecondaryResolutionTags(
 
   if (usesDxfDimensionsAsSourceFallback(row)) {
     tags.push("USING_DXF_DIMENSIONS");
-    tags.push("MISSING_SOURCE_DIMENSIONS");
-  } else if (
-    !(
-      row.source.sourceWidthMm != null &&
-      row.source.sourceLengthMm != null &&
-      row.source.sourceWidthMm > 0 &&
-      row.source.sourceLengthMm > 0
-    )
-  ) {
-    tags.push("MISSING_SOURCE_DIMENSIONS");
   }
 
   if (missing.includes("MATERIAL")) tags.push("MISSING_MATERIAL");
   if (missing.includes("THICKNESS")) tags.push("MISSING_THICKNESS");
   if (missing.includes("QUANTITY")) tags.push("MISSING_QUANTITY");
+  if (
+    missing.includes("SOURCE_LENGTH") ||
+    missing.includes("SOURCE_WIDTH")
+  ) {
+    tags.push("MISSING_SOURCE_DIMENSIONS");
+  }
   if (missing.includes("FINAL_DIMENSIONS")) tags.push("MISSING_FINAL_DIMENSIONS");
 
   if (hasUnresolvedSignificantDimensionMismatch(row)) {
@@ -285,33 +283,8 @@ export function deriveRowResolutionPresentation(
   }
 
   if (category === "MISSING_ITEM_DATA") {
-    const missing = deriveMissingRequiredItemFields(row);
-    if (missing.includes("MATERIAL")) {
-      return {
-        title: "חסר סוג חומר",
-        description: "יש להשלים את סוג החומר לפני התמחור.",
-        actionLabel: "השלם חומר",
-      };
-    }
-    if (missing.includes("THICKNESS")) {
-      return {
-        title: "חסר עובי",
-        description: "יש להשלים את עובי הפלטה.",
-        actionLabel: "השלם עובי",
-      };
-    }
-    if (missing.includes("QUANTITY")) {
-      return {
-        title: "חסרה כמות",
-        description: "יש להשלים את הכמות לפני התמחור.",
-        actionLabel: "השלם כמות",
-      };
-    }
-    return {
-      title: "חסרים נתוני פריט",
-      description: "יש להשלים את השדות החסרים לפני התמחור.",
-      actionLabel: "השלם נתונים",
-    };
+    const panelDetails = derivePanelMissingItemDetails(row);
+    return describePanelMissingDetailsHe(panelDetails);
   }
 
   // DIMENSION_REVIEW

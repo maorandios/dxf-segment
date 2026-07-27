@@ -119,7 +119,8 @@
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    /* transform: none so sticky children can pin inside this scrollport */
+    transform: none;
   }
 }
 

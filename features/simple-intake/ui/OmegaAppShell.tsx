@@ -32,7 +32,7 @@ export function OmegaAppShell({
   return (
     <div
       className={cn(
-        "omega-workflow flex min-h-[100vh] min-h-[100dvh] flex-col",
+        "omega-workflow flex h-[100vh] h-[100dvh] max-h-[100vh] max-h-[100dvh] flex-col overflow-hidden",
         className
       )}
       dir="rtl"
@@ -46,8 +46,8 @@ export function OmegaAppShell({
         />
       )}
       <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="ow-stage-enter flex min-h-0 flex-1 flex-col overflow-auto px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col items-stretch">
+        <div className="ow-stage-enter relative flex min-h-0 flex-1 flex-col overflow-auto px-4 py-5 sm:px-6 lg:px-8">
+          <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col items-stretch">
             {children}
           </div>
         </div>
