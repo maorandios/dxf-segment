@@ -176,22 +176,26 @@ export function OmegaHeader({
       />
 
       {cancelOpen && (
-        <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-5 sm:pb-7"
-          dir="rtl"
-        >
-          <div
-            role="alertdialog"
-            aria-labelledby="cancel-quote-title"
-            aria-describedby="cancel-quote-desc"
-            className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
-            style={{
-              backgroundColor: "#ffffff",
-              borderColor: "#E5E9EE",
-              color: "#13202B",
-              textAlign: "center",
-            }}
-          >
+        <div className="fixed inset-0 z-[60]" dir="rtl">
+          <button
+            type="button"
+            className="ow-toast-scrim absolute inset-0"
+            aria-label="סגור"
+            onClick={() => setCancelOpen(false)}
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
+            <div
+              role="alertdialog"
+              aria-labelledby="cancel-quote-title"
+              aria-describedby="cancel-quote-desc"
+              className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
+              style={{
+                backgroundColor: "#ffffff",
+                borderColor: "#E5E9EE",
+                color: "#13202B",
+                textAlign: "center",
+              }}
+            >
             <p
               id="cancel-quote-title"
               className="text-center text-[15px] font-semibold"
@@ -237,6 +241,7 @@ export function OmegaHeader({
                   בטל הצעה
                 </button>
               </div>
+            </div>
             </div>
           </div>
         </div>

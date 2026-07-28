@@ -14,7 +14,7 @@ import {
   deriveSimpleDxfAvailability,
   matchSimpleRows,
 } from "./matchSimpleRows";
-import { classifyDxfDuplicates } from "./classifyDxfDuplicates";
+import { classifyDxfDuplicates, type DuplicateMatchingDiagnostics } from "./classifyDxfDuplicates";
 import {
   assignmentSourceFromMatch,
   buildReservedDxfIds,
@@ -22,6 +22,9 @@ import {
   type CandidateSuggestionSampleRow,
   type SmartSuggestionDiagnostics,
 } from "./smartDxfAssignment";
+import {
+  registryHasExactUsableDxfMatch,
+} from "./resolveExactDxfAssignment";
 import type {
   SimpleDxfAvailabilityItem,
   SimpleDxfPart,
@@ -153,18 +156,19 @@ export function matchWithFilenamePriority(args: {
   itemFilenameDebug: Record<string, ItemFilenameMatchDebug>;
   smartSuggestionDiagnostics: SmartSuggestionDiagnostics;
   candidateSuggestionSample: CandidateSuggestionSampleRow[];
+  duplicateMatchingDiagnostics: DuplicateMatchingDiagnostics;
 } {
   const dxfById = new Map(args.dxfParts.map((d) => [d.id, d]));
   const classified = classifyDxfDuplicates(args.dxfParts, {
     sourceRows: args.extractedRows,
   });
-  const secondaryIds = classified.secondaryDuplicateFileIds;
+  // Only same-name repeated uploads are excluded — never DIFFERENT_NAME_SAME_CONTENT.
+  const matchingExcludedIds = classified.repeatedUploadExcludedDxfIds;
 
   const byKey = new Map<string, SimpleDxfPart[]>();
   for (const dxf of args.dxfParts) {
     if (dxf.geometryStatus === "INVALID") continue;
-    // Identical content duplicates: keep only the canonical instance for matching.
-    if (secondaryIds.has(dxf.id)) continue;
+    if (matchingExcludedIds.has(dxf.id)) continue;
     const key = normalizeDxfFileKey(dxf.filename);
     if (!key) continue;
     const list = byKey.get(key) ?? [];
@@ -247,7 +251,7 @@ export function matchWithFilenamePriority(args: {
   }
 
   const remainingDxfs = args.dxfParts.filter(
-    (d) => !usedDxfIds.has(d.id) && !secondaryIds.has(d.id)
+    (d) => !usedDxfIds.has(d.id) && !matchingExcludedIds.has(d.id)
   );
   const heuristic = matchSimpleRows({
     extractedRows: heuristicRows,
@@ -300,10 +304,53 @@ export function matchWithFilenamePriority(args: {
     extractedRows: args.extractedRows,
     resultRows,
     dxfParts: args.dxfParts,
-    secondaryDuplicateFileIds: secondaryIds,
+    secondaryDuplicateFileIds: matchingExcludedIds,
     reservedDxfIds,
     confirmedManualMatchIds: args.confirmedManualMatchIds,
   });
+
+  const identicalContentFileIds = new Set(
+    classified.identicalContentInformationalGroups.flatMap((g) =>
+      g.files.map((f) => f.fileId)
+    )
+  );
+  let exactMatchesRecoveredFromIdenticalContentGroups = 0;
+  for (const row of resultRows) {
+    if (row.match.status !== "MATCHED" || !row.match.matchedDxfId) continue;
+    if (identicalContentFileIds.has(row.match.matchedDxfId)) {
+      exactMatchesRecoveredFromIdenticalContentGroups++;
+    }
+  }
+
+  let rowsWithExactRegistryMatchButNoMatchingDxfIssue = 0;
+  for (const row of resultRows) {
+    const hasRegistryExact = registryHasExactUsableDxfMatch(
+      {
+        partId: row.extracted.partId,
+        dxfFileName: row.extracted.dxfFileName,
+      },
+      args.dxfParts,
+      matchingExcludedIds
+    );
+    if (!hasRegistryExact) continue;
+    // Registry has an exact usable DXF — row must not end unmatched.
+    if (row.match.status === "UNMATCHED") {
+      rowsWithExactRegistryMatchButNoMatchingDxfIssue++;
+    }
+  }
+
+  const duplicateMatchingDiagnostics: DuplicateMatchingDiagnostics = {
+    totalRegistryEntries: args.dxfParts.length,
+    sameNameSameContentGroups: classified.diagnostics.sameNameSameContentGroups,
+    differentNameSameContentGroups:
+      classified.diagnostics.differentNameSameContentGroups,
+    sameNameDifferentContentGroups:
+      classified.diagnostics.sameNameDifferentContentGroups,
+    repeatedUploadExcludedDxfCount: matchingExcludedIds.size,
+    differentNameSameContentExcludedDxfCount: 0,
+    exactMatchesRecoveredFromIdenticalContentGroups,
+    rowsWithExactRegistryMatchButNoMatchingDxfIssue,
+  };
 
   const dxfAvailability = deriveSimpleDxfAvailability({
     dxfParts: args.dxfParts,
@@ -380,6 +427,7 @@ export function matchWithFilenamePriority(args: {
     itemFilenameDebug,
     smartSuggestionDiagnostics,
     candidateSuggestionSample,
+    duplicateMatchingDiagnostics,
   };
 }
 

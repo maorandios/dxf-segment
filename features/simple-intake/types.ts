@@ -354,6 +354,11 @@ export type SimpleIntakeSession = {
   completedAt: string | null;
   lastDebug: Record<string, unknown> | null;
   providerCallCount: number;
+  /**
+   * Frozen quotation scope — keyed by canonical materialRowId → frozenAt ISO.
+   * Orthogonal to material resolution category and to `excluded`.
+   */
+  frozenMaterialRows: Record<string, string>;
 };
 
 export const SIMPLE_INTAKE_TIMEOUT_MS = 120_000;

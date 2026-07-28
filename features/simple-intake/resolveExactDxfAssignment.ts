@@ -40,6 +40,12 @@ export type ExactDxfAssignmentResult =
 export type ParsedDxfRegistry = ReadonlyArray<SimpleDxfPart>;
 
 export type DxfDuplicateRegistry = {
+  /** Same-name repeated-upload exclusions only. */
+  repeatedUploadExcludedDxfIds?: ReadonlySet<string>;
+  /**
+   * @deprecated Prefer `repeatedUploadExcludedDxfIds`.
+   * Alias for matching exclusion of same-name repeated uploads.
+   */
   secondaryDuplicateFileIds: ReadonlySet<string>;
 };
 
@@ -55,13 +61,43 @@ function dxfMatchesPartId(dxf: SimpleDxfPart, partNorm: string): boolean {
   return fromName === partNorm;
 }
 
+function matchingExcludedIdsOf(
+  duplicateRegistry: DxfDuplicateRegistry
+): ReadonlySet<string> {
+  return (
+    duplicateRegistry.repeatedUploadExcludedDxfIds ??
+    duplicateRegistry.secondaryDuplicateFileIds
+  );
+}
+
 function matchingPool(
   dxfRegistry: ParsedDxfRegistry,
   duplicateRegistry: DxfDuplicateRegistry
 ): SimpleDxfPart[] {
-  return dxfRegistry.filter(
-    (d) => !duplicateRegistry.secondaryDuplicateFileIds.has(d.id)
+  const excluded = matchingExcludedIdsOf(duplicateRegistry);
+  return dxfRegistry.filter((d) => !excluded.has(d.id));
+}
+
+/**
+ * True when the registry contains a usable (VALID) DXF whose exact filename or
+ * part ID matches the material row — independent of content-hash siblings.
+ */
+export function registryHasExactUsableDxfMatch(
+  materialRow: Pick<SimpleExtractedRow, "partId" | "dxfFileName">,
+  dxfRegistry: ParsedDxfRegistry,
+  matchingExcludedIds: ReadonlySet<string> = new Set()
+): boolean {
+  const identifier = getSourceItemIdentifier(materialRow);
+  if (!identifier) return false;
+  const pool = dxfRegistry.filter(
+    (d) => d.geometryStatus === "VALID" && !matchingExcludedIds.has(d.id)
   );
+  if (identifier.type === "DXF_FILENAME") {
+    return pool.some((d) =>
+      dxfMatchesFilenameKey(d, identifier.normalizedValue)
+    );
+  }
+  return pool.some((d) => dxfMatchesPartId(d, identifier.normalizedValue));
 }
 
 function finalizeExactHits(

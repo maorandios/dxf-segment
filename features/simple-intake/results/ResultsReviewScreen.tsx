@@ -124,6 +124,7 @@ export function ResultsReviewScreen({
         diagnostics: session.matchingDiagnostics,
         confirmedManualMatchIds: confirmedManual,
         dimensionMismatchResolutions,
+        frozenMaterialRows: session.frozenMaterialRows,
       }),
     [
       session.resultRows,
@@ -131,6 +132,7 @@ export function ResultsReviewScreen({
       session.workbookFile?.name,
       session.workbookSnapshot,
       session.matchingDiagnostics,
+      session.frozenMaterialRows,
       confirmedManual,
       dimensionMismatchResolutions,
     ]

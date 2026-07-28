@@ -138,6 +138,7 @@ function createEmptySession(): SimpleIntakeSession {
     completedAt: null,
     lastDebug: null,
     providerCallCount: 0,
+    frozenMaterialRows: {},
   };
 }
 
@@ -1784,6 +1785,41 @@ export const simpleIntakeActions = {
       session.coverageIssues
     );
     setSession({ ...session, resultRows, ...refreshed });
+  },
+
+  /**
+   * Freeze / restore quotation scope by canonical materialRowId.
+   * Does not clear DXF assignments, edits, or rematch.
+   */
+  freezeQuoteItem(materialRowId: string): void {
+    const id = materialRowId.trim();
+    if (!id) return;
+    setSession({
+      ...session,
+      frozenMaterialRows: {
+        ...session.frozenMaterialRows,
+        [id]: new Date().toISOString(),
+      },
+    });
+  },
+
+  restoreQuoteItem(materialRowId: string): void {
+    const id = materialRowId.trim();
+    if (!id) return;
+    if (!(id in session.frozenMaterialRows)) return;
+    const next = { ...session.frozenMaterialRows };
+    delete next[id];
+    setSession({ ...session, frozenMaterialRows: next });
+  },
+
+  toggleQuoteItemFreeze(materialRowId: string): void {
+    const id = materialRowId.trim();
+    if (!id) return;
+    if (id in session.frozenMaterialRows) {
+      this.restoreQuoteItem(id);
+    } else {
+      this.freezeQuoteItem(id);
+    }
   },
 
   updateRowEdits(

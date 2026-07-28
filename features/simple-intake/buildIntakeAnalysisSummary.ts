@@ -801,18 +801,33 @@ export function buildIntakeAnalysisSummary(args: {
       : uniqueMaterialPartIds.filter((id) => !dxfPartIdSet.has(id));
 
   // Definitive unreferenced/extra only with FULL identifier coverage.
-  // Exclude secondary content-duplicate instances.
-  const secondaryPartIds = new Set<string>();
+  // Exclude same-name repeated-upload instances, and different-name
+  // identical-content siblings when another member is already in the material set.
+  const excludedFromExtrasPartIds = new Set<string>();
   for (const part of args.dxfParts) {
-    if (!classified.secondaryDuplicateFileIds.has(part.id)) continue;
+    if (!classified.repeatedUploadExcludedDxfIds.has(part.id)) continue;
     const norm = normalizePartIdForMatch(part.partId);
-    if (norm) secondaryPartIds.add(norm);
+    if (norm) excludedFromExtrasPartIds.add(norm);
+  }
+  for (const g of classified.identicalContentInformationalGroups) {
+    const memberNorms = g.files
+      .map((f) => {
+        const part = args.dxfParts.find((p) => p.id === f.fileId);
+        return part ? normalizePartIdForMatch(part.partId) : null;
+      })
+      .filter((n): n is string => Boolean(n));
+    const anyInMaterial = memberNorms.some((n) => materialPartIdSet.has(n));
+    if (!anyInMaterial) continue;
+    for (const n of memberNorms) {
+      if (!materialPartIdSet.has(n)) excludedFromExtrasPartIds.add(n);
+    }
   }
 
   const extraDxfPartIds =
     coverage === "FULL"
       ? uniqueDxfPartIds.filter(
-          (id) => !materialPartIdSet.has(id) && !secondaryPartIds.has(id)
+          (id) =>
+            !materialPartIdSet.has(id) && !excludedFromExtrasPartIds.has(id)
         )
       : [];
 

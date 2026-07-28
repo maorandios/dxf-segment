@@ -93,6 +93,7 @@ export function buildGapCommunicationRows(
 
   const rows: GapCommunicationRow[] = items
     .filter((item) => !item.isExcluded)
+    .filter((item) => item.scopeState !== "FROZEN" && item.isFrozen !== true)
     .map((item) => {
       const sourceDxfFileName = sourceDxfFileNameForItem(item, materialRows);
       const category = deriveMaterialResolutionCategory(item);

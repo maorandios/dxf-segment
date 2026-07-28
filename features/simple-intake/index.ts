@@ -62,6 +62,7 @@ export type {
   DxfDuplicateSummary,
   DxfDuplicateDiagnostics,
   ClassifiedDxfDuplicates,
+  DuplicateMatchingDiagnostics,
 } from "./classifyDxfDuplicates";
 export {
   getAvailableDxfCandidates,
@@ -158,7 +159,7 @@ export type {
 } from "./results/primaryResolutionCategory";
 export { getSourceItemIdentifier } from "./sourceItemIdentifier";
 export type { SourceItemIdentifier } from "./sourceItemIdentifier";
-export { resolveExactDxfAssignment } from "./resolveExactDxfAssignment";
+export { resolveExactDxfAssignment, registryHasExactUsableDxfMatch } from "./resolveExactDxfAssignment";
 export type { ExactDxfAssignmentResult } from "./resolveExactDxfAssignment";
 export {
   deriveMissingRequiredItemFields,
@@ -256,6 +257,23 @@ export type {
   AnalysisRoutingReadiness,
   PostAnalysisRoutingDiagnostics,
 } from "./postAnalysisRouting";
+export {
+  isQuoteItemActive,
+  isQuoteItemFrozen,
+  selectActiveQuoteItems,
+  selectFrozenQuoteItems,
+  selectActiveActionableGapItems,
+  selectActivePricingItems,
+  isBlockingDxfFindingForActiveScope,
+  buildFreezeScopeDiagnostics,
+  freezeLookupForRow,
+} from "./quoteItemScope";
+export type {
+  QuoteItemScopeState,
+  QuoteItemFreezeState,
+  FreezeScopeDiagnostics,
+  FrozenMaterialRowsMap,
+} from "./quoteItemScope";
 export {
   categorizeReadinessIssues,
   rowHasCriticalIssue,

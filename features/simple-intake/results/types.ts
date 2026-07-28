@@ -107,6 +107,15 @@ export type FinalTableRow = {
   isManuallyMatched: boolean;
   isManualMatchConfirmed: boolean;
   isExcluded: boolean;
+  /**
+   * Quotation inclusion — orthogonal to material resolution category.
+   * FROZEN rows stay stored/visible but leave gaps and commercial totals.
+   * Defaults to INCLUDED when omitted (legacy constructors / tests).
+   */
+  scopeState?: "INCLUDED" | "FROZEN";
+  frozenAt?: string | null;
+  /** Convenience mirror of scopeState === "FROZEN". */
+  isFrozen?: boolean;
 };
 
 export type FinalFilterId =

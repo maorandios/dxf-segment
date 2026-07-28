@@ -4,6 +4,14 @@
 
 import type { FinalFilterId, FinalIntakeRow, FinalSortId } from "./types";
 
+function isFrozenScope(row: FinalIntakeRow): boolean {
+  return row.scopeState === "FROZEN" || row.isFrozen === true;
+}
+
+function isActivePricingRow(row: FinalIntakeRow): boolean {
+  return row.status !== "EXCLUDED" && !row.isExcluded && !isFrozenScope(row);
+}
+
 const MISSING_DXF_CODES = new Set([
   "NO_DXF_FOUND",
   "EXPLICIT_DXF_FILE_MISSING",
@@ -23,35 +31,48 @@ export function filterFinalRows(
 ): FinalIntakeRow[] {
   switch (filter) {
     case "ALL":
-      return rows;
+      // Active quotation scope + existing excluded rows; frozen stay out of pricing.
+      return rows.filter((r) => !isFrozenScope(r));
     case "NEEDS_ATTENTION":
       return rows.filter(
-        (r) => r.status === "NEEDS_REVIEW" || r.status === "BLOCKED"
+        (r) =>
+          isActivePricingRow(r) &&
+          (r.status === "NEEDS_REVIEW" || r.status === "BLOCKED")
       );
     case "READY":
-      return rows.filter((r) => r.status === "READY");
+      return rows.filter((r) => isActivePricingRow(r) && r.status === "READY");
     case "NEEDS_REVIEW":
-      return rows.filter((r) => r.status === "NEEDS_REVIEW");
+      return rows.filter(
+        (r) => isActivePricingRow(r) && r.status === "NEEDS_REVIEW"
+      );
     case "BLOCKED":
-      return rows.filter((r) => r.status === "BLOCKED");
+      return rows.filter(
+        (r) => isActivePricingRow(r) && r.status === "BLOCKED"
+      );
     case "EXCLUDED":
-      return rows.filter((r) => r.status === "EXCLUDED");
+      // Existing excluded/audit filter — frozen may appear as informational.
+      return rows.filter((r) => r.status === "EXCLUDED" || isFrozenScope(r));
     case "MISSING_DXF":
-      return rows.filter((r) =>
-        r.issueCodes.some((c) => MISSING_DXF_CODES.has(c))
+      return rows.filter(
+        (r) =>
+          isActivePricingRow(r) &&
+          r.issueCodes.some((c) => MISSING_DXF_CODES.has(c))
       );
     case "DUPLICATE_DXF":
       return rows.filter(
         (r) =>
-          r.issueCodes.some((c) => DUPLICATE_DXF_CODES.has(c)) ||
-          r.match.status === "AMBIGUOUS"
+          isActivePricingRow(r) &&
+          (r.issueCodes.some((c) => DUPLICATE_DXF_CODES.has(c)) ||
+            r.match.status === "AMBIGUOUS")
       );
     case "CONFLICTING_DATA":
-      return rows.filter((r) =>
-        r.issueCodes.some((c) => CONFLICT_CODES.has(c))
+      return rows.filter(
+        (r) =>
+          isActivePricingRow(r) &&
+          r.issueCodes.some((c) => CONFLICT_CODES.has(c))
       );
     default:
-      return rows;
+      return rows.filter((r) => !isFrozenScope(r));
   }
 }
 

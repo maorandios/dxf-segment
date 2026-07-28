@@ -62,6 +62,7 @@ export function PostAnalysisWorkflow() {
         diagnostics: session.matchingDiagnostics,
         confirmedManualMatchIds: confirmedManual,
         dimensionMismatchResolutions: dimensionResolutions,
+        frozenMaterialRows: session.frozenMaterialRows,
       }),
     [
       session.resultRows,
@@ -69,6 +70,7 @@ export function PostAnalysisWorkflow() {
       session.workbookFile?.name,
       session.workbookSnapshot,
       session.matchingDiagnostics,
+      session.frozenMaterialRows,
       confirmedManual,
       dimensionResolutions,
     ]

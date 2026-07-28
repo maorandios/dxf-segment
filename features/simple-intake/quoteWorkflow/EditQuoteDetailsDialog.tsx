@@ -143,28 +143,33 @@ export function EditQuoteDetailsDialog({
   if (!open || !details) return null;
 
   return (
-    <div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-5 sm:pb-7"
-      dir="rtl"
-    >
-      <div
-        role="dialog"
-        aria-labelledby="edit-quote-title"
-        className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
-        style={{
-          backgroundColor: "#ffffff",
-          borderColor: "#E5E9EE",
-          color: "#13202B",
-        }}
-      >
-        <span id="edit-quote-title" className="sr-only">
-          עריכת פרטי הצעה
-        </span>
-        <EditQuoteDetailsForm
-          key={`${details.projectName}|${details.customerName}|${open}`}
-          details={details}
-          onClose={() => onOpenChange(false)}
-        />
+    <div className="fixed inset-0 z-[60]" dir="rtl">
+      <button
+        type="button"
+        className="ow-toast-scrim absolute inset-0"
+        aria-label="סגור"
+        onClick={() => onOpenChange(false)}
+      />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
+        <div
+          role="dialog"
+          aria-labelledby="edit-quote-title"
+          className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
+          style={{
+            backgroundColor: "#ffffff",
+            borderColor: "#E5E9EE",
+            color: "#13202B",
+          }}
+        >
+          <span id="edit-quote-title" className="sr-only">
+            עריכת פרטי הצעה
+          </span>
+          <EditQuoteDetailsForm
+            key={`${details.projectName}|${details.customerName}|${open}`}
+            details={details}
+            onClose={() => onOpenChange(false)}
+          />
+        </div>
       </div>
     </div>
   );

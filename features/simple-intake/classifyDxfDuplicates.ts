@@ -69,10 +69,34 @@ export type ClassifiedDxfDuplicates = {
   groups: DxfDuplicateGroup[];
   summary: DxfDuplicateSummary;
   diagnostics: DxfDuplicateDiagnostics;
-  /** Secondary physical instances of true content duplicates — not for matching/extras. */
+  /**
+   * Repeated-upload instances only (`SAME_NAME_SAME_CONTENT` non-canonicals).
+   * These may be excluded from exact matching. Never includes
+   * `DIFFERENT_NAME_SAME_CONTENT` members.
+   */
+  repeatedUploadExcludedDxfIds: ReadonlySet<string>;
+  /**
+   * @deprecated Alias of `repeatedUploadExcludedDxfIds` — matching exclusion
+   * for same-name repeated uploads only. Do not treat as “all content secondaries”.
+   */
   secondaryDuplicateFileIds: ReadonlySet<string>;
-  /** Canonical file id kept for each true-duplicate content key. */
+  /** Canonical file id kept for each true same-name-same-content key. */
   canonicalFileIdsByContentKey: ReadonlyMap<string, string>;
+  /** Informational different-name identical-content groups (not matching exclusions). */
+  identicalContentInformationalGroups: ReadonlyArray<DxfDuplicateGroup>;
+};
+
+export type DuplicateMatchingDiagnostics = {
+  totalRegistryEntries: number;
+  sameNameSameContentGroups: number;
+  differentNameSameContentGroups: number;
+  sameNameDifferentContentGroups: number;
+  repeatedUploadExcludedDxfCount: number;
+  /** Must remain 0 — different-name same-content must stay matchable. */
+  differentNameSameContentExcludedDxfCount: number;
+  exactMatchesRecoveredFromIdenticalContentGroups: number;
+  /** Must remain 0 — invariant: registry exact match ⇒ no NO_MATCHING_DXF. */
+  rowsWithExactRegistryMatchButNoMatchingDxfIssue: number;
 };
 
 type PartInput = Pick<
@@ -241,11 +265,10 @@ export function classifyDxfDuplicates(
   let differentNameSameContentGroups = 0;
   let sameNameDifferentContentGroups = 0;
 
-  const secondaryDuplicateFileIds = new Set<string>();
+  const repeatedUploadExcludedDxfIds = new Set<string>();
   const canonicalFileIdsByContentKey = new Map<string, string>();
-  // A file may appear in both SAME_NAME_SAME_CONTENT and a follow-up
-  // DIFFERENT_NAME group as canonical — secondary ids only from true dups.
-  const countedSecondary = new Set<string>();
+  const countedRepeated = new Set<string>();
+  const identicalContentInformationalGroups: DxfDuplicateGroup[] = [];
 
   for (const g of groups) {
     if (g.classification === "SAME_NAME_DIFFERENT_CONTENT") {
@@ -259,21 +282,28 @@ export function classifyDxfDuplicates(
     if (g.classification === "SAME_NAME_SAME_CONTENT") {
       sameNameSameContentGroups++;
       sameNameSameContentCount += g.duplicateFileCount;
+      // Only same-name repeated uploads may be excluded from matching.
+      const canonical = g.files[0]!;
+      const ck = canonical.contentFingerprint;
+      if (ck && !canonicalFileIdsByContentKey.has(ck)) {
+        canonicalFileIdsByContentKey.set(ck, canonical.fileId);
+      }
+      for (let i = 1; i < g.files.length; i++) {
+        const id = g.files[i]!.fileId;
+        if (countedRepeated.has(id)) continue;
+        countedRepeated.add(id);
+        repeatedUploadExcludedDxfIds.add(id);
+      }
     } else {
+      // DIFFERENT_NAME_SAME_CONTENT — informational only; all members stay matchable.
       differentNameSameContentGroups++;
       differentNameSameContentCount += g.duplicateFileCount;
-    }
-
-    const canonical = g.files[0]!;
-    const ck = canonical.contentFingerprint;
-    if (ck && !canonicalFileIdsByContentKey.has(ck)) {
-      canonicalFileIdsByContentKey.set(ck, canonical.fileId);
-    }
-    for (let i = 1; i < g.files.length; i++) {
-      const id = g.files[i]!.fileId;
-      if (countedSecondary.has(id)) continue;
-      countedSecondary.add(id);
-      secondaryDuplicateFileIds.add(id);
+      identicalContentInformationalGroups.push(g);
+      const canonical = g.files[0]!;
+      const ck = canonical.contentFingerprint;
+      if (ck && !canonicalFileIdsByContentKey.has(ck)) {
+        canonicalFileIdsByContentKey.set(ck, canonical.fileId);
+      }
     }
   }
 
@@ -317,8 +347,10 @@ export function classifyDxfDuplicates(
       boundingBoxOnlyMatchesExcludedFromDuplicates: 0,
       duplicateGroupSample: sample,
     },
-    secondaryDuplicateFileIds,
+    repeatedUploadExcludedDxfIds,
+    secondaryDuplicateFileIds: repeatedUploadExcludedDxfIds,
     canonicalFileIdsByContentKey,
+    identicalContentInformationalGroups,
   };
 }
 
@@ -361,7 +393,7 @@ export function buildDxfDuplicateFindingCopy(summary: DxfDuplicateSummary): {
           ? "קובץ DXF אחד עם תוכן כפול"
           : `${formatHe(n)} קובצי DXF עם תוכן כפול`,
       description:
-        "הקבצים מופיעים בשמות שונים, אך מכילים את אותו שרטוט.",
+        "הקבצים מופיעים בשמות שונים אך מכילים תוכן זהה.",
     };
   }
   if (same > 0 && diff === 0) {

@@ -1,10 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import {
   ArrowLeft,
   FileSpreadsheet,
   Mail,
+  Search,
+  X,
 } from "lucide-react";
 import type { GapWorkspaceAction } from "../gapCommunication";
 
@@ -55,12 +57,18 @@ function Sep() {
 export function GapWorkspaceToolbar({
   onAction,
   continueDisabled,
+  searchQuery,
+  onSearchQueryChange,
 }: {
   onAction: (action: GapWorkspaceAction) => void;
   /** Reserved — continue is always allowed per product rules. */
   continueDisabled?: boolean;
+  searchQuery: string;
+  onSearchQueryChange: (value: string) => void;
 }) {
   void continueDisabled;
+  const searchId = useId();
+
   return (
     <div
       role="toolbar"
@@ -72,6 +80,40 @@ export function GapWorkspaceToolbar({
         backgroundColor: "var(--ow-surface, #ffffff)",
       }}
     >
+      <div className="inline-flex h-10 min-w-[10.5rem] flex-1 items-center gap-1.5 px-3 sm:w-[13.5rem] sm:flex-none">
+        <Search
+          className="h-3.5 w-3.5 shrink-0"
+          style={{ color: "var(--ow-text-muted, #98a2b3)" }}
+          strokeWidth={1.75}
+          aria-hidden
+        />
+        <label htmlFor={searchId} className="sr-only">
+          חיפוש פריט
+        </label>
+        <input
+          id={searchId}
+          type="text"
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+          placeholder="חיפוש פריט"
+          className="gap-toolbar-search min-w-0 flex-1 border-0 bg-transparent py-0 text-[13px] text-[var(--ow-text)] outline-none placeholder:text-[var(--ow-text-muted,#98a2b3)]"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {searchQuery ? (
+          <button
+            type="button"
+            aria-label="נקה חיפוש"
+            title="נקה חיפוש"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+            style={{ color: "var(--ow-text-muted, #98a2b3)" }}
+            onClick={() => onSearchQueryChange("")}
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+          </button>
+        ) : null}
+      </div>
+      <Sep />
       <Segment action="CREATE_GAP_EMAIL" onAction={onAction}>
         <Mail className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         צור מייל פערים

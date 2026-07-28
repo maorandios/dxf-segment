@@ -309,66 +309,71 @@ export function DxfSelectedFilesBoard({
       </div>
 
       {clearOpen && (
-        <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-5 sm:pb-7"
-          dir="rtl"
-        >
-          <div
-            role="alertdialog"
-            aria-labelledby="clear-dxf-title"
-            aria-describedby="clear-dxf-desc"
-            className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
-            style={{
-              backgroundColor: "#ffffff",
-              borderColor: "#E5E9EE",
-              color: "#13202B",
-              textAlign: "center",
-            }}
-          >
-            <p
-              id="clear-dxf-title"
-              className="text-center text-[15px] font-semibold"
-              style={{ color: "#13202B" }}
+        <div className="fixed inset-0 z-[60]" dir="rtl">
+          <button
+            type="button"
+            className="ow-toast-scrim absolute inset-0"
+            aria-label="סגור"
+            onClick={() => setClearOpen(false)}
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
+            <div
+              role="alertdialog"
+              aria-labelledby="clear-dxf-title"
+              aria-describedby="clear-dxf-desc"
+              className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
+              style={{
+                backgroundColor: "#ffffff",
+                borderColor: "#E5E9EE",
+                color: "#13202B",
+                textAlign: "center",
+              }}
             >
-              למחוק את כל קובצי ה-DXF?
-            </p>
-            <p
-              id="clear-dxf-desc"
-              className="mt-1.5 text-center text-[13px] leading-relaxed"
-              style={{ color: "#5C6978" }}
-            >
-              יימחקו {count.toLocaleString("he-IL")} קבצים שנבחרו. ניתן להעלות
-              קבצים מחדש בכל שלב.
-            </p>
-            <div className="mt-4 flex items-center justify-center">
-              <div
-                role="group"
-                aria-label="אישור מחיקת קבצים"
-                className="inline-flex max-w-full overflow-hidden rounded-2xl border"
-                style={{
-                  borderColor: "var(--ow-border, #e4e7ec)",
-                  backgroundColor: "var(--ow-surface, #ffffff)",
-                }}
+              <p
+                id="clear-dxf-title"
+                className="text-center text-[15px] font-semibold"
+                style={{ color: "#13202B" }}
               >
-                <button
-                  type="button"
-                  onClick={() => setClearOpen(false)}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                למחוק את כל קובצי ה-DXF?
+              </p>
+              <p
+                id="clear-dxf-desc"
+                className="mt-1.5 text-center text-[13px] leading-relaxed"
+                style={{ color: "#5C6978" }}
+              >
+                יימחקו {count.toLocaleString("he-IL")} קבצים שנבחרו. ניתן להעלות
+                קבצים מחדש בכל שלב.
+              </p>
+              <div className="mt-4 flex items-center justify-center">
+                <div
+                  role="group"
+                  aria-label="אישור מחיקת קבצים"
+                  className="inline-flex max-w-full overflow-hidden rounded-2xl border"
+                  style={{
+                    borderColor: "var(--ow-border, #e4e7ec)",
+                    backgroundColor: "var(--ow-surface, #ffffff)",
+                  }}
                 >
-                  ביטול
-                </button>
-                <span
-                  aria-hidden
-                  className="h-full w-px shrink-0 self-stretch"
-                  style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
-                />
-                <button
-                  type="button"
-                  onClick={confirmClearAll}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-[var(--ow-accent)] px-5 text-[13px] font-medium text-[var(--ow-accent-fg)] transition-colors hover:bg-[var(--ow-accent-hover,#115e59)]"
-                >
-                  מחק הכל
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setClearOpen(false)}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                  >
+                    ביטול
+                  </button>
+                  <span
+                    aria-hidden
+                    className="h-full w-px shrink-0 self-stretch"
+                    style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={confirmClearAll}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-[var(--ow-accent)] px-5 text-[13px] font-medium text-[var(--ow-accent-fg)] transition-colors hover:bg-[var(--ow-accent-hover,#115e59)]"
+                  >
+                    מחק הכל
+                  </button>
+                </div>
               </div>
             </div>
           </div>

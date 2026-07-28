@@ -81,6 +81,7 @@ console.log("=== DXF Duplicate Classification v1 ===\n");
   assertEq(result.summary.duplicateFileCount, 1, "1 duplicate file");
   assertEq(result.summary.sameNameSameContentCount, 1, "same count");
   assertEq(result.secondaryDuplicateFileIds.size, 1, "one secondary");
+  assertEq(result.repeatedUploadExcludedDxfIds.size, 1, "repeated upload excluded");
   console.log("✓ SAME_NAME_SAME_CONTENT");
 }
 
@@ -92,6 +93,8 @@ console.log("=== DXF Duplicate Classification v1 ===\n");
   assertEq(result.groups[0]!.classification, "DIFFERENT_NAME_SAME_CONTENT", "diff name");
   assertEq(result.summary.duplicateFileCount, 1, "1 dup");
   assertEq(result.summary.differentNameSameContentCount, 1, "diff count");
+  assertEq(result.repeatedUploadExcludedDxfIds.size, 0, "not matching-excluded");
+  assertEq(result.secondaryDuplicateFileIds.size, 0, "legacy secondary empty");
   console.log("✓ DIFFERENT_NAME_SAME_CONTENT");
 }
 
@@ -189,7 +192,27 @@ console.log("=== DXF Duplicate Classification v1 ===\n");
         sheetName: "S",
         sourceRow: 1,
         sourceCell: "A1",
-        partId: null,
+        partId: "A",
+        profile: null,
+        description: null,
+        material: "S355",
+        thicknessMm: 10,
+        quantity: 1,
+        widthMm: 100,
+        lengthMm: 200,
+        note: null,
+        dxfFileName: null,
+        sourceAreaM2: null,
+        sourceWeightKg: null,
+        confidence: 1,
+        warnings: [],
+      },
+      {
+        rowId: "r2",
+        sheetName: "S",
+        sourceRow: 2,
+        sourceCell: "A2",
+        partId: "B",
         profile: null,
         description: null,
         material: "S355",
@@ -210,13 +233,14 @@ console.log("=== DXF Duplicate Classification v1 ===\n");
       dxf({ id: "b", filename: "B.dxf", contentHash: "H", widthMm: 100, lengthMm: 200 }),
     ],
   });
-  const cands = matched.resultRows[0]!.match.candidates ?? [];
-  const ids = new Set(cands.map((c) => c.dxfId));
-  assert(
-    !(ids.has("a") && ids.has("b")),
-    "identical content instances not both candidates"
+  assertEq(matched.resultRows[0]!.match.matchedDxfId, "a", "A exact-matches A.dxf");
+  assertEq(matched.resultRows[1]!.match.matchedDxfId, "b", "B exact-matches B.dxf");
+  assertEq(
+    matched.duplicateMatchingDiagnostics.differentNameSameContentExcludedDxfCount,
+    0,
+    "no different-name exclusions"
   );
-  console.log("✓ Matching does not create repeated identical-content candidates");
+  console.log("✓ Different-name identical content both exact-matchable");
 }
 
 {

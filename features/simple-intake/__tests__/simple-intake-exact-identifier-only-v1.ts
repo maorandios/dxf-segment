@@ -389,15 +389,15 @@ console.log("=== Exact-Identifier-Only DXF Workflow v1 ===\n");
   ];
   const classified = classifyDxfDuplicates(parts, { sourceRows: rows });
   assert(
-    !classified.secondaryDuplicateFileIds.has("d1"),
-    "p1122.dxf is canonical"
+    !classified.repeatedUploadExcludedDxfIds.has("d1"),
+    "p1122.dxf is not matching-excluded"
   );
   assert(
-    classified.secondaryDuplicateFileIds.has("d2"),
-    "copy is secondary"
+    !classified.repeatedUploadExcludedDxfIds.has("d2"),
+    "copy is not matching-excluded (different part id remains matchable)"
   );
   const matched = runMatch(rows, parts);
-  assertEq(matched.resultRows[0]!.match.matchedDxfId, "d1", "exact to canonical");
+  assertEq(matched.resultRows[0]!.match.matchedDxfId, "d1", "exact to base filename");
   const final = deriveFinalRows({
     resultRows: matched.resultRows,
     dxfParts: parts,
@@ -410,6 +410,7 @@ console.log("=== Exact-Identifier-Only DXF Workflow v1 ===\n");
   );
   const findings = deriveDxfFileFindings(parts, final, {
     secondaryDuplicateFileIds: classified.secondaryDuplicateFileIds,
+    repeatedUploadExcludedDxfIds: classified.repeatedUploadExcludedDxfIds,
     groups: classified.groups,
   });
   assert(

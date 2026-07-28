@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { createPortal } from "react-dom";
 import {
   CheckCircle2,
+  CirclePause,
   ClipboardList,
   Fingerprint,
+  RotateCcw,
   Ruler,
   type LucideIcon,
 } from "lucide-react";
@@ -42,6 +44,14 @@ import {
   type GapWorkspaceAction,
 } from "../gapCommunication";
 import { deriveDxfFileFindings } from "../dxfFileFindings";
+import {
+  buildFreezeScopeDiagnostics,
+  isBlockingDxfFindingForActiveScope,
+  isQuoteItemFrozen,
+  selectFrozenQuoteItems,
+} from "../quoteItemScope";
+import { getCanonicalMaterialItemId } from "../results/canonicalMaterialItemId";
+import { simpleIntakeActions } from "../sessionStore";
 import { GapEmailModal } from "./GapEmailModal";
 import { GapWorkspaceToolbar } from "./GapWorkspaceToolbar";
 
@@ -305,6 +315,7 @@ export function GapResolutionWorkspace({
   const [continueWarnOpen, setContinueWarnOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [railOpen, setRailOpen] = useState(false);
   const [panelSlideIn, setPanelSlideIn] = useState(false);
   /** Ease spacer/main width with the panel on both open and close. */
@@ -326,10 +337,44 @@ export function GapResolutionWorkspace({
     if (countForCategory(summary, selectedCategory) > 0) return;
   }, [summary, selectedCategory]);
 
-  const filtered = useMemo(
-    () => filterItemsByResolutionCategory(finalRows, selectedCategory),
-    [finalRows, selectedCategory]
+  const frozenInViewCount = useMemo(
+    () => selectFrozenQuoteItems(finalRows).length,
+    [finalRows]
   );
+
+  const filtered = useMemo(() => {
+    const rows = filterItemsByResolutionCategory(finalRows, selectedCategory);
+    const q = searchQuery.trim().toLocaleLowerCase("he");
+    const searched = !q
+      ? rows
+      : rows.filter((row) => {
+          const hay = [
+            row.part.displayName,
+            row.part.sourcePartId,
+            row.part.matchedDxfFilename,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLocaleLowerCase("he");
+          return hay.includes(q);
+        });
+    // Keep frozen rows in place; sort A–Z over the full filtered set.
+    return [...searched].sort((a, b) =>
+      (a.part.displayName || a.part.sourcePartId || "").localeCompare(
+        b.part.displayName || b.part.sourcePartId || "",
+        "he",
+        { sensitivity: "base", numeric: true }
+      )
+    );
+  }, [finalRows, selectedCategory, searchQuery]);
+
+  function handleToggleFreeze(row: FinalIntakeRow): void {
+    const materialRowId =
+      getCanonicalMaterialItemId(row) ?? row.materialRowId ?? row.id;
+    // Freeze uses the current committed canonical row state (no silent edit loss
+    // of already-saved values). Pending drawer drafts remain until restored.
+    simpleIntakeActions.toggleQuoteItemFreeze(materialRowId);
+  }
 
   const detailsRow = useMemo(
     () => finalRows.find((r) => r.id === detailsId) ?? null,
@@ -430,21 +475,42 @@ export function GapResolutionWorkspace({
         closeTimerRef.current = null;
       }
     };
+    // trackPanelBoxDuringMotion is stable for this panel lifecycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional panel open/close deps
   }, [detailsId, detailsRow]);
 
   useEffect(() => () => stopPanelBoxTracking(), []);
 
-  // Keep panel content fresh while open (e.g. after rematch).
   useEffect(() => {
     if (detailsId != null && detailsRow) setPanelRow(detailsRow);
   }, [detailsId, detailsRow]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const emailRows = communicationRows.filter(
+      (r) => r.category !== "READY_FOR_PRICING"
+    );
+    const diagnostics = buildFreezeScopeDiagnostics({
+      rows: finalRows,
+      gapEmailRowCount: emailRows.length,
+      excelRowCount: communicationRows.length,
+      calculationRowCount: finalRows.filter(
+        (r) => !isQuoteItemFrozen(r) && !r.isExcluded
+      ).length,
+      dxfFindings,
+    });
+    simpleIntakeActions.patchLastDebug({ freezeScopeDiagnostics: diagnostics });
+  }, [finalRows, communicationRows, dxfFindings]);
 
   function closeFixPanel(): void {
     setDetailsId(null);
   }
 
   function requestContinue(): void {
-    if (summary.remainingActionCount > 0) {
+    const activeBlockingDxf = dxfFindings.filter((f) =>
+      isBlockingDxfFindingForActiveScope(f, finalRows)
+    ).length;
+    if (summary.remainingActionCount > 0 || activeBlockingDxf > 0) {
       setContinueWarnOpen(true);
       return;
     }
@@ -604,7 +670,11 @@ export function GapResolutionWorkspace({
         >
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <ScreenHeader title="פערים להתייחסות" className="mb-0" />
-            <GapWorkspaceToolbar onAction={handleToolbarAction} />
+            <GapWorkspaceToolbar
+              onAction={handleToolbarAction}
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
+            />
           </div>
 
           <div
@@ -625,7 +695,7 @@ export function GapResolutionWorkspace({
                   aria-pressed={selected}
                   aria-label={`${card.label}, ${count} שורות`}
                   onClick={() => setSelectedCategory(card.category)}
-                  className="flex min-w-[10rem] shrink-0 flex-col gap-3 rounded-[var(--ow-radius-lg)] border px-4 py-4 text-right transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-w-0"
+                  className="relative flex min-w-[10rem] shrink-0 flex-col gap-3 overflow-hidden rounded-[var(--ow-radius-lg)] border px-4 py-4 text-right transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-w-0"
                   style={{
                     borderColor: selected
                       ? "var(--ow-accent)"
@@ -637,7 +707,18 @@ export function GapResolutionWorkspace({
                       : undefined,
                   }}
                 >
-                  <div className="flex items-center gap-2.5">
+                  {count > 0 ? (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -right-[3.375rem] -top-[3.375rem] h-[6.75rem] w-[6.75rem] rounded-full"
+                      style={{
+                        background: `radial-gradient(circle at center, ${dot} 0%, transparent 68%)`,
+                        opacity: 0.15,
+                        filter: "blur(22px)",
+                      }}
+                    />
+                  ) : null}
+                  <div className="relative z-[1] flex items-center gap-2.5">
                     <Icon
                       className="h-4 w-4 shrink-0"
                       style={{ color: MUTED_GRAY }}
@@ -651,12 +732,23 @@ export function GapResolutionWorkspace({
                     </span>
                   </div>
                   <div
-                    className="text-[28px] font-semibold leading-none tabular-nums tracking-tight sm:text-[32px]"
+                    className="relative z-[1] flex flex-wrap items-center gap-x-2 text-[28px] font-semibold leading-none tabular-nums tracking-tight sm:text-[32px]"
                     style={{ color: "var(--ow-text)" }}
                   >
-                    {count.toLocaleString("he-IL")}
+                    <span>{count.toLocaleString("he-IL")}</span>
+                    {card.category === "READY_FOR_PRICING" &&
+                    frozenInViewCount > 0 ? (
+                      <span
+                        className="text-[13px] font-medium tracking-normal sm:text-[14px]"
+                        style={{ color: "var(--ow-text-muted)" }}
+                        data-testid="frozen-rows-indicator"
+                      >
+                        · מוקפאים:{" "}
+                        {frozenInViewCount.toLocaleString("he-IL")}
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="space-y-1">
+                  <div className="relative z-[1] space-y-1">
                     <p
                       className="text-[12px] leading-snug"
                       style={{ color: "var(--ow-text-secondary)" }}
@@ -689,9 +781,11 @@ export function GapResolutionWorkspace({
               }}
             >
               <p className="text-[15px] font-medium">
-                {selectedCategory === "READY_FOR_PRICING"
-                  ? "אין שורות בקטגוריה זו"
-                  : "כל החוסרים בקטגוריה הזו טופלו"}
+                {searchQuery.trim()
+                  ? "לא נמצאו פריטים התואמים לחיפוש"
+                  : selectedCategory === "READY_FOR_PRICING"
+                    ? "אין שורות בקטגוריה זו"
+                    : "כל החוסרים בקטגוריה הזו טופלו"}
               </p>
               {nextCategory && nextCategory !== selectedCategory ? (
                 <Button
@@ -724,7 +818,7 @@ export function GapResolutionWorkspace({
                     <GroupHeader label="נתונים כלליים" colSpan={6} />
                     <GroupHeader label="מידות טבלה" colSpan={2} withSeparator />
                     <GroupHeader label="מידות DXF" colSpan={2} withSeparator />
-                    <GroupHeader label="פעולות" colSpan={2} withSeparator />
+                    <GroupHeader label="פעולות" colSpan={3} withSeparator />
                   </tr>
                   <tr
                     style={{
@@ -743,12 +837,14 @@ export function GapResolutionWorkspace({
                     <ColHeader label={'אורך (מ״מ)'} withSeparator />
                     <ColHeader label={'רוחב (מ״מ)'} />
                     <ColHeader label="תיאור הפער" withSeparator />
+                    <ColHeader label="הקפא" className="w-14 text-center" />
                     <ColHeader label="צפיה" className="text-center" />
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((row, index) => {
                     const presentation = deriveRowResolutionPresentation(row);
+                    const frozen = isQuoteItemFrozen(row);
                     const sourceLength = row.source.sourceLengthMm;
                     const sourceWidth = row.source.sourceWidthMm;
                     const dxfLength =
@@ -764,87 +860,178 @@ export function GapResolutionWorkspace({
                       row.preview.geometryAvailable;
                     const isActiveRow =
                       panelMounted && panelRow?.id === row.id;
+                    const partLabel =
+                      row.part.displayName?.trim() ||
+                      row.part.sourcePartId?.trim() ||
+                      row.materialRowId;
+                    const strikeStyle: CSSProperties | undefined = frozen
+                      ? {
+                          textDecoration: "line-through",
+                          color: "var(--ow-text-muted)",
+                        }
+                      : undefined;
+                    const materialRowId =
+                      getCanonicalMaterialItemId(row) ??
+                      row.materialRowId ??
+                      row.id;
                     return (
                       <tr
                         key={row.id}
+                        data-scope-state={frozen ? "FROZEN" : "INCLUDED"}
+                        data-frozen={frozen ? "true" : undefined}
+                        title={
+                          frozen
+                            ? "הפריט מוקפא ואינו נכלל בהצעה"
+                            : undefined
+                        }
                         aria-selected={isActiveRow}
                         style={{
                           borderBottom: "1px solid var(--ow-border)",
-                          backgroundColor: isActiveRow
-                            ? "color-mix(in srgb, var(--ow-accent) 12%, white)"
+                          backgroundColor: frozen
+                            ? "color-mix(in srgb, var(--ow-surface-muted) 55%, transparent)"
+                            : isActiveRow
+                              ? "color-mix(in srgb, var(--ow-accent) 12%, white)"
+                              : undefined,
+                          color: frozen
+                            ? "var(--ow-text-muted)"
                             : undefined,
                           boxShadow: isActiveRow
                             ? "inset -3px 0 0 var(--ow-accent)"
                             : undefined,
                         }}
                         className={
-                          isActiveRow
+                          isActiveRow || frozen
                             ? undefined
                             : "hover:bg-[color-mix(in_srgb,var(--ow-surface-muted)_55%,transparent)]"
                         }
                       >
                         <Td
                           className="px-3 py-3 text-center tabular-nums"
-                          style={{ color: "var(--ow-text-muted)" }}
+                          style={{
+                            color: "var(--ow-text-muted)",
+                            ...strikeStyle,
+                          }}
                         >
                           {(index + 1).toLocaleString("he-IL")}
                         </Td>
-                        <Td className="px-3 py-3 font-medium whitespace-nowrap">
+                        <Td
+                          className="px-3 py-3 font-medium whitespace-nowrap"
+                          style={strikeStyle}
+                        >
                           {row.part.displayName}
                         </Td>
                         <Td
                           className="px-3 py-3 text-center"
                           title={
-                            hasDxf
-                              ? (row.part.matchedDxfFilename ?? "משויך")
-                              : "לא משויך"
+                            frozen
+                              ? "הפריט מוקפא ואינו נכלל בהצעה"
+                              : hasDxf
+                                ? (row.part.matchedDxfFilename ?? "משויך")
+                                : "לא משויך"
                           }
                         >
                           <span
                             className="inline-block h-2 w-2 rounded-full"
                             style={{
-                              backgroundColor: hasDxf ? DOT_GREEN : DOT_ORANGE,
+                              backgroundColor: frozen
+                                ? MUTED_GRAY
+                                : hasDxf
+                                  ? DOT_GREEN
+                                  : DOT_ORANGE,
+                              opacity: frozen ? 0.55 : 1,
                             }}
                             aria-label={
-                              hasDxf ? "משויך ל DXF" : "לא משויך ל DXF"
+                              frozen
+                                ? "מוקפא"
+                                : hasDxf
+                                  ? "משויך ל DXF"
+                                  : "לא משויך ל DXF"
                             }
                           />
                         </Td>
-                        <Td className="px-3 py-3 whitespace-nowrap tabular-nums">
+                        <Td
+                          className="px-3 py-3 whitespace-nowrap tabular-nums"
+                          style={strikeStyle}
+                        >
                           {cellNumber(row.quantity)}
                         </Td>
-                        <Td className="px-3 py-3 whitespace-nowrap tabular-nums">
+                        <Td
+                          className="px-3 py-3 whitespace-nowrap tabular-nums"
+                          style={strikeStyle}
+                        >
                           {cellNumber(row.thicknessMm)}
                         </Td>
-                        <Td className="px-3 py-3 whitespace-nowrap">
+                        <Td
+                          className="px-3 py-3 whitespace-nowrap"
+                          style={strikeStyle}
+                        >
                           {row.material ?? "—"}
                         </Td>
                         <Td
                           className="px-3 py-3 whitespace-nowrap tabular-nums"
                           withSeparator
+                          style={strikeStyle}
                         >
                           {cellNumber(sourceLength)}
                         </Td>
-                        <Td className="px-3 py-3 whitespace-nowrap tabular-nums">
+                        <Td
+                          className="px-3 py-3 whitespace-nowrap tabular-nums"
+                          style={strikeStyle}
+                        >
                           {cellNumber(sourceWidth)}
                         </Td>
                         <Td
                           className="px-3 py-3 whitespace-nowrap tabular-nums"
                           withSeparator
+                          style={strikeStyle}
                         >
                           {cellNumber(dxfLength)}
                         </Td>
-                        <Td className="px-3 py-3 whitespace-nowrap tabular-nums">
+                        <Td
+                          className="px-3 py-3 whitespace-nowrap tabular-nums"
+                          style={strikeStyle}
+                        >
                           {cellNumber(dxfWidth)}
                         </Td>
                         <Td
                           className="min-w-[12rem] max-w-[16rem] px-3 py-3"
-                          style={{ color: "var(--ow-text-secondary)" }}
+                          style={{
+                            color: frozen
+                              ? "var(--ow-text-muted)"
+                              : "var(--ow-text-secondary)",
+                            ...strikeStyle,
+                          }}
                           withSeparator
                         >
                           <div className="leading-snug">
-                            {presentation.title}
+                            {frozen
+                              ? "הפריט מוקפא ואינו נכלל בהצעה"
+                              : presentation.title}
                           </div>
+                        </Td>
+                        <Td className="px-3 py-3 text-center whitespace-nowrap">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 rounded-lg p-0 shadow-none"
+                            style={{ color: "var(--ow-text-secondary)" }}
+                            aria-pressed={frozen}
+                            aria-label={
+                              frozen
+                                ? `החזר את הפריט ${partLabel}`
+                                : `הקפא את הפריט ${partLabel}`
+                            }
+                            title={frozen ? "החזר פריט" : "הקפא פריט"}
+                            onClick={() => handleToggleFreeze(row)}
+                            data-testid={`freeze-toggle-${materialRowId}`}
+                          >
+                            {frozen ? (
+                              <RotateCcw className="h-4 w-4" aria-hidden />
+                            ) : (
+                              <CirclePause className="h-4 w-4" aria-hidden />
+                            )}
+                          </Button>
                         </Td>
                         <Td className="px-3 py-3 text-center whitespace-nowrap">
                           <Button
@@ -868,47 +1055,75 @@ export function GapResolutionWorkspace({
       </div>
 
       {continueWarnOpen ? (
-        <div className="fixed inset-0 z-50" dir="rtl" role="presentation">
+        <div className="fixed inset-0 z-[60]" dir="rtl">
           <button
             type="button"
-            className="absolute inset-0 bg-black/40"
+            className="ow-toast-scrim absolute inset-0"
             aria-label="סגור"
             onClick={() => setContinueWarnOpen(false)}
           />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="אזהרת פערים פתוחים"
-            className="absolute left-1/2 top-1/2 w-[min(92vw,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-[var(--ow-radius-lg)] border bg-background p-5 shadow-xl"
-            style={{ borderColor: "var(--ow-border)" }}
-          >
-            <p className="text-[14px] leading-relaxed">
-              עדיין קיימים {summary.remainingActionCount.toLocaleString("he-IL")}{" "}
-              פריטים שדורשים פעולה.
-              <br />
-              אפשר להמשיך לטבלה ולחזור לטיפול מאוחר יותר.
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
+            <div
+              role="alertdialog"
+              aria-labelledby="continue-gaps-title"
+              aria-describedby="continue-gaps-desc"
+              className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
+              style={{
+                backgroundColor: "#ffffff",
+                borderColor: "#E5E9EE",
+                color: "#13202B",
+                textAlign: "center",
+              }}
+            >
+            <p
+              id="continue-gaps-title"
+              className="text-center text-[15px] font-semibold"
+              style={{ color: "#13202B", textAlign: "center" }}
+            >
+              עדיין קיימים פריטים לטיפול
             </p>
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setContinueWarnOpen(false)}
-              >
-                חזור לטיפול
-              </Button>
-              <Button
-                type="button"
+            <p
+              id="continue-gaps-desc"
+              className="mt-1.5 text-center text-[13px] leading-relaxed"
+              style={{ color: "#5C6978", textAlign: "center" }}
+            >
+              עדיין קיימים {summary.remainingActionCount.toLocaleString("he-IL")}{" "}
+              פריטים שדורשים פעולה. אפשר להמשיך לטבלה ולחזור לטיפול מאוחר יותר.
+            </p>
+            <div className="mt-4 flex items-center justify-center">
+              <div
+                role="group"
+                aria-label="אישור המשך עם פערים"
+                className="inline-flex max-w-full overflow-hidden rounded-2xl border"
                 style={{
-                  backgroundColor: "var(--ow-accent)",
-                  color: "var(--ow-accent-fg)",
-                }}
-                onClick={() => {
-                  setContinueWarnOpen(false);
-                  onContinueToTable();
+                  borderColor: "var(--ow-border, #e4e7ec)",
+                  backgroundColor: "var(--ow-surface, #ffffff)",
                 }}
               >
-                המשך בכל זאת
-              </Button>
+                <button
+                  type="button"
+                  onClick={() => setContinueWarnOpen(false)}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                >
+                  חזור לטיפול
+                </button>
+                <span
+                  aria-hidden
+                  className="h-full w-px shrink-0 self-stretch"
+                  style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setContinueWarnOpen(false);
+                    onContinueToTable();
+                  }}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-[var(--ow-accent)] px-5 text-[13px] font-medium text-[var(--ow-accent-fg)] transition-colors hover:bg-[var(--ow-accent-hover,#115e59)]"
+                >
+                  המשך בכל זאת
+                </button>
+              </div>
+            </div>
             </div>
           </div>
         </div>

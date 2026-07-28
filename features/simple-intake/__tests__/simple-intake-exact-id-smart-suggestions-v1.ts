@@ -124,10 +124,13 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
     "exact",
     "canonical is p1122.dxf"
   );
-  assert(classified.secondaryDuplicateFileIds.has("copy"), "copy is secondary");
   assert(
-    !classified.secondaryDuplicateFileIds.has("exact"),
-    "exact not secondary"
+    !classified.repeatedUploadExcludedDxfIds.has("copy"),
+    "copy is not matching-excluded"
+  );
+  assert(
+    !classified.repeatedUploadExcludedDxfIds.has("exact"),
+    "exact not matching-excluded"
   );
 
   const matched = matchWithFilenamePriority({
@@ -159,13 +162,13 @@ console.log("=== Exact-ID Priority and Smart Unassigned DXF Suggestions v1 ===\n
   const available = getAvailableDxfCandidates({
     dxfParts: parts,
     reservedDxfIds: buildReservedDxfIds({ resultRows: matched.resultRows }),
-    nonCanonicalDuplicateDxfIds: classified.secondaryDuplicateFileIds,
+    nonCanonicalDuplicateDxfIds: classified.repeatedUploadExcludedDxfIds,
     rejectedCandidatePairs: new Set(),
     materialRowId: "other",
   });
   assert(
-    !available.some((d) => d.id === "copy"),
-    "copy not available candidate"
+    available.some((d) => d.id === "copy"),
+    "copy remains available (different-name identical-content not matching-excluded)"
   );
   assert(
     !available.some((d) => d.id === "exact"),

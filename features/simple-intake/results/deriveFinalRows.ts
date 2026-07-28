@@ -91,9 +91,12 @@ export function deriveFinalRows(args: {
   confirmedManualMatchIds?: ReadonlySet<string>;
   /** Per result-row dimension mismatch resolution (USE_DXF_DIMENSIONS | UNRESOLVED). */
   dimensionMismatchResolutions?: ReadonlyMap<string, DimensionMismatchResolution>;
+  /** Canonical materialRowId → frozenAt ISO. */
+  frozenMaterialRows?: Readonly<Record<string, string>>;
 }): FinalIntakeRow[] {
   const confirmed = args.confirmedManualMatchIds ?? new Set<string>();
   const dimResolutions = args.dimensionMismatchResolutions ?? new Map();
+  const frozenMap = args.frozenMaterialRows ?? {};
   const dxfById = new Map(args.dxfParts.map((d) => [d.id, d]));
   const unmatchedReasons = new Map(
     (args.diagnostics?.unmatchedReasons ?? []).map((u) => [u.rowId, u.reason])
@@ -102,6 +105,8 @@ export function deriveFinalRows(args: {
   const usageCount = new Map<string, number>();
   for (const r of args.resultRows) {
     if (r.excluded) continue;
+    // Frozen rows keep their DXF assignment but leave active quotation occupancy.
+    if (frozenMap[r.extracted.rowId]) continue;
     // Skip geometry suggestions — they are not treated as assignments.
     if (r.match.method === "GEOMETRY") continue;
     const id = r.match.matchedDxfId;
@@ -338,6 +343,9 @@ export function deriveFinalRows(args: {
       isManuallyMatched,
       isManualMatchConfirmed,
       isExcluded: row.excluded,
+      scopeState: frozenMap[extracted.rowId] ? "FROZEN" : "INCLUDED",
+      frozenAt: frozenMap[extracted.rowId] ?? null,
+      isFrozen: Boolean(frozenMap[extracted.rowId]),
       dimensionComparison,
       rawDxfDimensions,
       dimensionMismatchResolution,
@@ -409,8 +417,10 @@ export function deriveFinalRows(args: {
 }
 
 export function summarizeFinalRows(rows: FinalIntakeRow[]): FinalResultsSummary {
-  const totalRowCount = rows.length;
-  const activeRows = rows.filter((r) => r.status !== "EXCLUDED");
+  const activeRows = rows.filter(
+    (r) => r.status !== "EXCLUDED" && !r.isFrozen && r.scopeState !== "FROZEN"
+  );
+  const totalRowCount = activeRows.length;
   const rowsWithMissingQuantity = activeRows.filter(
     (r) => r.quantity == null
   ).length;
@@ -419,7 +429,7 @@ export function summarizeFinalRows(rows: FinalIntakeRow[]): FinalResultsSummary 
     0
   );
   const canonical = buildCanonicalReviewSummaryFromFinalRows({
-    finalRows: rows,
+    finalRows: activeRows,
     findingOccurrenceCount: 0,
     findingCategoryCount: 0,
   });

@@ -65,6 +65,7 @@ const CATEGORY_CODES: Record<ReadinessCategoryId, FinalIssueCode[]> = {
 
 export function criticalCodesForRow(row: FinalIntakeRow): FinalIssueCode[] {
   if (row.isExcluded) return [];
+  if (row.scopeState === "FROZEN" || row.isFrozen === true) return [];
   return row.issueCodes.filter(
     (c) =>
       MISSING_INFO_CODES.includes(c) ||
@@ -85,7 +86,13 @@ export function rowsInCategory(
 ): FinalIntakeRow[] {
   const codes = CATEGORY_CODES[category];
   return rows
-    .filter((r) => !r.isExcluded && r.issueCodes.some((c) => codes.includes(c)))
+    .filter(
+      (r) =>
+        !r.isExcluded &&
+        r.scopeState !== "FROZEN" &&
+        r.isFrozen !== true &&
+        r.issueCodes.some((c) => codes.includes(c))
+    )
     .slice()
     .sort((a, b) => a.sourceOrderIndex - b.sourceOrderIndex);
 }

@@ -78,6 +78,7 @@ export function deriveDxfFileFindings(
   materialItems: ReadonlyArray<FinalIntakeRow>,
   duplicateRegistry?: {
     secondaryDuplicateFileIds: ReadonlySet<string>;
+    repeatedUploadExcludedDxfIds?: ReadonlySet<string>;
     groups: ReturnType<typeof classifyDxfDuplicates>["groups"];
   } | null
 ): DxfFileFinding[] {
@@ -86,6 +87,9 @@ export function deriveDxfFileFindings(
       ? {
           groups: duplicateRegistry.groups,
           secondaryDuplicateFileIds: duplicateRegistry.secondaryDuplicateFileIds,
+          repeatedUploadExcludedDxfIds:
+            duplicateRegistry.repeatedUploadExcludedDxfIds ??
+            duplicateRegistry.secondaryDuplicateFileIds,
         }
       : classifyDxfDuplicates(dxfRegistry, {
           sourceRows: materialItems.map((m) => ({
@@ -96,14 +100,20 @@ export function deriveDxfFileFindings(
 
   const findings: DxfFileFinding[] = [];
   const sourceKeys = materialSourceKeys(materialItems);
-  const secondary = classified.secondaryDuplicateFileIds;
+  const repeatedUploadExcluded =
+    "repeatedUploadExcludedDxfIds" in classified &&
+    classified.repeatedUploadExcludedDxfIds
+      ? classified.repeatedUploadExcludedDxfIds
+      : classified.secondaryDuplicateFileIds;
   const seenConflictIds = new Set<string>();
 
+  const differentNameSameContentIds = new Set<string>();
+  const differentNameGroups = classified.groups.filter(
+    (g) => g.classification === "DIFFERENT_NAME_SAME_CONTENT"
+  );
+
   for (const group of classified.groups) {
-    if (
-      group.classification === "SAME_NAME_SAME_CONTENT" ||
-      group.classification === "DIFFERENT_NAME_SAME_CONTENT"
-    ) {
+    if (group.classification === "SAME_NAME_SAME_CONTENT") {
       findings.push({
         id: `dup_${group.groupId}`,
         type: "DUPLICATE_CONTENT",
@@ -111,6 +121,17 @@ export function deriveDxfFileFindings(
         dxfIds: group.files.map((f) => f.fileId),
         title: "נמצאו קובצי DXF עם תוכן זהה",
         description: group.files.map((f) => f.originalFileName).join(", "),
+      });
+    }
+    if (group.classification === "DIFFERENT_NAME_SAME_CONTENT") {
+      for (const f of group.files) differentNameSameContentIds.add(f.fileId);
+      findings.push({
+        id: `dup_${group.groupId}`,
+        type: "DUPLICATE_CONTENT",
+        severity: "INFO",
+        dxfIds: group.files.map((f) => f.fileId),
+        title: "נמצאו קובצי DXF עם תוכן זהה",
+        description: "הקבצים מופיעים בשמות שונים אך מכילים תוכן זהה.",
       });
     }
     if (group.classification === "SAME_NAME_DIFFERENT_CONTENT") {
@@ -167,11 +188,27 @@ export function deriveDxfFileFindings(
 
   for (const dxf of dxfRegistry) {
     if (dxf.geometryStatus !== "VALID") continue;
-    if (secondary.has(dxf.id)) continue;
+    if (repeatedUploadExcluded.has(dxf.id)) continue;
     const referencedBySource = [...sourceKeys].some((k) =>
       dxfMatchesSourceKey(dxf, k)
     );
     if (referencedBySource) continue;
+    // Content-identical siblings of a referenced DXF stay informational only.
+    if (differentNameSameContentIds.has(dxf.id)) {
+      const coveredBySibling = differentNameGroups.some(
+        (g) =>
+          g.files.some((f) => f.fileId === dxf.id) &&
+          g.files.some((f) => {
+            if (f.fileId === dxf.id) return false;
+            const sibling = dxfRegistry.find((d) => d.id === f.fileId);
+            if (!sibling) return false;
+            return [...sourceKeys].some((k) =>
+              dxfMatchesSourceKey(sibling, k)
+            );
+          })
+      );
+      if (coveredBySibling) continue;
+    }
     findings.push({
       id: `unref_${dxf.id}`,
       type: "UNREFERENCED_DXF",

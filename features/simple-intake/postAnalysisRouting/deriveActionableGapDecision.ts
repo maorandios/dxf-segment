@@ -8,6 +8,7 @@ import {
   type MaterialResolutionCategory,
 } from "../results/primaryResolutionCategory";
 import type { FinalIntakeRow } from "../results/types";
+import { isBlockingDxfFindingForActiveScope } from "../quoteItemScope";
 import { isActionableDxfFinding } from "./isActionableDxfFinding";
 import type { ActionableGapDecision } from "./types";
 
@@ -27,6 +28,8 @@ export function isActionableMaterialCategory(
 /**
  * Derives routing decision from material-row categories + DXF findings.
  * Counts each material row at most once (by materialRowId).
+ * Frozen rows are excluded from actionable material gaps; DXF findings
+ * that touch only frozen rows do not route as actionable.
  */
 export function deriveActionableGapDecision(
   items: ReadonlyArray<FinalIntakeRow>,
@@ -35,12 +38,17 @@ export function deriveActionableGapDecision(
   const materialRowIdSet = new Set<string>();
 
   for (const item of items) {
+    if (item.scopeState === "FROZEN" || item.isFrozen === true) continue;
+    if (item.isExcluded) continue;
     const category = deriveMaterialResolutionCategory(item);
     if (!isActionableMaterialCategory(category)) continue;
     materialRowIdSet.add(item.materialRowId);
   }
 
-  const actionableFindings = dxfFindings.filter(isActionableDxfFinding);
+  const actionableFindings = dxfFindings.filter(
+    (f) =>
+      isActionableDxfFinding(f) && isBlockingDxfFindingForActiveScope(f, items)
+  );
   const materialRowIds = [...materialRowIdSet];
   const dxfFindingIds = actionableFindings.map((f) => f.id);
 

@@ -75,11 +75,11 @@ export function FiveStepProgressBar({
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ring-4 ring-[var(--ow-surface)] transition-colors duration-200"
                   style={{
                     backgroundColor:
-                      state === "ACTIVE" || state === "COMPLETED"
+                      state === "ACTIVE" ||
+                      state === "COMPLETED" ||
+                      state === "ATTENTION"
                         ? "var(--ow-accent)"
-                        : state === "ATTENTION"
-                          ? "var(--ow-attention)"
-                          : "var(--ow-surface-muted)",
+                        : "var(--ow-surface-muted)",
                     color:
                       state === "ACTIVE" ||
                       state === "COMPLETED" ||
@@ -87,7 +87,7 @@ export function FiveStepProgressBar({
                         ? "#fff"
                         : "var(--ow-text-muted)",
                     boxShadow:
-                      state === "ACTIVE"
+                      state === "ACTIVE" || state === "ATTENTION"
                         ? "0 0 0 4px var(--ow-accent-soft)"
                         : undefined,
                   }}
@@ -105,7 +105,7 @@ export function FiveStepProgressBar({
                   )}
                   style={{
                     color:
-                      state === "ACTIVE"
+                      state === "ACTIVE" || state === "ATTENTION"
                         ? "var(--ow-accent)"
                         : state === "UPCOMING"
                           ? "var(--ow-text-muted)"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Lottie from "lottie-react";
 import type { ActivityStepModel } from "./deriveWorkflowPresentation";
 
@@ -164,13 +164,16 @@ function DocumentUploadLottie() {
 
   if (!data) {
     return (
-      <div className="mx-auto h-[168px] w-[224px] sm:h-[184px] sm:w-[246px]" aria-hidden />
+      <div
+        className="mx-auto h-[336px] w-[448px] max-w-[min(448px,92vw)] sm:h-[368px] sm:w-[492px] sm:max-w-[min(492px,92vw)]"
+        aria-hidden
+      />
     );
   }
 
   return (
     <div
-      className="mx-auto h-[168px] w-[224px] overflow-hidden bg-transparent sm:h-[184px] sm:w-[246px]"
+      className="mx-auto h-[336px] w-[448px] max-w-[min(448px,92vw)] overflow-hidden bg-transparent sm:h-[368px] sm:w-[492px] sm:max-w-[min(492px,92vw)]"
       style={{ background: "transparent" }}
     >
       <Lottie
@@ -186,6 +189,42 @@ function DocumentUploadLottie() {
       />
     </div>
   );
+}
+
+/**
+ * Keeps the bar moving toward 99% so long AI waits never look frozen.
+ * Step progress is a floor; time eases the rest. Never shows 100% here.
+ */
+function useMotionProgress(stepProgress: number): number {
+  const floorPct = Math.min(92, Math.max(6, Math.round(stepProgress * 100)));
+  const [pct, setPct] = useState(floorPct);
+  const startRef = useRef(Date.now());
+  const pctRef = useRef(pct);
+  pctRef.current = pct;
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const elapsedSec = (Date.now() - startRef.current) / 1000;
+      // Asymptotic crawl → 99% (~never arrives in practice during a run)
+      const timeTarget = 99 * (1 - Math.exp(-elapsedSec / 32));
+      const target = Math.min(99, Math.max(floorPct, timeTarget));
+      const current = pctRef.current;
+      const delta = target - current;
+      const next =
+        delta <= 0
+          ? current
+          : Math.min(99, current + Math.max(0.04, delta * 0.045));
+      if (next - current >= 0.04) {
+        setPct(next);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [floorPct]);
+
+  return Math.min(99, Math.max(floorPct, Math.round(pct)));
 }
 
 /**
@@ -206,17 +245,17 @@ export function AnalyzingLoadingPanel({
     null;
 
   const completed = steps.filter((s) => s.status === "COMPLETED").length;
-  const progress = useMemo(() => {
+  const stepProgress = useMemo(() => {
     if (steps.length === 0) return 0.08;
-    const activeBonus = steps.some((s) => s.status === "ACTIVE") ? 0.55 : 0;
-    return Math.min(0.96, (completed + activeBonus) / steps.length);
+    const activeBonus = steps.some((s) => s.status === "ACTIVE") ? 0.45 : 0;
+    return Math.min(0.9, (completed + activeBonus) / steps.length);
   }, [steps, completed]);
+
+  const progressPct = useMotionProgress(stepProgress);
 
   const phaseKey = active?.id ?? "idle";
   const phaseLabel = active?.label ?? "מעבדים…";
   const phaseDetail = active?.detail ?? null;
-
-  const progressPct = Math.round(progress * 100);
 
   return (
     <div
@@ -228,7 +267,7 @@ export function AnalyzingLoadingPanel({
     >
       {/* Centered, then nudged slightly up in the main area */}
       <div
-        className="m-auto flex w-full max-w-md -translate-y-10 flex-col items-center px-4 sm:-translate-y-12"
+        className="m-auto flex w-full max-w-lg -translate-y-10 flex-col items-center px-4 sm:-translate-y-12"
         style={{ textAlign: "center" }}
       >
         <DocumentUploadLottie />
@@ -252,10 +291,11 @@ export function AnalyzingLoadingPanel({
             aria-label="התקדמות כוללת"
           >
             <div
-              className="h-full rounded-full transition-[width] duration-700 ease-out"
+              className="h-full rounded-full"
               style={{
                 width: `${progressPct}%`,
                 backgroundColor: "var(--ow-accent, #0f766e)",
+                transition: "width 180ms linear",
               }}
             />
           </div>

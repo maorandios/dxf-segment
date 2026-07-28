@@ -13,12 +13,20 @@ import {
   type UnifiedQuoteItem,
 } from "../missingRequiredItemFields";
 import { getSourceItemIdentifier } from "../sourceItemIdentifier";
+import { registryHasExactUsableDxfMatch } from "../resolveExactDxfAssignment";
+import type { SimpleDxfPart } from "../types";
 import type {
   DimensionMismatchResolution,
   FinalIntakeRow,
   FinalIssueCode,
   FinalReviewStatus,
 } from "./types";
+
+function isActiveQuoteScopeItem(item: UnifiedQuoteItem): boolean {
+  if (item.isExcluded) return false;
+  if (item.scopeState === "FROZEN" || item.isFrozen) return false;
+  return true;
+}
 
 export type { DimensionMismatchResolution };
 
@@ -179,7 +187,10 @@ export function mapCategoryToReviewStatus(
 }
 
 export function deriveSecondaryResolutionTags(
-  row: FinalIntakeRow
+  row: FinalIntakeRow,
+  opts?: {
+    dxfRegistry?: ReadonlyArray<SimpleDxfPart>;
+  }
 ): SecondaryResolutionTag[] {
   const tags: SecondaryResolutionTag[] = [];
   const category = deriveMaterialResolutionCategory(row);
@@ -199,7 +210,16 @@ export function deriveSecondaryResolutionTags(
     ) {
       tags.push("MATCHING_DXF_INVALID");
     } else {
-      tags.push("NO_MATCHING_DXF");
+      // Invariant: registry exact usable match ⇒ never NO_MATCHING_DXF.
+      const hasExactInRegistry =
+        opts?.dxfRegistry != null &&
+        registryHasExactUsableDxfMatch(
+          { partId: row.part.sourcePartId, dxfFileName: null },
+          opts.dxfRegistry
+        );
+      if (!hasExactInRegistry) {
+        tags.push("NO_MATCHING_DXF");
+      }
     }
   }
 
@@ -299,21 +319,25 @@ export function filterItemsByResolutionCategory(
   items: ReadonlyArray<FinalIntakeRow>,
   category: MaterialResolutionCategory
 ): FinalIntakeRow[] {
-  return items.filter(
-    (item) => deriveMaterialResolutionCategory(item) === category
-  );
+  // Keep frozen rows in their original source order (do not move to end).
+  return items
+    .filter((item) => deriveMaterialResolutionCategory(item) === category)
+    .sort((a, b) => a.sourceOrderIndex - b.sourceOrderIndex);
 }
 
 export function buildGapResolutionSummary(
   items: ReadonlyArray<FinalIntakeRow>,
   dxfFileFindingCount = 0
 ): GapResolutionSummary {
+  // Gap cards / progression count active (non-frozen, non-excluded) rows only.
+  const activeItems = items.filter((item) => isActiveQuoteScopeItem(item));
+
   let itemIdentificationCount = 0;
   let missingItemDataCount = 0;
   let dimensionReviewCount = 0;
   let readyForPricingCount = 0;
 
-  for (const item of items) {
+  for (const item of activeItems) {
     switch (deriveMaterialResolutionCategory(item)) {
       case "ITEM_IDENTIFICATION":
         itemIdentificationCount++;
@@ -330,7 +354,11 @@ export function buildGapResolutionSummary(
     }
   }
 
-  const totalMaterialItemCount = items.length;
+  const totalMaterialItemCount = activeItems.length;
+  const remainingActionCount = activeItems.filter(
+    (item) => deriveMaterialResolutionCategory(item) !== "READY_FOR_PRICING"
+  ).length;
+
   const summary: GapResolutionSummary = {
     totalMaterialItemCount,
     itemIdentificationCount,
@@ -338,7 +366,7 @@ export function buildGapResolutionSummary(
     dimensionReviewCount,
     readyForPricingCount,
     dxfFileFindingCount,
-    remainingActionCount: totalMaterialItemCount - readyForPricingCount,
+    remainingActionCount,
     // Legacy aliases for gradual UI migration
     totalItemCount: totalMaterialItemCount,
     missingRequiredDataCount: missingItemDataCount,

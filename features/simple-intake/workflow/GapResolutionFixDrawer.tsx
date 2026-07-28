@@ -33,6 +33,7 @@ import {
 } from "../results/primaryResolutionCategory";
 import type { FinalDxfCandidate, FinalIntakeRow } from "../results/types";
 import { getSourceItemIdentifier } from "../sourceItemIdentifier";
+import { isQuoteItemFrozen } from "../quoteItemScope";
 import { simpleIntakeActions } from "../sessionStore";
 
 export const GAP_FIX_PANEL_WIDTH_PX = 380;
@@ -264,6 +265,7 @@ export function GapResolutionFixDrawer({
 
   if (!row) return null;
 
+  const frozen = isQuoteItemFrozen(row);
   const presentation = deriveRowResolutionPresentation(row);
   const category = deriveMaterialResolutionCategory(row);
   const sourceId = getSourceItemIdentifier({
@@ -289,6 +291,7 @@ export function GapResolutionFixDrawer({
       row.issueCodes.includes("NO_DXF_FOUND"));
 
   async function handleUploadDxf(files: FileList | null): Promise<void> {
+    if (frozen) return;
     if (!files || files.length === 0) return;
     setBusy(true);
     setError(null);
@@ -310,6 +313,7 @@ export function GapResolutionFixDrawer({
   }
 
   function approvePartId(): void {
+    if (frozen) return;
     const next = partIdDraft.trim();
     if (!next) {
       setError("יש להזין שם פריט או מזהה.");
@@ -321,6 +325,7 @@ export function GapResolutionFixDrawer({
   }
 
   function approveMissingData(): void {
+    if (frozen) return;
     const edits: {
       material?: string | null;
       thicknessMm?: number | null;
@@ -471,15 +476,32 @@ export function GapResolutionFixDrawer({
         >
           {presentation.description}
         </p>
-        <p
-          className="pt-1 text-[11px] font-semibold tracking-wide"
-          style={{ color: "var(--ow-text-muted, #667085)" }}
-        >
-          בחר פעולה לתיקון
-        </p>
+        {frozen ? (
+          <p
+            className="rounded-lg border px-3 py-2 text-[12px] leading-relaxed"
+            style={{
+              borderColor: "var(--ow-border)",
+              backgroundColor: "var(--ow-surface-muted, #F2F4F7)",
+              color: "var(--ow-text-muted, #667085)",
+            }}
+          >
+            הפריט מוקפא ואינו נכלל בהצעה. החזר אותו מהטבלה כדי לערוך שוב.
+          </p>
+        ) : (
+          <p
+            className="pt-1 text-[11px] font-semibold tracking-wide"
+            style={{ color: "var(--ow-text-muted, #667085)" }}
+          >
+            בחר פעולה לתיקון
+          </p>
+        )}
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-2">
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-2"
+        aria-disabled={frozen}
+        style={frozen ? { opacity: 0.55, pointerEvents: "none" } : undefined}
+      >
         {category === "ITEM_IDENTIFICATION" && !sourceId ? (
           <GuideStep
             icon={Hash}
