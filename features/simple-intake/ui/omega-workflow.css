@@ -175,6 +175,84 @@
   animation: ow-activity-detail-in 260ms ease-out both;
 }
 
+@keyframes ow-phase-rollup-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-110%);
+  }
+}
+
+@keyframes ow-phase-rollup-in {
+  from {
+    opacity: 0;
+    transform: translateY(110%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.omega-workflow .ow-phase-rollup-out {
+  animation: ow-phase-rollup-out 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.omega-workflow .ow-phase-rollup-in {
+  animation: ow-phase-rollup-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Tube / flip-board roll on X axis */
+.omega-workflow .ow-phase-tube {
+  transform-style: preserve-3d;
+  overflow: hidden;
+}
+
+@keyframes ow-phase-tube-out {
+  0% {
+    opacity: 1;
+    transform: rotateX(0deg) translateZ(0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: rotateX(-85deg) translateZ(-18px);
+    filter: blur(1.5px);
+  }
+}
+
+@keyframes ow-phase-tube-in {
+  0% {
+    opacity: 0;
+    transform: rotateX(85deg) translateZ(-18px);
+    filter: blur(1.5px);
+  }
+  100% {
+    opacity: 1;
+    transform: rotateX(0deg) translateZ(0);
+    filter: blur(0);
+  }
+}
+
+.omega-workflow .ow-phase-tube-out,
+.omega-workflow .ow-phase-tube-in {
+  backface-visibility: hidden;
+  transform-origin: center center;
+  transform-style: preserve-3d;
+  will-change: transform, opacity, filter;
+}
+
+.omega-workflow .ow-phase-tube-out {
+  animation: ow-phase-tube-out 480ms cubic-bezier(0.4, 0.0, 0.2, 1) both;
+}
+
+.omega-workflow .ow-phase-tube-in {
+  animation: ow-phase-tube-in 480ms cubic-bezier(0.4, 0.0, 0.2, 1) both;
+}
+
 @keyframes ow-progress-indeterminate {
   0% {
     transform: translateX(110%);

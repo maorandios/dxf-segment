@@ -1,14 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import { simpleIntakeActions } from "../sessionStore";
 import type { QuoteWorkspaceDetails } from "../types";
-
-const btnRadius = "rounded-2xl";
 
 const lightFieldClass =
   "h-11 rounded-2xl border border-[#E5E9EE] px-3 text-[14px] !text-[#13202B] placeholder:!text-[#8B96A3] shadow-none focus-visible:ring-2 focus-visible:ring-[#0F766E] focus-visible:ring-offset-0 md:text-[14px]";
@@ -99,42 +95,36 @@ function EditQuoteDetailsForm({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          className={cn("h-10 shadow-none", btnRadius)}
+      <div className="mt-4 flex items-center justify-center">
+        <div
+          role="group"
+          aria-label="שמירת פרטי הצעה"
+          className="inline-flex max-w-full overflow-hidden rounded-2xl border"
           style={{
-            borderColor: "#D6DEE6",
-            backgroundColor: "#ffffff",
-            color: "#5C6978",
+            borderColor: "var(--ow-border, #e4e7ec)",
+            backgroundColor: "var(--ow-surface, #ffffff)",
           }}
-          onClick={onClose}
         >
-          ביטול
-        </Button>
-        <Button
-          type="submit"
-          disabled={!canSave}
-          className={cn(
-            "h-10 shadow-none disabled:opacity-100",
-            btnRadius,
-            !canSave && "hover:bg-[#D0D5DD]"
-          )}
-          style={
-            canSave
-              ? {
-                  backgroundColor: "#0F766E",
-                  color: "#ffffff",
-                }
-              : {
-                  backgroundColor: "#E4E7EC",
-                  color: "#98A2B3",
-                }
-          }
-        >
-          שמור
-        </Button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+          >
+            ביטול
+          </button>
+          <span
+            aria-hidden
+            className="h-full w-px shrink-0 self-stretch"
+            style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
+          />
+          <button
+            type="submit"
+            disabled={!canSave}
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-[var(--ow-accent)] px-5 text-[13px] font-medium text-[var(--ow-accent-fg)] transition-colors hover:bg-[var(--ow-accent-hover,#115e59)] disabled:opacity-45"
+          >
+            שמור
+          </button>
+        </div>
       </div>
     </form>
   );

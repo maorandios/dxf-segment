@@ -225,7 +225,6 @@ export function GapResolutionWorkspace({
   finalRows,
   analysis,
   onContinueToTable,
-  onBackToUpload,
   onConfirmManual,
   onPickDxfAction,
   onLeaveUnassigned,
@@ -242,7 +241,6 @@ export function GapResolutionWorkspace({
   finalRows: FinalIntakeRow[];
   analysis: IntakeAnalysisSummary;
   onContinueToTable: () => void;
-  onBackToUpload: () => void;
   onConfirmManual: (resultRowId: string) => void;
   onPickDxfAction: (resultRowId: string) => void;
   onLeaveUnassigned: (resultRowId: string) => void;
@@ -469,9 +467,6 @@ export function GapResolutionWorkspace({
 
   function handleToolbarAction(action: GapWorkspaceAction): void {
     switch (action) {
-      case "BACK_TO_UPLOAD":
-        onBackToUpload();
-        return;
       case "CREATE_GAP_EMAIL":
         setEmailOpen(true);
         return;

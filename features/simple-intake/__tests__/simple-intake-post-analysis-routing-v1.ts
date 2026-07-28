@@ -486,10 +486,10 @@ assertEq(isActionableMaterialCategory("ITEM_IDENTIFICATION"), true, "id A");
     "final table not linked to summary"
   );
   assert(!workflow.includes("onBackToSummary"), "gap not linked to summary");
-  assert(workflow.includes("onBackToUpload"), "upload back wired");
-  assert(toolbar.includes("חזרה להעלאת הקבצים"), "upload back label");
+  assert(!workflow.includes("onBackToUpload"), "no upload back after analysis");
+  assert(!toolbar.includes("חזרה להעלאת הקבצים"), "upload back label removed");
   assert(!toolbar.includes("חזרה לסיכום"), "summary back removed");
-  assert(workspace.includes("BACK_TO_UPLOAD"), "action renamed");
+  assert(!workspace.includes("BACK_TO_UPLOAD"), "BACK_TO_UPLOAD removed");
   assert(
     workspace.includes("המשך לטבלה המסכמת") ||
       toolbar.includes("המשך לטבלה המסכמת"),

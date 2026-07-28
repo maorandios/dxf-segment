@@ -23,6 +23,7 @@ export { WorkflowStepper } from "./WorkflowStepper";
 export { MetricStrip } from "./MetricStrip";
 export type { MetricStripItem } from "./MetricStrip";
 export { AgentActivityPanel, ActivityStep } from "./AgentActivityPanel";
+export { AnalyzingLoadingPanel } from "./AnalyzingLoadingPanel";
 export { WorkflowNotice } from "./WorkflowNotice";
 export type { NoticeSeverity } from "./WorkflowNotice";
 export { AttentionInbox } from "./AttentionInbox";

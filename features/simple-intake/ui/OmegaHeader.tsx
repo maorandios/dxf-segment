@@ -1,15 +1,50 @@
 "use client";
 
-import { useState } from "react";
-import { Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useState, type ReactNode } from "react";
+import { Pencil, Save, X } from "lucide-react";
 import { EditQuoteDetailsDialog } from "../quoteWorkflow/EditQuoteDetailsDialog";
 import { simpleIntakeActions } from "../sessionStore";
 import type { QuoteWorkspaceDetails } from "../types";
 import { firstNameFromFullName } from "../workbookUpload/uploadScreenTokens";
 
-const btnRadius = "rounded-2xl";
+function HeaderSegment({
+  children,
+  onClick,
+  primary,
+  ariaLabel,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  primary?: boolean;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onClick}
+      className={[
+        "inline-flex h-9 shrink-0 items-center justify-center gap-2 px-3.5 text-[13px] font-medium transition-colors sm:px-4",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ow-accent)] focus-visible:ring-inset",
+        primary
+          ? "bg-[var(--ow-accent)] text-[var(--ow-accent-fg)] hover:bg-[var(--ow-accent-hover,#115e59)]"
+          : "bg-transparent text-[var(--ow-text)] hover:bg-[var(--ow-surface-muted,#f2f4f7)]",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function HeaderSep() {
+  return (
+    <span
+      aria-hidden
+      className="h-full w-px shrink-0 self-stretch"
+      style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
+    />
+  );
+}
 
 export function OmegaHeader({
   quoteDetails,
@@ -97,39 +132,40 @@ export function OmegaHeader({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-self-end gap-2 sm:gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            className={cn(
-              "h-9 border px-3 text-[13px] shadow-none sm:px-4",
-              btnRadius
-            )}
+        {/* RTL: end = visual left — segmented Save / Cancel stripe */}
+        <div className="flex shrink-0 items-center justify-self-end">
+          <div
+            role="toolbar"
+            aria-label="פעולות הצעת מחיר"
+            data-quote-header-toolbar="true"
+            className="inline-flex max-w-full overflow-hidden rounded-2xl border"
             style={{
-              borderColor: "var(--ow-border-strong)",
-              backgroundColor: "var(--ow-surface)",
-              color: "var(--ow-text-secondary)",
-            }}
-            onClick={() => {
-              setEditOpen(false);
-              setCancelOpen(true);
+              borderColor: "var(--ow-border, #e4e7ec)",
+              backgroundColor: "var(--ow-surface, #ffffff)",
             }}
           >
-            ביטול הצעת מחיר
-          </Button>
-          <Button
-            type="button"
-            className={cn("h-9 px-3 text-[13px] shadow-none sm:px-4", btnRadius)}
-            style={{
-              backgroundColor: "var(--ow-accent)",
-              color: "var(--ow-accent-fg)",
-            }}
-            onClick={() => {
-              /* Save is intentionally a no-op for now */
-            }}
-          >
-            שמור הצעת מחיר
-          </Button>
+            <HeaderSegment
+              ariaLabel="ביטול הצעת מחיר"
+              onClick={() => {
+                setEditOpen(false);
+                setCancelOpen(true);
+              }}
+            >
+              <X className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+              ביטול הצעת מחיר
+            </HeaderSegment>
+            <HeaderSep />
+            <HeaderSegment
+              primary
+              ariaLabel="שמור הצעת מחיר"
+              onClick={() => {
+                /* Save is intentionally a no-op for now */
+              }}
+            >
+              שמור הצעת מחיר
+              <Save className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            </HeaderSegment>
+          </div>
         </div>
       </header>
 
@@ -171,31 +207,36 @@ export function OmegaHeader({
               הפעולה תחזיר אתכם למסך יצירת הצעה חדשה. פרטי הפרויקט וההתקדמות
               הנוכחית לא יישמרו.
             </p>
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className={cn("h-10 shadow-none", btnRadius)}
+            <div className="mt-4 flex items-center justify-center">
+              <div
+                role="group"
+                aria-label="אישור ביטול הצעה"
+                className="inline-flex max-w-full overflow-hidden rounded-2xl border"
                 style={{
-                  borderColor: "#D6DEE6",
-                  backgroundColor: "#ffffff",
-                  color: "#5C6978",
+                  borderColor: "var(--ow-border, #e4e7ec)",
+                  backgroundColor: "var(--ow-surface, #ffffff)",
                 }}
-                onClick={() => setCancelOpen(false)}
               >
-                המשך בעבודה
-              </Button>
-              <Button
-                type="button"
-                className={cn("h-10 shadow-none", btnRadius)}
-                style={{
-                  backgroundColor: "#0F766E",
-                  color: "#ffffff",
-                }}
-                onClick={confirmCancel}
-              >
-                בטל הצעה
-              </Button>
+                <button
+                  type="button"
+                  onClick={() => setCancelOpen(false)}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                >
+                  המשך בעבודה
+                </button>
+                <span
+                  aria-hidden
+                  className="h-full w-px shrink-0 self-stretch"
+                  style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
+                />
+                <button
+                  type="button"
+                  onClick={confirmCancel}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-[var(--ow-accent)] px-5 text-[13px] font-medium text-[var(--ow-accent-fg)] transition-colors hover:bg-[var(--ow-accent-hover,#115e59)]"
+                >
+                  בטל הצעה
+                </button>
+              </div>
             </div>
           </div>
         </div>

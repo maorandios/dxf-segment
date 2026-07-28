@@ -248,10 +248,6 @@ export function PostAnalysisWorkflow() {
     setManualView("GAP_RESOLUTION");
   }, []);
 
-  const backToUpload = useCallback(() => {
-    simpleIntakeActions.backToDxfIntake();
-  }, []);
-
   const trySelectDxf = useCallback(
     (resultRowId: string, dxfId: string | null): boolean => {
       if (dxfId == null) {
@@ -329,7 +325,6 @@ export function PostAnalysisWorkflow() {
           materialListRows={session.materialListRows}
           dxfParts={session.dxfParts}
           onContinueToTable={() => openUnifiedTable()}
-          onBackToUpload={backToUpload}
           onConfirmManual={(id) => {
             setConfirmedManual((prev) => new Set(prev).add(id));
           }}

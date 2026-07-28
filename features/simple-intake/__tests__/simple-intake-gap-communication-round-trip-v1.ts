@@ -126,19 +126,19 @@ async function main(): Promise<void> {
     "utf8"
   );
   for (const action of [
-    "BACK_TO_UPLOAD",
     "CREATE_GAP_EMAIL",
     "EXPORT_ROUND_TRIP_EXCEL",
     "CONTINUE_TO_FINAL_TABLE",
   ]) {
     assert(toolbar.includes(action), `toolbar exposes ${action}`);
   }
-  assert(toolbar.includes("חזרה להעלאת הקבצים"), "back label");
+  assert(!toolbar.includes("חזרה להעלאת הקבצים"), "no upload back after analysis");
+  assert(!toolbar.includes("BACK_TO_UPLOAD"), "BACK_TO_UPLOAD removed");
   assert(!toolbar.includes("חזרה לסיכום"), "summary back gone");
   assert(toolbar.includes("צור מייל פערים"), "email label");
   assert(toolbar.includes("ייצא דוח Excel"), "excel label");
   assert(toolbar.includes("המשך לטבלה המסכמת"), "continue label");
-  console.log("✓ four-action toolbar exposed");
+  console.log("✓ three-action toolbar exposed (no upload back)");
 }
 
 {
@@ -148,7 +148,7 @@ async function main(): Promise<void> {
   );
   assert(ws.includes("GapWorkspaceToolbar"), "workspace uses toolbar");
   assert(ws.includes("GapEmailModal"), "workspace uses email modal");
-  assert(ws.includes("onBackToUpload"), "back navigation wired");
+  assert(!ws.includes("onBackToUpload"), "no back-to-upload after analysis");
   assert(ws.includes("onContinueToTable"), "continue navigation wired");
   assert(!ws.includes("openai") && !ws.includes("OpenAI"), "no AI in workspace email path");
   console.log("✓ workspace navigation + email modal (no AI)");

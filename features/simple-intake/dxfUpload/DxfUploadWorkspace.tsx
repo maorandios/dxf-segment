@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DxfUploadArt } from "./DxfUploadArt";
@@ -52,8 +53,7 @@ export function DxfUploadWorkspace({
     >
       <div
         className={cn(
-          "flex h-full min-h-0 w-full flex-col items-center px-4 text-center",
-          empty ? "justify-center py-4" : "justify-stretch py-2",
+          "flex h-full min-h-0 w-full flex-col items-center justify-center px-4 text-center",
           dragging && empty && "opacity-95"
         )}
         onDragEnter={(e) => {
@@ -115,18 +115,59 @@ export function DxfUploadWorkspace({
               מדויקת מומלץ ששם הקובץ יופיע ברשימת החומר.
             </p>
 
-            <Button
-              type="button"
-              className="mt-8 h-12 min-w-[11.5rem] rounded-2xl px-8 text-[15px] font-medium shadow-none transition-opacity hover:opacity-95"
-              disabled={busy}
-              onClick={openPicker}
-              style={{
-                backgroundColor: "var(--ow-accent, #0f766e)",
-                color: "#ffffff",
-              }}
-            >
-              בחר קבצים
-            </Button>
+            {onBack ? (
+              <div className="mt-8 flex shrink-0 items-center justify-center">
+                <div
+                  role="toolbar"
+                  aria-label="ניווט העלאת DXF"
+                  className="inline-flex max-w-full overflow-hidden rounded-2xl border"
+                  style={{
+                    borderColor: "var(--ow-border, #e4e7ec)",
+                    backgroundColor: "var(--ow-surface, #ffffff)",
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onBack}
+                    className="inline-flex h-12 shrink-0 items-center justify-center gap-2 bg-transparent px-5 text-[15px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)] disabled:opacity-45"
+                  >
+                    <ArrowRight
+                      className="h-4 w-4 shrink-0"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    חזרה
+                  </button>
+                  <span
+                    aria-hidden
+                    className="h-full w-px shrink-0 self-stretch"
+                    style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
+                  />
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={openPicker}
+                    className="inline-flex h-12 shrink-0 items-center justify-center gap-2 bg-[var(--ow-accent)] px-6 text-[15px] font-medium text-[var(--ow-accent-fg)] transition-colors hover:bg-[var(--ow-accent-hover,#115e59)] disabled:opacity-45"
+                  >
+                    בחר קבצים
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                className="mt-8 h-12 min-w-[11.5rem] rounded-2xl px-8 text-[15px] font-medium shadow-none transition-opacity hover:opacity-95"
+                disabled={busy}
+                onClick={openPicker}
+                style={{
+                  backgroundColor: "var(--ow-accent, #0f766e)",
+                  color: "#ffffff",
+                }}
+              >
+                בחר קבצים
+              </Button>
+            )}
           </div>
         ) : (
           <DxfSelectedFilesBoard

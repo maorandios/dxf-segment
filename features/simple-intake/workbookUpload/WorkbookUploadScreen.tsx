@@ -43,7 +43,7 @@ export function WorkbookUploadScreen() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col items-center justify-center py-8">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1040px] flex-1 flex-col">
       <WorkbookUploadWorkspace
         file={file}
         sheetCount={sheetCount}
@@ -51,6 +51,7 @@ export function WorkbookUploadScreen() {
         notice={notice}
         onPickFiles={onPickFiles}
         onRemove={() => applyFile(null)}
+        onBack={() => simpleIntakeActions.backToDxfIntake()}
         onCreate={() => {
           setLoading(true);
           void simpleIntakeActions.analyze().finally(() => setLoading(false));

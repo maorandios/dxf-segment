@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
 import {
-  AgentActivityPanel,
+  AnalyzingLoadingPanel,
   buildDxfActivitySteps,
   buildWorkbookActivitySteps,
 } from "../ui";
@@ -76,8 +76,8 @@ export function AnalyzingStep() {
   ]);
 
   return (
-    <div className="flex min-h-[calc(100vh-11rem)] items-center justify-center py-10">
-      <AgentActivityPanel
+    <div className="flex min-h-0 flex-1 flex-col">
+      <AnalyzingLoadingPanel
         title={isDxf ? "מחברים את קובצי ה-DXF" : "הפקת רשימת חומר מותאמת"}
         steps={steps}
       />

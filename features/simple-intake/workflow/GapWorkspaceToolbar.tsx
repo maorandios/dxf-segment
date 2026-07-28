@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
-  ArrowRight,
   FileSpreadsheet,
   Mail,
 } from "lucide-react";
@@ -73,11 +72,6 @@ export function GapWorkspaceToolbar({
         backgroundColor: "var(--ow-surface, #ffffff)",
       }}
     >
-      <Segment action="BACK_TO_UPLOAD" onAction={onAction}>
-        <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-        חזרה להעלאת הקבצים
-      </Segment>
-      <Sep />
       <Segment action="CREATE_GAP_EMAIL" onAction={onAction}>
         <Mail className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         צור מייל פערים

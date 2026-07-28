@@ -103,7 +103,7 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
   );
   assert(workflow.includes("claimPostAnalysisRoute"), "auto routing");
   assert(workflow.includes("FINAL_TABLE"), "table view");
-  assert(workflow.includes("onBackToUpload") || workflow.includes("backToDxfIntake"), "upload back");
+  assert(!workflow.includes("onBackToUpload"), "no upload back after analysis");
   assert(workspace.includes("פערים להתייחסות"), "workspace heading");
   assert(
     workspace.includes("המשך לטבלה המסכמת") ||
