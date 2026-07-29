@@ -91,6 +91,7 @@ function Td({
 export function FinalQuoteListTable({
   rows,
   commercialOptions,
+  activeRowId = null,
   onToggleFreeze,
   onView,
   onFinishChange,
@@ -98,6 +99,8 @@ export function FinalQuoteListTable({
 }: {
   rows: FinalIntakeRow[];
   commercialOptions: QuoteItemCommercialOptionsMap;
+  /** Row open in the side panel — same accent highlight as gaps table. */
+  activeRowId?: string | null;
   onToggleFreeze: (row: FinalIntakeRow) => void;
   onView: (rowId: string) => void;
   onFinishChange: (materialRowId: string, finish: QuoteItemFinish) => void;
@@ -145,6 +148,7 @@ export function FinalQuoteListTable({
         <tbody>
           {rows.map((row, index) => {
             const frozen = isQuoteItemFrozen(row);
+            const isActiveRow = activeRowId != null && activeRowId === row.id;
             const partLabel =
               row.part.sourcePartId?.trim() ||
               row.part.displayName?.trim() ||
@@ -178,15 +182,21 @@ export function FinalQuoteListTable({
                 title={
                   frozen ? "הפריט מוקפא ואינו נכלל בהצעה" : undefined
                 }
+                aria-selected={isActiveRow}
                 style={{
                   borderBottom: "1px solid var(--ow-border)",
                   backgroundColor: frozen
                     ? "color-mix(in srgb, var(--ow-surface-muted) 55%, transparent)"
-                    : undefined,
+                    : isActiveRow
+                      ? "color-mix(in srgb, var(--ow-accent) 12%, white)"
+                      : undefined,
                   color: frozen ? "var(--ow-text-muted)" : undefined,
+                  boxShadow: isActiveRow
+                    ? "inset -3px 0 0 var(--ow-accent)"
+                    : undefined,
                 }}
                 className={
-                  frozen
+                  isActiveRow || frozen
                     ? undefined
                     : "hover:bg-[color-mix(in_srgb,var(--ow-surface-muted)_55%,transparent)]"
                 }

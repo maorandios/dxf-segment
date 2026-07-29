@@ -118,7 +118,11 @@ console.log("OMEGA — Simplify the Final Quote List Screen v1");
   assert(screen.includes("FinalQuoteListToolbar"), "toolbar wired");
   assert(screen.includes("FinalQuoteMetricCards"), "metrics wired");
   assert(screen.includes("FinalQuoteListTable"), "table wired");
-  assert(screen.includes("FinalQuoteItemPreviewModal"), "preview modal");
+  assert(screen.includes("GapResolutionFixDrawer"), "gap drawer reused");
+  assert(screen.includes('variant="final-preview"'), "final preview variant");
+  assert(screen.includes("activeRowId"), "active row highlight wired");
+  assert(screen.includes("GAP_FIX_PANEL"), "slide panel chrome");
+  assert(!screen.includes("FinalQuoteItemPreviewModal"), "old modal removed");
 
   assert(toolbar.includes("אישור רשימה"), "approve");
   assert(toolbar.includes("ייצא דוח EXCEL"), "excel");
@@ -143,6 +147,8 @@ console.log("OMEGA — Simplify the Final Quote List Screen v1");
 
   assert(table.includes('label="הקפא"'), "freeze col");
   assert(table.includes('label="צפייה"'), "view col");
+  assert(table.includes("isActiveRow"), "active row selection");
+  assert(table.includes("ow-accent) 12%"), "green/accent active row");
   const freezeCol = table.indexOf('label="הקפא"');
   const viewCol = table.indexOf('label="צפייה"');
   assert(freezeCol > 0 && viewCol > freezeCol, "הקפא before צפייה in DOM");
@@ -247,16 +253,41 @@ console.log("OMEGA — Simplify the Final Quote List Screen v1");
 }
 
 {
-  const preview = fs.readFileSync(
-    path.join(root, "results/FinalQuoteItemPreviewModal.tsx"),
+  const drawer = fs.readFileSync(
+    path.join(root, "workflow/GapResolutionFixDrawer.tsx"),
     "utf8"
   );
-  assert(preview.includes("SimpleDxfThumbnail"), "reuses DXF viewer");
-  assert(preview.includes("הקפא פריט"), "modal freeze");
-  assert(preview.includes("החזר פריט"), "modal restore");
-  assert(preview.includes("סגור"), "modal close");
-  assert(preview.includes("מזהה פריט"), "part id field");
-  assert(preview.includes("תצוגת DXF"), "dxf view");
+  assert(drawer.includes("GapResolutionFixDrawer"), "shared drawer");
+  assert(drawer.includes("GAP_FIX_PANEL_MS"), "slide timing");
+  assert(drawer.includes("READY_FOR_PRICING"), "ready presentation");
+  assert(drawer.includes('final-preview"'), "final preview variant");
+  assert(drawer.includes("FinalQuotePartPreviewBody"), "part preview body");
+
+  const previewBody = fs.readFileSync(
+    path.join(root, "results/FinalQuotePartPreviewBody.tsx"),
+    "utf8"
+  );
+  assert(previewBody.includes("שם פריט"), "part name field");
+  assert(previewBody.includes("כמות"), "qty field");
+  assert(previewBody.includes("עובי"), "thickness field");
+  assert(previewBody.includes("סוג חומר"), "material field");
+  assert(previewBody.includes("אורך"), "length field");
+  assert(previewBody.includes("רוחב"), "width field");
+  assert(previewBody.includes("משקל"), "weight field");
+  assert(previewBody.includes("שטח"), "area field");
+  assert(
+    previewBody.includes("SimpleDxfGeometryPreviewLoader"),
+    "geometry with holes"
+  );
+
+  const screen = fs.readFileSync(
+    path.join(root, "results/ResultsReviewScreen.tsx"),
+    "utf8"
+  );
+  assert(screen.includes("GapResolutionFixDrawer"), "final uses gap drawer");
+  assert(screen.includes('variant="final-preview"'), "final preview mode");
+  assert(screen.includes("translate3d"), "slide motion");
+  assert(screen.includes("createPortal"), "portal chrome");
 
   const workflow = fs.readFileSync(
     path.join(root, "workflow/PostAnalysisWorkflow.tsx"),
@@ -264,14 +295,9 @@ console.log("OMEGA — Simplify the Final Quote List Screen v1");
   );
   assert(!workflow.includes("ANALYSIS_SUMMARY") || workflow.includes("intentionally omitted"), "no summary nav");
   assert(workflow.includes("onBackToGaps"), "back to gaps");
-  assert(
-    fs
-      .readFileSync(path.join(root, "results/ResultsReviewScreen.tsx"), "utf8")
-      .includes("backToDxfIntake"),
-    "upload fallback in final list"
-  );
+  assert(screen.includes("backToDxfIntake"), "upload fallback in final list");
 
-  console.log("✓ preview modal + back navigation wiring");
+  console.log("✓ gap drawer reuse + final preview + back navigation wiring");
 }
 
 console.log("\nOMEGA — Simplify the Final Quote List Screen v1 — all checks passed.");

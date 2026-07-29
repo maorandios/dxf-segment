@@ -45,7 +45,7 @@ export type {
   FinalQuoteListV3Diagnostics,
   ApprovedQuoteItem,
 } from "./finalQuoteListMetrics";
-export { buildFinalQuoteExcelWorkbook, FINAL_QUOTE_EXCEL_HEADERS } from "./buildFinalQuoteExcelWorkbook";
+export { buildFinalQuoteExcelWorkbook, FINAL_QUOTE_EXCEL_HEADERS, buildFinalQuoteExcelFilename, roundExportMetric3 } from "./buildFinalQuoteExcelWorkbook";
 export { FinishSelectCell, FinishMultiSelectCell } from "./FinishSelectCell";
 export {
   FIXED_TABLE_COLUMN_HEADERS,

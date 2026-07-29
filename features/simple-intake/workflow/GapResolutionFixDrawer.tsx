@@ -27,6 +27,7 @@ import {
   type PanelMissingItemDetail,
 } from "../missingRequiredItemFields";
 import { describeDimensionComparisonHe } from "../results/dimensionComparisonCopy";
+import { FinalQuotePartPreviewBody } from "../results/FinalQuotePartPreviewBody";
 import {
   deriveMaterialResolutionCategory,
   deriveRowResolutionPresentation,
@@ -40,6 +41,8 @@ export const GAP_FIX_PANEL_WIDTH_PX = 380;
 export const GAP_FIX_PANEL_MS = 400;
 export const GAP_FIX_PANEL_GUTTER_PX = 40;
 export const GAP_FIX_PANEL_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+export type GapFixDrawerVariant = "gap-fix" | "final-preview";
 
 type GuideOptionId =
   | "upload-dxf"
@@ -161,6 +164,7 @@ function GuideStep({
 
 /**
  * Guided fix panel — clear options with icons so the user knows what to do next.
+ * `variant="final-preview"` shows part geometry + vertical data cards (final quote list).
  */
 export function GapResolutionFixDrawer({
   row,
@@ -171,6 +175,8 @@ export function GapResolutionFixDrawer({
   onKeepDimensionReview,
   trySelectDxf,
   candidates,
+  variant = "gap-fix",
+  dxfFile = null,
 }: {
   row: FinalIntakeRow | null;
   open: boolean;
@@ -180,6 +186,9 @@ export function GapResolutionFixDrawer({
   onKeepDimensionReview: () => void;
   trySelectDxf: (resultRowId: string, dxfId: string | null) => boolean;
   candidates: FinalDxfCandidate[];
+  variant?: GapFixDrawerVariant;
+  /** Matched DXF file for geometry preview (final-preview only). */
+  dxfFile?: File | null;
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -195,8 +204,10 @@ export function GapResolutionFixDrawer({
   const [error, setError] = useState<string | null>(null);
   const [activeOption, setActiveOption] = useState<GuideOptionId>("upload-dxf");
 
+  const isFinalPreview = variant === "final-preview";
+
   useEffect(() => {
-    if (!open || !row) return;
+    if (!open || !row || isFinalPreview) return;
     setPartIdDraft(row.part.sourcePartId?.trim() || "");
     setMaterialDraft(row.material?.trim() || "");
     setThicknessDraft(
@@ -242,7 +253,7 @@ export function GapResolutionFixDrawer({
     } else {
       setActiveOption("upload-dxf");
     }
-  }, [open, row]);
+  }, [open, row, isFinalPreview]);
 
   useEffect(() => {
     if (!open || !row) return;
@@ -265,6 +276,61 @@ export function GapResolutionFixDrawer({
 
   if (!row) return null;
 
+  const itemLabel =
+    row.part.displayName?.trim() ||
+    row.part.sourcePartId?.trim() ||
+    "פריט ללא שם";
+
+  if (isFinalPreview) {
+    return (
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby={titleId}
+        className="flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-[14px] border"
+        style={{
+          width: GAP_FIX_PANEL_WIDTH_PX,
+          maxHeight: "100%",
+          borderColor: "var(--ow-border, #e4e7ec)",
+          backgroundColor: "var(--ow-surface, #ffffff)",
+          color: "var(--ow-text, #101828)",
+          boxShadow: "var(--ow-shadow-md, 0 8px 24px rgba(16, 24, 40, 0.12))",
+        }}
+        data-final-quote-preview-panel="true"
+      >
+        <header className="shrink-0 space-y-1 px-4 pt-4 pb-2">
+          <p
+            className="truncate text-[11px] font-medium tracking-wide"
+            style={{ color: "var(--ow-text-muted, #667085)" }}
+          >
+            תצוגת פריט
+          </p>
+          <h2
+            id={titleId}
+            className="truncate text-[16px] font-semibold leading-snug"
+            style={{ color: "var(--ow-text, #101828)" }}
+          >
+            {itemLabel}
+          </h2>
+        </header>
+
+        <FinalQuotePartPreviewBody row={row} dxfFile={dxfFile} />
+
+        <footer className="shrink-0 px-4 pt-2 pb-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-full rounded-2xl text-[13px]"
+            onClick={onClose}
+          >
+            סגור
+          </Button>
+        </footer>
+      </div>
+    );
+  }
+
   const frozen = isQuoteItemFrozen(row);
   const presentation = deriveRowResolutionPresentation(row);
   const category = deriveMaterialResolutionCategory(row);
@@ -276,10 +342,6 @@ export function GapResolutionFixDrawer({
     category === "MISSING_ITEM_DATA"
       ? derivePanelMissingItemDetails(row)
       : [];
-  const itemLabel =
-    row.part.displayName?.trim() ||
-    row.part.sourcePartId?.trim() ||
-    "פריט ללא שם";
 
   const needsDxfUpload =
     category === "ITEM_IDENTIFICATION" &&

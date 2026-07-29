@@ -29,7 +29,7 @@ import {
   compareQuotePartIds,
   rowCommercialAreaTotalM2,
 } from "../results";
-import { FINAL_QUOTE_EXCEL_HEADERS as EXCEL_HEADERS } from "../results/buildFinalQuoteExcelWorkbook";
+import { FINAL_QUOTE_EXCEL_HEADERS as EXCEL_HEADERS, buildFinalQuoteExcelFilename, roundExportMetric3 } from "../results/buildFinalQuoteExcelWorkbook";
 import type { FinalIntakeRow } from "../results/types";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -304,6 +304,19 @@ console.log("OMEGA — Final Quote List Behavior Corrections v3");
   assert_(EXCEL_HEADERS.includes('שטח פריט (מ"ר)'), "excel ua");
   assert_(EXCEL_HEADERS.includes('שטח כללי (מ"ר)'), "excel ta");
   assert_(EXCEL_HEADERS.includes("פח מרוג"), "excel checkered");
+
+  assertEq(roundExportMetric3(0.57318345), 0.573, "round 3dp");
+  assertEq(roundExportMetric3(14.13), 14.13, "round keep");
+  const fname = buildFinalQuoteExcelFilename({
+    projectName: "פרויקט א",
+    customerName: "לקוח ב",
+    date: new Date(2026, 6, 29),
+  });
+  assertEq(
+    fname,
+    "פירוט להצעת מחיר_פרויקט א_לקוח ב_29-07-2026.xlsx",
+    "excel filename"
+  );
   console.log("✓ physical metric columns + excel headers");
 }
 
