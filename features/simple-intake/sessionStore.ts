@@ -57,6 +57,11 @@ import {
   type FinalQuoteListMembership,
 } from "./finalQuoteListMembership";
 import type { UnifiedQuoteItem } from "./missingRequiredItemFields";
+import {
+  createEmptyWeightPricingDraft,
+  type WeightPricingDraft,
+  type WeightPricingSummaryPayload,
+} from "./weightPricing/types";
 import { parseSimpleDxfFiles } from "./parseSimpleDxfFiles";
 import type {
   OmegaQuoteStage,
@@ -151,6 +156,9 @@ function createEmptySession(): SimpleIntakeSession {
     frozenMaterialRows: {},
     quoteItemCommercialOptions: {},
     finalQuoteListMembership: null,
+    weightPricingDraft: null,
+    weightPricingSummaryPayload: null,
+    forcedReviewWorkspaceView: null,
   };
 }
 
@@ -327,7 +335,11 @@ export const simpleIntakeActions = {
     });
   },
 
-  advanceToPricing(): void {
+  /**
+   * Approve the final quote list: refresh membership snapshot and open pricing.
+   * Preserves any existing weightPricingDraft values for surviving group keys.
+   */
+  advanceToPricing(rows?: ReadonlyArray<UnifiedQuoteItem>): void {
     if (
       session.quoteStage !== "UNIFIED_REVIEW" &&
       session.status !== "FINAL_PRICING_TABLE" &&
@@ -336,11 +348,65 @@ export const simpleIntakeActions = {
     ) {
       return;
     }
+    const membership = rows
+      ? buildFinalQuoteListMembership(rows)
+      : session.finalQuoteListMembership;
+    if (!membership || membership.includedMaterialRowIds.length === 0) {
+      return;
+    }
+    const quotationId = session.runId ?? "local";
+    const draft =
+      session.weightPricingDraft ??
+      createEmptyWeightPricingDraft(quotationId);
     setSession({
       ...session,
       status: "FINAL_PRICING_TABLE",
       quoteStage: "QUOTE_PRICING",
       enteredQuoteStages: markEntered(session.enteredQuoteStages, "QUOTE_PRICING"),
+      finalQuoteListMembership: membership,
+      weightPricingDraft: {
+        ...draft,
+        quotationId,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  },
+
+  setWeightPricingDraft(draft: WeightPricingDraft | null): void {
+    setSession({
+      ...session,
+      weightPricingDraft: draft,
+    });
+  },
+
+  backToFinalQuoteList(): void {
+    setSession({
+      ...session,
+      status: "FINAL_PRICING_TABLE",
+      quoteStage: "UNIFIED_REVIEW",
+      enteredQuoteStages: markEntered(
+        session.enteredQuoteStages,
+        "UNIFIED_REVIEW"
+      ),
+      forcedReviewWorkspaceView: "FINAL_TABLE",
+    });
+  },
+
+  clearForcedReviewWorkspaceView(): void {
+    if (session.forcedReviewWorkspaceView == null) return;
+    setSession({
+      ...session,
+      forcedReviewWorkspaceView: null,
+    });
+  },
+
+  advanceToQuotationSummary(payload: WeightPricingSummaryPayload): void {
+    setSession({
+      ...session,
+      status: "FINAL_PRICING_TABLE",
+      quoteStage: "COMPLETED",
+      enteredQuoteStages: markEntered(session.enteredQuoteStages, "COMPLETED"),
+      weightPricingSummaryPayload: payload,
     });
   },
 
@@ -626,6 +692,9 @@ export const simpleIntakeActions = {
       frozenMaterialRows: {},
       quoteItemCommercialOptions: {},
       finalQuoteListMembership: null,
+      weightPricingDraft: null,
+      weightPricingSummaryPayload: null,
+      forcedReviewWorkspaceView: null,
       timing: emptyTiming(),
     });
   },
@@ -1226,6 +1295,9 @@ export const simpleIntakeActions = {
       lastDebug: null,
       providerCallCount: 0,
       finalQuoteListMembership: null,
+      weightPricingDraft: null,
+      weightPricingSummaryPayload: null,
+      forcedReviewWorkspaceView: null,
       // Preserve DXF registry parsed in stage 1.
       timing,
     });

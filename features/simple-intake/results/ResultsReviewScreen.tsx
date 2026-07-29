@@ -500,7 +500,7 @@ export function ResultsReviewScreen({
       commercialOptions,
       membership
     );
-    simpleIntakeActions.advanceToPricing();
+    simpleIntakeActions.advanceToPricing(finalRows);
   }
 
   async function handleExportExcel(): Promise<void> {

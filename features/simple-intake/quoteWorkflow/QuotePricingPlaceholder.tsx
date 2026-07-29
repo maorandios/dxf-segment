@@ -46,18 +46,21 @@ export function QuotePricingPlaceholder() {
 
 export function QuoteCompletedPlaceholder() {
   return (
-    <div className="flex min-h-[calc(100vh-12rem)] flex-col items-center justify-center px-4 py-12 text-center">
+    <div
+      className="flex min-h-[calc(100vh-12rem)] flex-col items-center justify-center px-4 py-12 text-center"
+      data-quotation-summary-placeholder="true"
+    >
       <h2
         className="text-[26px] font-semibold tracking-tight sm:text-[28px]"
         style={{ color: "var(--ow-text)" }}
       >
-        הצעת המחיר מוכנה
+        סיכום הצעת מחיר
       </h2>
       <p
         className="mx-auto mt-3 max-w-md text-[14px] leading-relaxed"
         style={{ color: "var(--ow-text-secondary)" }}
       >
-        שלב זה יושלם לאחר פיתוח התמחור.
+        התמחור הושלם. מסך הסיכום והפקת המסמך יתווספו בשלב הבא.
       </p>
       <Button type="button" className="mt-6" disabled>
         הורד הצעה

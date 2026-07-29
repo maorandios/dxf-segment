@@ -16,10 +16,10 @@ import { simpleIntakeActions } from "./sessionStore";
 import { OmegaAppShell, deriveHeaderStatus } from "./ui";
 import {
   QuoteSetupScreen,
-  QuotePricingPlaceholder,
   QuoteCompletedPlaceholder,
   deriveQuoteStepperStates,
 } from "./quoteWorkflow";
+import { WeightPricingScreen } from "./weightPricing";
 
 function downloadDebug(debug: Record<string, unknown> | null): void {
   if (!debug) return;
@@ -61,7 +61,7 @@ export function SimpleIntakeShell() {
         onDownloadDebug={() => downloadDebug(session.lastDebug)}
         canDownloadDebug={Boolean(session.lastDebug)}
       >
-        <QuotePricingPlaceholder />
+        <WeightPricingScreen />
       </OmegaAppShell>
     );
   }

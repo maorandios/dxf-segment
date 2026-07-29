@@ -188,7 +188,13 @@ export function PostAnalysisWorkflow() {
     });
   }, [runId, readiness, gapDecision]);
 
-  const view: ReviewWorkspaceView | null = manualView ?? routedDestination;
+  const view: ReviewWorkspaceView | null =
+    session.forcedReviewWorkspaceView ?? manualView ?? routedDestination;
+
+  useLayoutEffect(() => {
+    if (session.forcedReviewWorkspaceView !== "FINAL_TABLE") return;
+    simpleIntakeActions.enterFinalQuoteList(finalRows);
+  }, [session.forcedReviewWorkspaceView, finalRows]);
 
   useLayoutEffect(() => {
     if (!readiness.isReady || !routedDestination) return;
@@ -234,6 +240,7 @@ export function PostAnalysisWorkflow() {
         dxfFileFindings
       );
       if (!access.canAccess) {
+        simpleIntakeActions.clearForcedReviewWorkspaceView();
         setManualView("GAP_RESOLUTION");
         return;
       }
@@ -246,6 +253,7 @@ export function PostAnalysisWorkflow() {
   );
 
   const openGapResolution = useCallback(() => {
+    simpleIntakeActions.clearForcedReviewWorkspaceView();
     setManualView("GAP_RESOLUTION");
   }, []);
 

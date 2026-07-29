@@ -299,6 +299,19 @@ export {
 } from "./finalQuoteListMembership";
 export type { FinalQuoteListMembership } from "./finalQuoteListMembership";
 export {
+  selectApprovedPricingRows,
+  buildWeightPricingGroups,
+  calculateWeightPricingGroup,
+  validateWeightPricingGroups,
+  buildWeightPricingSummaryPayload,
+  WeightPricingScreen,
+} from "./weightPricing";
+export type {
+  WeightPricingDraft,
+  WeightPricingGroup,
+  WeightPricingSummaryPayload,
+} from "./weightPricing";
+export {
   categorizeReadinessIssues,
   rowHasCriticalIssue,
   ReadinessSummary,

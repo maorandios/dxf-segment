@@ -368,6 +368,20 @@ export type SimpleIntakeSession = {
    * Rows frozen before entry are omitted; in-list freezes stay members.
    */
   finalQuoteListMembership: import("./finalQuoteListMembership").FinalQuoteListMembership | null;
+  /**
+   * Weight-based pricing draft keyed by stable pricing group key.
+   * Survives return to the final quote list.
+   */
+  weightPricingDraft: import("./weightPricing/types").WeightPricingDraft | null;
+  /**
+   * Last validated pricing summary payload (set when continuing to summary).
+   */
+  weightPricingSummaryPayload: import("./weightPricing/types").WeightPricingSummaryPayload | null;
+  /**
+   * When returning from weight pricing, keep the final quote-list subview
+   * until the user explicitly opens gap resolution again.
+   */
+  forcedReviewWorkspaceView: "GAP_RESOLUTION" | "FINAL_TABLE" | null;
 };
 
 export const SIMPLE_INTAKE_TIMEOUT_MS = 120_000;
