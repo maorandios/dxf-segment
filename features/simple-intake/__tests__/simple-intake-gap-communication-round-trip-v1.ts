@@ -137,7 +137,7 @@ async function main(): Promise<void> {
   assert(!toolbar.includes("חזרה לסיכום"), "summary back gone");
   assert(toolbar.includes("צור מייל פערים"), "email label");
   assert(toolbar.includes("ייצא דוח Excel"), "excel label");
-  assert(toolbar.includes("המשך לטבלה המסכמת"), "continue label");
+  assert(toolbar.includes("המשך לרשימה להצעת מחיר") || toolbar.includes("המשך לטבלה המסכמת"), "continue label");
   console.log("✓ three-action toolbar exposed (no upload back)");
 }
 

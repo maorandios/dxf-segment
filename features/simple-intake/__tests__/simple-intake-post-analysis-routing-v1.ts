@@ -491,7 +491,9 @@ assertEq(isActionableMaterialCategory("ITEM_IDENTIFICATION"), true, "id A");
   assert(!toolbar.includes("חזרה לסיכום"), "summary back removed");
   assert(!workspace.includes("BACK_TO_UPLOAD"), "BACK_TO_UPLOAD removed");
   assert(
-    workspace.includes("המשך לטבלה המסכמת") ||
+    workspace.includes("המשך לרשימה להצעת מחיר") ||
+      toolbar.includes("המשך לרשימה להצעת מחיר") ||
+      workspace.includes("המשך לטבלה המסכמת") ||
       toolbar.includes("המשך לטבלה המסכמת"),
     "manual continue"
   );
@@ -499,8 +501,12 @@ assertEq(isActionableMaterialCategory("ITEM_IDENTIFICATION"), true, "id A");
     !workflow.includes("/api/simple-intake/analyze"),
     "nav does not rerun AI"
   );
+  const finalToolbar = fs.readFileSync(
+    path.join(root, "results/FinalQuoteListToolbar.tsx"),
+    "utf8"
+  );
   assert(
-    review.includes("onBackToGaps") && review.includes("חזרה לטיפול בפערים"),
+    review.includes("onBackToGaps") && finalToolbar.includes("חזרה"),
     "back to gaps still available"
   );
   console.log("✓ Active flow wiring + nav labels");

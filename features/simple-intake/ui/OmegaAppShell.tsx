@@ -46,8 +46,12 @@ export function OmegaAppShell({
         />
       )}
       <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="ow-stage-enter relative flex min-h-0 flex-1 flex-col overflow-auto px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col items-stretch">
+        {/*
+          Vertical padding lives on the inner wrapper — not the scrollport —
+          so position:sticky top:0 pins flush under the progress bar (no gap).
+        */}
+        <div className="ow-stage-enter relative flex min-h-0 flex-1 flex-col overflow-auto px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col items-stretch py-5">
             {children}
           </div>
         </div>

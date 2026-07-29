@@ -359,6 +359,15 @@ export type SimpleIntakeSession = {
    * Orthogonal to material resolution category and to `excluded`.
    */
   frozenMaterialRows: Record<string, string>;
+  /**
+   * Quotation commercial options (finish / checkered plate) by materialRowId.
+   */
+  quoteItemCommercialOptions: import("./quoteItemCommercialOptions").QuoteItemCommercialOptionsMap;
+  /**
+   * Snapshot of material rows included when entering רשימה להצעת מחיר.
+   * Rows frozen before entry are omitted; in-list freezes stay members.
+   */
+  finalQuoteListMembership: import("./finalQuoteListMembership").FinalQuoteListMembership | null;
 };
 
 export const SIMPLE_INTAKE_TIMEOUT_MS = 120_000;

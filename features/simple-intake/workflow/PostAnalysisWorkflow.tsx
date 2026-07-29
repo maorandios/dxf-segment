@@ -21,6 +21,7 @@ import {
   deriveAnalysisRoutingReadiness,
 } from "../postAnalysisRouting";
 import { GapResolutionWorkspace } from "./GapResolutionWorkspace";
+import { deriveFinalQuoteListAccessDecision } from "../deriveFinalQuoteListAccessDecision";
 import type {
   DimensionMismatchResolution,
   FinalDxfCandidate,
@@ -215,7 +216,7 @@ export function PostAnalysisWorkflow() {
     });
 
     if (routedDestination === "FINAL_TABLE") {
-      simpleIntakeActions.enterFinalPricingTable();
+      simpleIntakeActions.enterFinalQuoteList(finalRows);
     }
   }, [
     readiness.isReady,
@@ -228,22 +229,20 @@ export function PostAnalysisWorkflow() {
 
   const openUnifiedTable = useCallback(
     (filter?: FinalFilterId) => {
-      const nextFilter: FinalFilterId =
-        filter ??
-        (analysis.reviewMetric.affectedItemCount > 0 ||
-        analysis.actionableDiscrepancyCount > 0 ||
-        actionableCount > 0
-          ? "NEEDS_ATTENTION"
-          : "ALL");
+      const access = deriveFinalQuoteListAccessDecision(
+        finalRows,
+        dxfFileFindings
+      );
+      if (!access.canAccess) {
+        setManualView("GAP_RESOLUTION");
+        return;
+      }
+      const nextFilter: FinalFilterId = filter ?? "ALL";
       setTableFilter(nextFilter);
       setManualView("FINAL_TABLE");
-      simpleIntakeActions.enterFinalPricingTable();
+      simpleIntakeActions.enterFinalQuoteList(finalRows);
     },
-    [
-      actionableCount,
-      analysis.actionableDiscrepancyCount,
-      analysis.reviewMetric.affectedItemCount,
-    ]
+    [finalRows, dxfFileFindings]
   );
 
   const openGapResolution = useCallback(() => {
@@ -300,6 +299,19 @@ export function PostAnalysisWorkflow() {
     []
   );
 
+  const canBackToGaps =
+    routedDestination === "GAP_RESOLUTION" || gapDecision.hasActionableGaps;
+
+  const finalListAccess = useMemo(
+    () => deriveFinalQuoteListAccessDecision(finalRows, dxfFileFindings),
+    [finalRows, dxfFileFindings]
+  );
+
+  const effectiveView: ReviewWorkspaceView | null =
+    view === "FINAL_TABLE" && !finalListAccess.canAccess
+      ? "GAP_RESOLUTION"
+      : view;
+
   if (session.resultRows.length === 0 && session.materialListRows.length === 0) {
     return <ResultsReviewScreen />;
   }
@@ -310,16 +322,13 @@ export function PostAnalysisWorkflow() {
     return null;
   }
 
-  if (!view) {
+  if (!effectiveView) {
     return null;
   }
 
-  // Live decision for nav affordances only — never auto-navigate after edits.
-  const liveDecision = gapDecision;
-
   return (
     <div className="space-y-4" dir="rtl">
-      {view === "GAP_RESOLUTION" && (
+      {effectiveView === "GAP_RESOLUTION" && (
         <GapResolutionWorkspace
           finalRows={finalRows}
           analysis={analysis}
@@ -363,16 +372,15 @@ export function PostAnalysisWorkflow() {
         />
       )}
 
-      {view === "FINAL_TABLE" && (
+      {effectiveView === "FINAL_TABLE" && (
         <ResultsReviewScreen
           key={`table-${tableFilter}`}
           initialFilter={tableFilter}
           confirmedManual={confirmedManual}
           onConfirmedManualChange={setConfirmedManual}
           unresolvedCount={actionableCount}
-          onBackToGaps={
-            liveDecision.hasActionableGaps ? openGapResolution : undefined
-          }
+          onBackToGaps={canBackToGaps ? openGapResolution : undefined}
+          onAccessDenied={openGapResolution}
           onOpenCompletionRequest={() => setCompletionOpen(true)}
           dimensionMismatchResolutions={dimensionResolutions}
           onDimensionResolution={handleDimensionResolution}

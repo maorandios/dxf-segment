@@ -47,6 +47,16 @@ import type {
   MaterialListUserOverrides,
 } from "./materialList/types";
 import { normalizePartIdForMatch } from "./normalizePartId";
+import {
+  hydrateQuoteItemCommercialOptions,
+  normalizeQuoteItemFinish,
+  type QuoteItemFinish,
+} from "./quoteItemCommercialOptions";
+import {
+  buildFinalQuoteListMembership,
+  type FinalQuoteListMembership,
+} from "./finalQuoteListMembership";
+import type { UnifiedQuoteItem } from "./missingRequiredItemFields";
 import { parseSimpleDxfFiles } from "./parseSimpleDxfFiles";
 import type {
   OmegaQuoteStage,
@@ -139,6 +149,8 @@ function createEmptySession(): SimpleIntakeSession {
     lastDebug: null,
     providerCallCount: 0,
     frozenMaterialRows: {},
+    quoteItemCommercialOptions: {},
+    finalQuoteListMembership: null,
   };
 }
 
@@ -611,6 +623,9 @@ export const simpleIntakeActions = {
       // Keep dxfFiles + dxfParts registry for DXF-first reuse.
       lastDebug: null,
       providerCallCount: 0,
+      frozenMaterialRows: {},
+      quoteItemCommercialOptions: {},
+      finalQuoteListMembership: null,
       timing: emptyTiming(),
     });
   },
@@ -1160,6 +1175,14 @@ export const simpleIntakeActions = {
     });
   },
 
+  clearFinalQuoteListMembership(): void {
+    if (session.finalQuoteListMembership == null) return;
+    setSession({
+      ...session,
+      finalQuoteListMembership: null,
+    });
+  },
+
   async analyze(): Promise<void> {
     if (!session.workbookFile) return;
     if (session.status === "ANALYZING") return;
@@ -1202,6 +1225,7 @@ export const simpleIntakeActions = {
       matchingDiagnostics: null,
       lastDebug: null,
       providerCallCount: 0,
+      finalQuoteListMembership: null,
       // Preserve DXF registry parsed in stage 1.
       timing,
     });
@@ -1820,6 +1844,87 @@ export const simpleIntakeActions = {
     } else {
       this.freezeQuoteItem(id);
     }
+  },
+
+  setQuoteItemFinish(materialRowId: string, finish: QuoteItemFinish): void {
+    const id = materialRowId.trim();
+    if (!id) return;
+    const prev = hydrateQuoteItemCommercialOptions(
+      session.quoteItemCommercialOptions[id]
+    );
+    setSession({
+      ...session,
+      quoteItemCommercialOptions: {
+        ...session.quoteItemCommercialOptions,
+        [id]: {
+          ...prev,
+          finish: normalizeQuoteItemFinish(finish),
+        },
+      },
+    });
+  },
+
+  /** @deprecated use setQuoteItemFinish */
+  setQuoteItemFinishes(
+    materialRowId: string,
+    finishes: QuoteItemFinish | QuoteItemFinish[]
+  ): void {
+    this.setQuoteItemFinish(materialRowId, normalizeQuoteItemFinish(finishes));
+  },
+
+  setQuoteItemCheckeredPlate(
+    materialRowId: string,
+    isCheckeredPlate: boolean
+  ): void {
+    const id = materialRowId.trim();
+    if (!id) return;
+    const prev = hydrateQuoteItemCommercialOptions(
+      session.quoteItemCommercialOptions[id]
+    );
+    setSession({
+      ...session,
+      quoteItemCommercialOptions: {
+        ...session.quoteItemCommercialOptions,
+        [id]: {
+          ...prev,
+          isCheckeredPlate: Boolean(isCheckeredPlate),
+        },
+      },
+    });
+  },
+
+  setFinalQuoteListMembership(
+    membership: FinalQuoteListMembership | null
+  ): void {
+    setSession({
+      ...session,
+      finalQuoteListMembership: membership,
+    });
+  },
+
+  enterFinalQuoteList(rows: ReadonlyArray<UnifiedQuoteItem>): void {
+    const membership = buildFinalQuoteListMembership(rows);
+    if (
+      session.status !== "DXF_REVIEW" &&
+      session.status !== "READY" &&
+      session.status !== "FINAL_PRICING_TABLE"
+    ) {
+      setSession({
+        ...session,
+        finalQuoteListMembership: membership,
+      });
+      return;
+    }
+    setSession({
+      ...session,
+      status: "FINAL_PRICING_TABLE",
+      quoteStage: "UNIFIED_REVIEW",
+      enteredQuoteStages: markEntered(
+        session.enteredQuoteStages,
+        "UNIFIED_REVIEW"
+      ),
+      finalQuoteListMembership: membership,
+    });
   },
 
   updateRowEdits(

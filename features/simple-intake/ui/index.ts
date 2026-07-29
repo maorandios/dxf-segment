@@ -35,4 +35,9 @@ export { FileUploadSurface } from "./FileUploadSurface";
 export { StatusBadge } from "./StatusBadge";
 export type { StatusBadgeVariant } from "./StatusBadge";
 export { EmptyState, FailureState, ScreenHeader } from "./EmptyState";
+export {
+  ReviewWorkspaceContainer,
+  REVIEW_WORKSPACE_CONTENT_MAX_PX,
+  REVIEW_WORKSPACE_WIDTH_TOKEN,
+} from "./ReviewWorkspaceContainer";
 export { OmegaSideDrawer } from "./OmegaSideDrawer";

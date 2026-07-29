@@ -46,7 +46,6 @@ import {
 import { deriveDxfFileFindings } from "../dxfFileFindings";
 import {
   buildFreezeScopeDiagnostics,
-  isBlockingDxfFindingForActiveScope,
   isQuoteItemFrozen,
   selectFrozenQuoteItems,
 } from "../quoteItemScope";
@@ -54,6 +53,14 @@ import { getCanonicalMaterialItemId } from "../results/canonicalMaterialItemId";
 import { simpleIntakeActions } from "../sessionStore";
 import { GapEmailModal } from "./GapEmailModal";
 import { GapWorkspaceToolbar } from "./GapWorkspaceToolbar";
+import {
+  REVIEW_WORKSPACE_CONTENT_MAX_PX,
+  REVIEW_WORKSPACE_WIDTH_TOKEN,
+} from "../ui/ReviewWorkspaceContainer";
+import {
+  activeBlockingGapCount,
+  deriveFinalQuoteListAccessDecision,
+} from "../deriveFinalQuoteListAccessDecision";
 
 const MUTED_GRAY = "var(--ow-text-muted)";
 const DOT_GREEN = "#16a34a";
@@ -61,7 +68,7 @@ const DOT_ORANGE = "#ea580c";
 /** Vertical separator between subject groups — muted like row borders. */
 const GROUP_SEPARATOR = "1px solid var(--ow-border)";
 const PANEL_EDGE_PAD = 16;
-const MAIN_CONTENT_MAX_PX = 1200;
+const MAIN_CONTENT_MAX_PX = REVIEW_WORKSPACE_CONTENT_MAX_PX;
 
 type StagePanelBox = {
   top: number;
@@ -128,6 +135,10 @@ function cellNumber(value: number | null | undefined): string {
       });
 }
 
+/** Shared sticky header band — fixed heights so the two rows sit flush (no gap). */
+const GAP_STICKY_GROUP_H = "2rem";
+const GAP_STICKY_COL_H = "2rem";
+
 function GroupHeader({
   label,
   colSpan,
@@ -141,11 +152,12 @@ function GroupHeader({
     <th
       colSpan={colSpan}
       scope="colgroup"
-      className="whitespace-nowrap border-b px-3 py-2 text-center text-[11px] font-semibold tracking-wide"
+      className="sticky top-0 z-30 whitespace-nowrap px-3 text-center text-[11px] font-semibold leading-none tracking-wide"
       style={{
+        height: GAP_STICKY_GROUP_H,
         color: "var(--ow-text-secondary)",
-        borderColor: "var(--ow-border)",
         backgroundColor: "var(--ow-surface-muted, #F2F4F7)",
+        borderBottom: "1px solid var(--ow-border)",
         borderInlineStart: withSeparator ? GROUP_SEPARATOR : undefined,
       }}
     >
@@ -166,9 +178,13 @@ function ColHeader({
   return (
     <th
       scope="col"
-      className={`whitespace-nowrap px-3 py-2 text-[11px] font-medium ${className ?? ""}`}
+      className={`sticky z-30 whitespace-nowrap px-3 text-[11px] font-medium leading-none ${className ?? ""}`}
       style={{
+        top: GAP_STICKY_GROUP_H,
+        height: GAP_STICKY_COL_H,
         color: MUTED_GRAY,
+        backgroundColor: "var(--ow-surface-muted, #F2F4F7)",
+        borderBottom: "1px solid var(--ow-border)",
         borderInlineStart: withSeparator ? GROUP_SEPARATOR : undefined,
       }}
     >
@@ -313,6 +329,11 @@ export function GapResolutionWorkspace({
     "search"
   );
   const [continueWarnOpen, setContinueWarnOpen] = useState(false);
+  const [continueBlockMessage, setContinueBlockMessage] = useState<string | null>(
+    null
+  );
+  const [blockedContinueClickCount, setBlockedContinueClickCount] = useState(0);
+  const [blockingMessageShownCount, setBlockingMessageShownCount] = useState(0);
   const [emailOpen, setEmailOpen] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -507,13 +528,33 @@ export function GapResolutionWorkspace({
   }
 
   function requestContinue(): void {
-    const activeBlockingDxf = dxfFindings.filter((f) =>
-      isBlockingDxfFindingForActiveScope(f, finalRows)
-    ).length;
-    if (summary.remainingActionCount > 0 || activeBlockingDxf > 0) {
+    const access = deriveFinalQuoteListAccessDecision(finalRows, dxfFindings);
+    if (!access.canAccess) {
+      const count = activeBlockingGapCount(access);
+      const message =
+        access.activeBlockingDxfFindingCount > 0 &&
+        access.activeBlockingMaterialRowCount > 0
+          ? "לא ניתן להתקדם — יש להשלים את הטיפול בפריטים ובקובצי ה-DXF המסומנים."
+          : count > 0
+            ? `לא ניתן להתקדם — נותרו ${count.toLocaleString("he-IL")} פריטים פעילים שדורשים טיפול.`
+            : "לא ניתן להתקדם כל עוד קיימים פריטים פעילים שדורשים טיפול.";
+      setContinueBlockMessage(message);
       setContinueWarnOpen(true);
+      setBlockedContinueClickCount((n) => n + 1);
+      setBlockingMessageShownCount((n) => n + 1);
+      simpleIntakeActions.patchLastDebug({
+        finalQuoteListV3Diagnostics: {
+          gapContinueButtonDisabled: false,
+          blockedContinueClickCount: blockedContinueClickCount + 1,
+          blockedContinueNavigationCount: 0,
+          blockingMessageShownCount: blockingMessageShownCount + 1,
+        },
+      });
       return;
     }
+    setContinueWarnOpen(false);
+    setContinueBlockMessage(null);
+    simpleIntakeActions.enterFinalQuoteList(finalRows);
     onContinueToTable();
   }
 
@@ -556,6 +597,11 @@ export function GapResolutionWorkspace({
     summary,
     selectedCategory
   );
+  const finalListAccess = useMemo(
+    () => deriveFinalQuoteListAccessDecision(finalRows, dxfFindings),
+    [finalRows, dxfFindings]
+  );
+  const continueBlockedCount = activeBlockingGapCount(finalListAccess);
   const panelMounted = panelRow != null;
   const railWidth = railOpen ? GAP_FIX_PANEL_WIDTH_PX : 0;
   const gutter = railOpen ? GAP_FIX_PANEL_GUTTER_PX : 0;
@@ -667,6 +713,9 @@ export function GapResolutionWorkspace({
           ref={contentColRef}
           className="min-w-0 flex-1"
           style={{ direction: "rtl" }}
+          data-review-workspace-container="true"
+          data-review-workspace-width-token={REVIEW_WORKSPACE_WIDTH_TOKEN}
+          data-testid="gap-resolution-content"
         >
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <ScreenHeader title="פערים להתייחסות" className="mb-0" />
@@ -803,14 +852,14 @@ export function GapResolutionWorkspace({
             </div>
           ) : (
             <div
-              className="overflow-x-auto rounded-[var(--ow-radius-lg)] border"
+              className="rounded-[var(--ow-radius-lg)] border"
               style={{
                 borderColor: "var(--ow-border)",
                 backgroundColor: "var(--ow-surface)",
               }}
             >
               <table
-                className="w-full min-w-[1080px] border-collapse text-right text-[13px]"
+                className="w-full min-w-[1080px] border-separate border-spacing-0 text-right text-[13px]"
                 aria-label="שורות בקטגוריה שנבחרה"
               >
                 <thead>
@@ -820,12 +869,7 @@ export function GapResolutionWorkspace({
                     <GroupHeader label="מידות DXF" colSpan={2} withSeparator />
                     <GroupHeader label="פעולות" colSpan={3} withSeparator />
                   </tr>
-                  <tr
-                    style={{
-                      borderBottom: "1px solid var(--ow-border)",
-                      backgroundColor: "var(--ow-surface-muted, #F2F4F7)",
-                    }}
-                  >
+                  <tr>
                     <ColHeader label="#" className="w-10 text-center" />
                     <ColHeader label="פריט" />
                     <ColHeader label="משויך ל DXF" />
@@ -1064,9 +1108,9 @@ export function GapResolutionWorkspace({
           />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
             <div
-              role="alertdialog"
-              aria-labelledby="continue-gaps-title"
-              aria-describedby="continue-gaps-desc"
+              role="alert"
+              aria-live="assertive"
+              data-testid="gap-continue-block-message"
               className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
               style={{
                 backgroundColor: "#ffffff",
@@ -1075,55 +1119,31 @@ export function GapResolutionWorkspace({
                 textAlign: "center",
               }}
             >
-            <p
-              id="continue-gaps-title"
-              className="text-center text-[15px] font-semibold"
-              style={{ color: "#13202B", textAlign: "center" }}
-            >
-              עדיין קיימים פריטים לטיפול
-            </p>
-            <p
-              id="continue-gaps-desc"
-              className="mt-1.5 text-center text-[13px] leading-relaxed"
-              style={{ color: "#5C6978", textAlign: "center" }}
-            >
-              עדיין קיימים {summary.remainingActionCount.toLocaleString("he-IL")}{" "}
-              פריטים שדורשים פעולה. אפשר להמשיך לטבלה ולחזור לטיפול מאוחר יותר.
-            </p>
-            <div className="mt-4 flex items-center justify-center">
-              <div
-                role="group"
-                aria-label="אישור המשך עם פערים"
-                className="inline-flex max-w-full overflow-hidden rounded-2xl border"
-                style={{
-                  borderColor: "var(--ow-border, #e4e7ec)",
-                  backgroundColor: "var(--ow-surface, #ffffff)",
-                }}
+              <p
+                className="text-center text-[15px] font-semibold"
+                style={{ color: "#13202B", textAlign: "center" }}
               >
+                לא ניתן להתקדם
+              </p>
+              <p
+                className="mt-1.5 text-center text-[13px] leading-relaxed"
+                style={{ color: "#5C6978", textAlign: "center" }}
+              >
+                {continueBlockMessage ??
+                  (continueBlockedCount > 0
+                    ? `לא ניתן להתקדם — נותרו ${continueBlockedCount.toLocaleString("he-IL")} פריטים פעילים שדורשים טיפול.`
+                    : "לא ניתן להתקדם כל עוד קיימים פריטים פעילים שדורשים טיפול.")}
+              </p>
+              <div className="mt-4 flex items-center justify-center">
                 <button
                   type="button"
                   onClick={() => setContinueWarnOpen(false)}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                  style={{ borderColor: "var(--ow-border, #e4e7ec)" }}
                 >
-                  חזור לטיפול
-                </button>
-                <span
-                  aria-hidden
-                  className="h-full w-px shrink-0 self-stretch"
-                  style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setContinueWarnOpen(false);
-                    onContinueToTable();
-                  }}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-[var(--ow-accent)] px-5 text-[13px] font-medium text-[var(--ow-accent-fg)] transition-colors hover:bg-[var(--ow-accent-hover,#115e59)]"
-                >
-                  המשך בכל זאת
+                  הבנתי
                 </button>
               </div>
-            </div>
             </div>
           </div>
         </div>

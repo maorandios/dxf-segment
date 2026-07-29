@@ -98,6 +98,23 @@ export function formatWeightKg(v: number | null | undefined): string {
   return `${trimNum(v, 2)} ק״ג`;
 }
 
+/** Table-cell formatters — units live in the column header only. */
+export function formatWeightKgCell(
+  v: number | null | undefined,
+  decimals = 2
+): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return trimNum(v, decimals);
+}
+
+export function formatAreaM2Cell(
+  v: number | null | undefined,
+  decimals = 3
+): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return trimNum(v, decimals);
+}
+
 export function formatDxfDims(
   widthMm: number | null | undefined,
   lengthMm: number | null | undefined

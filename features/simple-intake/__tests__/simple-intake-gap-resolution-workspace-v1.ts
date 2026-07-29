@@ -107,9 +107,10 @@ console.log("=== Guided Gap Resolution Workspace v1 ===\n");
   assert(workspace.includes("פערים להתייחסות"), "workspace heading");
   assert(
     workspace.includes("המשך לטבלה המסכמת") ||
+      workspace.includes("המשך לרשימה להצעת מחיר") ||
       fs
         .readFileSync(path.join(root, "workflow/GapWorkspaceToolbar.tsx"), "utf8")
-        .includes("המשך לטבלה המסכמת"),
+        .includes("המשך לרשימה להצעת מחיר"),
     "continue always"
   );
   assert(workspace.includes("aria-pressed"), "card a11y");

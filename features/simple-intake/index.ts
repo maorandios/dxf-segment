@@ -275,6 +275,30 @@ export type {
   FrozenMaterialRowsMap,
 } from "./quoteItemScope";
 export {
+  deriveFinalQuoteListAccessDecision,
+  canApproveFinalQuoteList,
+  activeBlockingGapCount,
+} from "./deriveFinalQuoteListAccessDecision";
+export type { FinalQuoteListAccessDecision } from "./deriveFinalQuoteListAccessDecision";
+export {
+  defaultQuoteItemCommercialOptions,
+  hydrateQuoteItemCommercialOptions,
+  normalizeQuoteItemFinish,
+  formatFinishLabelHe,
+  formatFinishesLabelHe,
+} from "./quoteItemCommercialOptions";
+export type {
+  QuoteItemFinish,
+  QuoteItemCommercialOptions,
+  QuoteItemCommercialOptionsMap,
+} from "./quoteItemCommercialOptions";
+export {
+  buildFinalQuoteListMembership,
+  selectFinalQuoteListMemberRows,
+  isInFinalQuoteListMembership,
+} from "./finalQuoteListMembership";
+export type { FinalQuoteListMembership } from "./finalQuoteListMembership";
+export {
   categorizeReadinessIssues,
   rowHasCriticalIssue,
   ReadinessSummary,

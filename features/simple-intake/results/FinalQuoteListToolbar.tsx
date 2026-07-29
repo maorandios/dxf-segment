@@ -2,41 +2,40 @@
 
 import { useId, type ReactNode } from "react";
 import {
-  ArrowLeft,
+  ArrowRight,
+  Check,
   FileSpreadsheet,
-  Mail,
   Search,
   X,
 } from "lucide-react";
-import type { GapWorkspaceAction } from "../gapCommunication";
+
+export type FinalQuoteListAction =
+  | "APPROVE_LIST"
+  | "EXPORT_EXCEL"
+  | "BACK"
+  | "SEARCH";
 
 function Segment({
-  action,
-  onAction,
+  onClick,
   children,
   primary,
-  className,
   disabled,
   title,
+  className,
 }: {
-  action: GapWorkspaceAction;
-  onAction: (action: GapWorkspaceAction) => void;
+  onClick: () => void;
   children: ReactNode;
   primary?: boolean;
-  className?: string;
   disabled?: boolean;
   title?: string;
+  className?: string;
 }) {
   return (
     <button
       type="button"
-      data-gap-action={action}
       title={title}
       disabled={disabled}
-      onClick={() => {
-        if (disabled) return;
-        onAction(action);
-      }}
+      onClick={onClick}
       className={[
         "inline-flex h-10 shrink-0 items-center justify-center gap-2 px-3.5 text-[13px] font-medium transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ow-accent)] focus-visible:ring-inset",
@@ -64,23 +63,37 @@ function Sep() {
   );
 }
 
-export function GapWorkspaceToolbar({
-  onAction,
+/**
+ * RTL visual order inside the panel:
+ * חיפוש פריט | חזרה | ייצא דוח EXCEL | אישור רשימה
+ * (DOM first = visual right in RTL)
+ */
+export function FinalQuoteListToolbar({
   searchQuery,
   onSearchQueryChange,
+  onApprove,
+  onExportExcel,
+  onBack,
+  approveDisabled,
+  approveDisabledReason,
+  exportBusy,
 }: {
-  onAction: (action: GapWorkspaceAction) => void;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
+  onApprove: () => void;
+  onExportExcel: () => void;
+  onBack: () => void;
+  approveDisabled?: boolean;
+  approveDisabledReason?: string;
+  exportBusy?: boolean;
 }) {
   const searchId = useId();
 
   return (
     <div
       role="toolbar"
-      aria-label="פעולות פערים"
-      data-gap-workspace-toolbar="true"
-      data-gap-continue-disabled="false"
+      aria-label="פעולות רשימת הצעת מחיר"
+      data-final-quote-toolbar="true"
       className="inline-flex max-w-full flex-wrap overflow-hidden rounded-2xl border"
       style={{
         borderColor: "var(--ow-border, #e4e7ec)",
@@ -121,28 +134,33 @@ export function GapWorkspaceToolbar({
         ) : null}
       </div>
       <Sep />
-      <Segment action="CREATE_GAP_EMAIL" onAction={onAction}>
-        <Mail className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-        צור מייל פערים
+      <Segment onClick={onBack}>
+        <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+        חזרה
       </Segment>
       <Sep />
-      <Segment action="EXPORT_ROUND_TRIP_EXCEL" onAction={onAction}>
+      <Segment onClick={onExportExcel} disabled={exportBusy}>
         <FileSpreadsheet
           className="h-4 w-4 shrink-0"
           strokeWidth={1.75}
           aria-hidden
         />
-        ייצא דוח Excel
+        ייצא דוח EXCEL
       </Segment>
       <Sep />
       <Segment
-        action="CONTINUE_TO_FINAL_TABLE"
-        onAction={onAction}
+        onClick={onApprove}
         primary
-        title="המשך לרשימה להצעת מחיר"
+        disabled={approveDisabled}
+        title={
+          approveDisabled
+            ? (approveDisabledReason ??
+              "לא ניתן לאשר רשימה ללא פריטים פעילים")
+            : "אישור רשימה"
+        }
       >
-        המשך לרשימה להצעת מחיר
-        <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+        <Check className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+        אישור רשימה
       </Segment>
     </div>
   );

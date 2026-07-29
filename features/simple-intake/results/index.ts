@@ -7,6 +7,9 @@ export {
   resolvePlateDensityKgPerM3,
   formatAreaM2,
   formatWeightKg,
+  formatAreaM2Cell,
+  formatWeightKgCell,
+  formatDimMm,
   formatDxfDims,
 } from "./commercialCalculations";
 export { deriveIssueCodes } from "./deriveIssueCodes";
@@ -20,6 +23,30 @@ export {
 } from "./filterFinalRows";
 export { issueMessageHe, primaryActionLabelHe, REVIEW_STATUS_HE } from "./issueMessages";
 export { ResultsReviewScreen } from "./ResultsReviewScreen";
+export { FinalQuoteListToolbar } from "./FinalQuoteListToolbar";
+export { FinalQuoteMetricCards } from "./FinalQuoteMetricCards";
+export { FinalQuoteListTable } from "./FinalQuoteListTable";
+export {
+  computeFinalQuoteListMetrics,
+  filterFinalQuoteListBySearch,
+  orderFinalQuoteListRows,
+  selectFinalQuoteActiveRows,
+  buildFinalQuoteListDiagnostics,
+  buildFinalQuoteListV2Diagnostics,
+  buildFinalQuoteListV3Diagnostics,
+  buildApprovedQuotePricingPayload,
+  compareQuotePartIds,
+  rowCommercialAreaTotalM2,
+} from "./finalQuoteListMetrics";
+export type {
+  FinalQuoteListMetrics,
+  FinalQuoteListDiagnostics,
+  FinalQuoteListV2Diagnostics,
+  FinalQuoteListV3Diagnostics,
+  ApprovedQuoteItem,
+} from "./finalQuoteListMetrics";
+export { buildFinalQuoteExcelWorkbook, FINAL_QUOTE_EXCEL_HEADERS } from "./buildFinalQuoteExcelWorkbook";
+export { FinishSelectCell, FinishMultiSelectCell } from "./FinishSelectCell";
 export {
   FIXED_TABLE_COLUMN_HEADERS,
   FALLBACK_PART_DISPLAY_NAME,
