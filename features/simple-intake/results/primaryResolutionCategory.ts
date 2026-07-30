@@ -137,6 +137,7 @@ export function hasUnresolvedSignificantDimensionMismatch(
   if (!hasOneResolvedExactUsableDxf(item)) return false;
   if (item.dimensionComparison?.hasSignificantMismatch !== true) return false;
   if (item.dimensionMismatchResolution === "USE_DXF_DIMENSIONS") return false;
+  if (item.dimensionMismatchResolution === "USE_MANUAL_DIMENSIONS") return false;
   return true;
 }
 

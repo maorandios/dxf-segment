@@ -453,6 +453,7 @@ export function runPricingGroupNestingEstimate(args: {
       utilizationPercent,
       wastePercent,
       wasteWeightKg,
+      totalSelectedStockWeightKg: stockWeightKg > 0 ? stockWeightKg : null,
       selectedSheets,
       unplacedPartCount: 0,
       errorMessage: null,

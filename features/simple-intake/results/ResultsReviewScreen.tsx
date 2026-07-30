@@ -110,7 +110,7 @@ export function ResultsReviewScreen({
   onConfirmedManualChange,
   onBackToGaps,
   onAccessDenied,
-  dimensionMismatchResolutions,
+  dimensionMismatchResolutions: _dimensionMismatchResolutions,
   onDimensionResolution,
   initialFilter: _initialFilter = "ALL",
   unresolvedCount: _unresolvedCount,
@@ -126,6 +126,7 @@ export function ResultsReviewScreen({
   onBackToGaps?: () => void;
   onAccessDenied?: () => void;
   onOpenCompletionRequest?: () => void;
+  /** @deprecated Resolutions now come from session.materialRowUserResolutions */
   dimensionMismatchResolutions?: Map<string, DimensionMismatchResolution>;
   onDimensionResolution?: (
     resultRowId: string,
@@ -138,6 +139,7 @@ export function ResultsReviewScreen({
   void _onStartGuidedReview;
   void _onShowSummary;
   void _onOpenCompletionRequest;
+  void _dimensionMismatchResolutions;
 
   const session = useSimpleIntakeSession();
   const [search, setSearch] = useState("");
@@ -146,21 +148,24 @@ export function ResultsReviewScreen({
   const [staleGuardMessage, setStaleGuardMessage] = useState<string | null>(
     null
   );
-  const [localConfirmed, setLocalConfirmed] = useState<Set<string>>(
-    () => new Set()
-  );
 
   const confirmedManual = useMemo(() => {
     if (confirmedManualProp) return confirmedManualProp;
-    return localConfirmed;
-  }, [confirmedManualProp, localConfirmed]);
+    return new Set(session.confirmedManualMatchIds);
+  }, [confirmedManualProp, session.confirmedManualMatchIds]);
 
   const updateConfirmedManual = useCallback(
     (next: Set<string>) => {
       if (onConfirmedManualChange) onConfirmedManualChange(next);
-      else setLocalConfirmed(next);
+      else {
+        for (const id of next) {
+          if (!session.confirmedManualMatchIds.includes(id)) {
+            simpleIntakeActions.confirmManualMatch(id);
+          }
+        }
+      }
     },
-    [onConfirmedManualChange]
+    [onConfirmedManualChange, session.confirmedManualMatchIds]
   );
 
   const [railOpen, setRailOpen] = useState(false);
@@ -188,7 +193,7 @@ export function ResultsReviewScreen({
         snapshot: session.workbookSnapshot,
         diagnostics: session.matchingDiagnostics,
         confirmedManualMatchIds: confirmedManual,
-        dimensionMismatchResolutions,
+        materialRowUserResolutions: session.materialRowUserResolutions,
         frozenMaterialRows: session.frozenMaterialRows,
       }),
     [
@@ -198,8 +203,8 @@ export function ResultsReviewScreen({
       session.workbookSnapshot,
       session.matchingDiagnostics,
       session.frozenMaterialRows,
+      session.materialRowUserResolutions,
       confirmedManual,
-      dimensionMismatchResolutions,
     ]
   );
 

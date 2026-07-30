@@ -16,10 +16,10 @@ import { simpleIntakeActions } from "./sessionStore";
 import { OmegaAppShell, deriveHeaderStatus } from "./ui";
 import {
   QuoteSetupScreen,
-  QuoteCompletedPlaceholder,
   deriveQuoteStepperStates,
 } from "./quoteWorkflow";
 import { WeightPricingScreen } from "./weightPricing";
+import { FinalQuotationScreen } from "./finalQuotation";
 
 function downloadDebug(debug: Record<string, unknown> | null): void {
   if (!debug) return;
@@ -75,7 +75,7 @@ export function SimpleIntakeShell() {
         stepperStates={stepperStates}
         statusText={deriveHeaderStatus(session)}
       >
-        <QuoteCompletedPlaceholder />
+        <FinalQuotationScreen />
       </OmegaAppShell>
     );
   }

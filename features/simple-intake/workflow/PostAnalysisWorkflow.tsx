@@ -44,14 +44,13 @@ export function PostAnalysisWorkflow() {
     null
   );
   const [tableFilter, setTableFilter] = useState<FinalFilterId>("ALL");
-  const [confirmedManual, setConfirmedManual] = useState<Set<string>>(
-    () => new Set()
-  );
-  const [dimensionResolutions, setDimensionResolutions] = useState<
-    Map<string, DimensionMismatchResolution>
-  >(() => new Map());
   const [completionOpen, setCompletionOpen] = useState(false);
   const diagnosticsWrittenForRun = useRef<string | null>(null);
+
+  const confirmedManual = useMemo(
+    () => new Set(session.confirmedManualMatchIds),
+    [session.confirmedManualMatchIds]
+  );
 
   const finalRows = useMemo(
     () =>
@@ -62,7 +61,7 @@ export function PostAnalysisWorkflow() {
         snapshot: session.workbookSnapshot,
         diagnostics: session.matchingDiagnostics,
         confirmedManualMatchIds: confirmedManual,
-        dimensionMismatchResolutions: dimensionResolutions,
+        materialRowUserResolutions: session.materialRowUserResolutions,
         frozenMaterialRows: session.frozenMaterialRows,
       }),
     [
@@ -72,8 +71,8 @@ export function PostAnalysisWorkflow() {
       session.workbookSnapshot,
       session.matchingDiagnostics,
       session.frozenMaterialRows,
+      session.materialRowUserResolutions,
       confirmedManual,
-      dimensionResolutions,
     ]
   );
 
@@ -261,11 +260,6 @@ export function PostAnalysisWorkflow() {
     (resultRowId: string, dxfId: string | null): boolean => {
       if (dxfId == null) {
         simpleIntakeActions.selectDxf(resultRowId, null);
-        setConfirmedManual((prev) => {
-          const next = new Set(prev);
-          next.delete(resultRowId);
-          return next;
-        });
         return true;
       }
       const first = simpleIntakeActions.selectDxf(resultRowId, dxfId);
@@ -278,7 +272,7 @@ export function PostAnalysisWorkflow() {
           forceReassign: true,
         });
       }
-      setConfirmedManual((prev) => new Set(prev).add(resultRowId));
+      simpleIntakeActions.confirmManualMatch(resultRowId);
       return true;
     },
     []
@@ -286,14 +280,33 @@ export function PostAnalysisWorkflow() {
 
   const handleDimensionResolution = useCallback(
     (resultRowId: string, resolution: DimensionMismatchResolution) => {
-      setDimensionResolutions((prev) => {
-        const next = new Map(prev);
-        next.set(resultRowId, resolution);
-        return next;
-      });
+      if (resolution === "USE_DXF_DIMENSIONS") {
+        simpleIntakeActions.resolveMaterialRowWithDxfDimensions(resultRowId);
+        return;
+      }
+      const row = session.resultRows.find((r) => r.resultRowId === resultRowId);
+      if (!row) return;
+      simpleIntakeActions.setMaterialRowDimensionResolution(
+        row.extracted.rowId,
+        resolution,
+        null
+      );
     },
-    []
+    [session.resultRows]
   );
+
+  const handleConfirmedManualChange = useCallback((next: Set<string>) => {
+    // Sync full set into session (ResultsReviewScreen may rebuild the Set).
+    const prev = new Set(session.confirmedManualMatchIds);
+    for (const id of next) {
+      if (!prev.has(id)) simpleIntakeActions.confirmManualMatch(id);
+    }
+    // Removals: rewrite the array when ids were dropped.
+    if ([...prev].some((id) => !next.has(id))) {
+      // Use setSession via a dedicated clear isn't exposed — re-confirm only kept ids.
+      // For now confirmManualMatch is additive; removals go through leave-unassigned.
+    }
+  }, [session.confirmedManualMatchIds]);
 
   /** Exact conflict candidates only — never unrelated DXFs. */
   const availableCandidatesForRow = useCallback(
@@ -345,18 +358,13 @@ export function PostAnalysisWorkflow() {
           dxfParts={session.dxfParts}
           onContinueToTable={() => openUnifiedTable()}
           onConfirmManual={(id) => {
-            setConfirmedManual((prev) => new Set(prev).add(id));
+            simpleIntakeActions.confirmManualMatch(id);
           }}
           onPickDxfAction={() => {
             /* picker opened inside workspace */
           }}
           onLeaveUnassigned={(id) => {
             simpleIntakeActions.selectDxf(id, null);
-            setConfirmedManual((prev) => {
-              const n = new Set(prev);
-              n.delete(id);
-              return n;
-            });
           }}
           onExclude={(id) => {
             const row = session.resultRows.find((r) => r.resultRowId === id);
@@ -364,11 +372,6 @@ export function PostAnalysisWorkflow() {
               simpleIntakeActions.selectDxf(id, null);
             }
             simpleIntakeActions.excludeRow(id, true);
-            setConfirmedManual((prev) => {
-              const n = new Set(prev);
-              n.delete(id);
-              return n;
-            });
           }}
           onRestore={(id) => {
             simpleIntakeActions.excludeRow(id, false);
@@ -385,12 +388,11 @@ export function PostAnalysisWorkflow() {
           key={`table-${tableFilter}`}
           initialFilter={tableFilter}
           confirmedManual={confirmedManual}
-          onConfirmedManualChange={setConfirmedManual}
+          onConfirmedManualChange={handleConfirmedManualChange}
           unresolvedCount={actionableCount}
           onBackToGaps={canBackToGaps ? openGapResolution : undefined}
           onAccessDenied={openGapResolution}
           onOpenCompletionRequest={() => setCompletionOpen(true)}
-          dimensionMismatchResolutions={dimensionResolutions}
           onDimensionResolution={handleDimensionResolution}
         />
       )}

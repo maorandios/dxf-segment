@@ -131,6 +131,7 @@ export type FinalFilterId =
 
 export type DimensionMismatchResolution =
   | "USE_DXF_DIMENSIONS"
+  | "USE_MANUAL_DIMENSIONS"
   | "UNRESOLVED";
 
 /**

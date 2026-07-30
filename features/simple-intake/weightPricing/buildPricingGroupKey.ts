@@ -54,6 +54,39 @@ export function formatPricingGroupLabelHe(input: {
   return `${material} · ${thickness} · ${finish} · ${plate}`;
 }
 
+/** Compact side-panel title: `S235 · עובי 6 מ״מ · שחור · חלק`. */
+export function formatPricingGroupTitle(input: {
+  material: string;
+  thicknessMm: number;
+  finish: QuoteItemFinish;
+  isCheckeredPlate: boolean;
+}): string {
+  const material =
+    input.material.trim().length > 0 ? input.material.trim() : "—";
+  const thickness = Number.isFinite(input.thicknessMm)
+    ? `עובי ${input.thicknessMm.toLocaleString("he-IL", {
+        maximumFractionDigits: 2,
+      })} מ״מ`
+    : "עובי —";
+  const finish = QUOTE_ITEM_FINISH_LABEL_HE[input.finish] ?? input.finish;
+  const plate = input.isCheckeredPlate ? "פח מרוג" : "חלק";
+  return `${material} · ${thickness} · ${finish} · ${plate}`;
+}
+
+/** Compact meta line: `7 פריטים · 10 יחידות`. */
+export function formatPricingGroupMetaLine(input: {
+  itemCount: number;
+  totalQuantity: number;
+}): string {
+  const items = Number.isFinite(input.itemCount)
+    ? input.itemCount.toLocaleString("he-IL")
+    : "0";
+  const units = Number.isFinite(input.totalQuantity)
+    ? input.totalQuantity.toLocaleString("he-IL")
+    : "0";
+  return `${items} פריטים · ${units} יחידות`;
+}
+
 export function comparePricingGroups(
   a: {
     material: string;

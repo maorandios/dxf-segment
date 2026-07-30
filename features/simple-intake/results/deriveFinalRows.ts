@@ -25,6 +25,11 @@ import {
   mapCategoryToReviewStatus,
   type DimensionMismatchResolution,
 } from "./primaryResolutionCategory";
+import {
+  buildDimensionResolutionsMapFromSession,
+  isResolvedDimensionDecision,
+  type MaterialRowUserResolutionsMap,
+} from "../materialRowUserResolution";
 import { issueMessageHe, primaryActionLabelHe } from "./issueMessages";
 import { resolvePartDisplayName } from "./resolvePartDisplayName";
 import type {
@@ -89,13 +94,21 @@ export function deriveFinalRows(args: {
   snapshot: SimpleWorkbookSnapshot | null;
   diagnostics?: SimpleMatchingDiagnostics | null;
   confirmedManualMatchIds?: ReadonlySet<string>;
-  /** Per result-row dimension mismatch resolution (USE_DXF_DIMENSIONS | UNRESOLVED). */
+  /**
+   * @deprecated Prefer materialRowUserResolutions (keyed by materialRowId).
+   * Legacy map keyed by resultRowId — still consulted as fallback.
+   */
   dimensionMismatchResolutions?: ReadonlyMap<string, DimensionMismatchResolution>;
+  /** Canonical materialRowId → user resolution (survives navigation). */
+  materialRowUserResolutions?: MaterialRowUserResolutionsMap | null;
   /** Canonical materialRowId → frozenAt ISO. */
   frozenMaterialRows?: Readonly<Record<string, string>>;
 }): FinalIntakeRow[] {
   const confirmed = args.confirmedManualMatchIds ?? new Set<string>();
-  const dimResolutions = args.dimensionMismatchResolutions ?? new Map();
+  const legacyDimByResultId = args.dimensionMismatchResolutions ?? new Map();
+  const sessionDimByMaterialId = buildDimensionResolutionsMapFromSession(
+    args.materialRowUserResolutions
+  );
   const frozenMap = args.frozenMaterialRows ?? {};
   const dxfById = new Map(args.dxfParts.map((d) => [d.id, d]));
   const unmatchedReasons = new Map(
@@ -244,7 +257,9 @@ export function deriveFinalRows(args: {
 
     const dimensionMismatchResolution: DimensionMismatchResolution | null =
       dimensionComparison?.hasSignificantMismatch === true
-        ? (dimResolutions.get(row.resultRowId) ?? "UNRESOLVED")
+        ? (sessionDimByMaterialId.get(extracted.rowId) ??
+            legacyDimByResultId.get(row.resultRowId) ??
+            "UNRESOLVED")
         : null;
 
     const rowForIssues = {
@@ -278,7 +293,7 @@ export function deriveFinalRows(args: {
         c !== "MANUAL_MATCH_NOT_CONFIRMED"
     );
 
-    if (dimensionMismatchResolution === "USE_DXF_DIMENSIONS") {
+    if (isResolvedDimensionDecision(dimensionMismatchResolution)) {
       issueCodes = issueCodes.filter((c) => c !== "PART_ID_DIMENSION_MISMATCH");
     }
 

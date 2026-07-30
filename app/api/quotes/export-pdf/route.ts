@@ -50,6 +50,11 @@ const itemSchema = z.object({
   plate_shape: z.string().optional(),
   description: z.string().optional(),
   source_row_id: z.string().optional(),
+  geometry_preview_data_uri: z.string().optional(),
+  geometry_preview_svg: z.string().optional(),
+  price_per_kg: z.number().optional(),
+  is_checkered_plate: z.boolean().optional(),
+  finish_code: z.string().optional(),
 });
 
 const pricingSchema = z.object({
@@ -73,6 +78,10 @@ const clientBodySchema = z.object({
   summary: summarySchema,
   items: z.array(itemSchema).min(1),
   pricing: pricingSchema,
+  document_variant: z.enum(["final_quotation"]).optional(),
+  kpi_override: z
+    .array(z.object({ label: z.string(), value: z.string() }))
+    .optional(),
 });
 
 function companyFromEnv() {

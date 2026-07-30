@@ -5,6 +5,7 @@ export {
   QuoteCompletedPlaceholder,
 } from "./QuotePricingPlaceholder";
 export { WeightPricingScreen } from "../weightPricing";
+export { FinalQuotationScreen } from "../finalQuotation";
 export { FiveStepProgressBar } from "./FiveStepProgressBar";
 export {
   deriveOmegaQuoteStage,

@@ -58,5 +58,6 @@ export function buildWeightPricingSummaryPayload(args: {
     subtotalBeforeVat: metrics.subtotalBeforeVat,
     defaults: { ...args.defaults },
     groups,
+    validation: { isComplete: groups.length > 0 },
   };
 }

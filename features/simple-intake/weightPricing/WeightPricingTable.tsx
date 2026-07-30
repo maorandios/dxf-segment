@@ -1,11 +1,7 @@
 "use client";
 
-import {
-  type CSSProperties,
-  type ReactNode,
-  useEffect,
-} from "react";
-import { Eye, RotateCcw } from "lucide-react";
+import { type TdHTMLAttributes, useEffect } from "react";
+import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -38,6 +34,9 @@ import type {
 
 const MUTED_GRAY = "var(--ow-text-muted)";
 const ATTENTION_SOFT = "var(--ow-attention-soft, #fff7e6)";
+/** Matches waste accent on the buy-vs-waste metrics card. */
+const WASTE_ALERT_RED = "#F41C00";
+const WASTE_PERCENT_ALERT_THRESHOLD = 40;
 
 function formatThicknessMmCell(thicknessMm: number): string {
   if (!Number.isFinite(thicknessMm)) return "—";
@@ -72,11 +71,8 @@ function Td({
   children,
   className,
   style,
-}: {
-  children: ReactNode;
-  className?: string;
-  style?: CSSProperties;
-}) {
+  ...rest
+}: TdHTMLAttributes<HTMLTableCellElement>) {
   return (
     <td
       className={className}
@@ -84,6 +80,7 @@ function Td({
         borderBottom: "1px solid var(--ow-border, #e4e7ec)",
         ...style,
       }}
+      {...rest}
     >
       {children}
     </td>
@@ -154,13 +151,34 @@ function NestingMetricCell({
 
   return (
     <span
-      className="tabular-nums text-[12px] leading-none whitespace-nowrap"
+      className="relative z-[1] tabular-nums text-[12px] leading-none whitespace-nowrap"
       style={{ color: muted ? MUTED_GRAY : "var(--ow-text)" }}
       data-pricing-nesting-cell={field}
       data-pricing-nesting-status={estimate.status}
     >
       {text}
     </span>
+  );
+}
+
+function isHighWastePercent(estimate: PricingGroupNestingEstimate): boolean {
+  return (
+    estimate.status === "READY" &&
+    estimate.wastePercent != null &&
+    Number.isFinite(estimate.wastePercent) &&
+    estimate.wastePercent > WASTE_PERCENT_ALERT_THRESHOLD
+  );
+}
+
+/** Solid red alert dot under high-%-פחת values (>40%). */
+function HighWasteAlertDot() {
+  return (
+    <span
+      aria-hidden
+      className="mt-1 inline-block h-1.5 w-1.5 rounded-full"
+      style={{ backgroundColor: WASTE_ALERT_RED }}
+      data-pricing-waste-alert-dot="true"
+    />
   );
 }
 
@@ -172,7 +190,7 @@ export function WeightPricingTable({
   focusRequestId = 0,
   nestingEstimatesByKey,
   onPatchGroup,
-  onViewGroup,
+  onViewGroup: _onViewGroup,
 }: {
   groups: WeightPricingGroup[];
   defaults: WeightPricingDefaults;
@@ -187,8 +205,10 @@ export function WeightPricingTable({
     groupKey: PricingGroupKey,
     patch: Partial<WeightPricingGroupDraft>
   ) => void;
-  onViewGroup: (groupKey: PricingGroupKey) => void;
+  /** Reserved — view column hidden for now. */
+  onViewGroup?: (groupKey: PricingGroupKey) => void;
 }) {
+  void _onViewGroup;
   useEffect(() => {
     if (!focusGroupKey) return;
     const el = document.querySelector<HTMLElement>(
@@ -228,8 +248,7 @@ export function WeightPricingTable({
           <col style={{ width: "8%" }} />
           <col style={{ width: "7%" }} />
           <col style={{ width: "11%" }} />
-          <col style={{ width: "9%" }} />
-          <col style={{ width: "4%" }} />
+          <col style={{ width: "10%" }} />
         </colgroup>
         <thead>
           <tr style={{ backgroundColor: "var(--ow-surface-muted, #F2F4F7)" }}>
@@ -248,7 +267,6 @@ export function WeightPricingTable({
             <ColHeader label="תוספת פח מרוג" />
             <ColHeader label={'מחיר סופי לק"ג'} />
             <ColHeader label='סה"כ' />
-            <ColHeader label="צפייה" className="text-center" />
           </tr>
         </thead>
         <tbody>
@@ -259,6 +277,7 @@ export function WeightPricingTable({
             const nesting =
               nestingEstimatesByKey?.get(group.groupKey) ??
               emptyPricingGroupNestingEstimate(group.groupKey, "IDLE");
+            const highWaste = isHighWastePercent(nesting);
             return (
               <tr
                 key={group.groupKey}
@@ -298,12 +317,18 @@ export function WeightPricingTable({
                     field="utilization"
                   />
                 </Td>
-                <Td className="px-1.5 py-2 tabular-nums">
-                  <NestingMetricCell
-                    estimate={nesting}
-                    text={formatNestingWastePercentColumn(nesting)}
-                    field="wastePercent"
-                  />
+                <Td
+                  className="px-1.5 py-2 tabular-nums"
+                  data-pricing-waste-alert={highWaste ? "true" : undefined}
+                >
+                  <span className="inline-flex flex-col items-center gap-0">
+                    <NestingMetricCell
+                      estimate={nesting}
+                      text={formatNestingWastePercentColumn(nesting)}
+                      field="wastePercent"
+                    />
+                    {highWaste ? <HighWasteAlertDot /> : null}
+                  </span>
                 </Td>
                 <Td className="px-1.5 py-2 tabular-nums">
                   <NestingMetricCell
@@ -358,20 +383,6 @@ export function WeightPricingTable({
                 </Td>
                 <Td className="px-1.5 py-2 tabular-nums whitespace-nowrap font-medium overflow-hidden text-ellipsis">
                   {formatMoneyIls(calc.groupTotal)}
-                </Td>
-                <Td className="px-1 py-2 text-center">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-md p-0 shadow-none"
-                    style={{ color: "var(--ow-text-secondary)" }}
-                    aria-label={`צפה בקבוצה ${groupLabel}`}
-                    title="צפייה"
-                    onClick={() => onViewGroup(group.groupKey)}
-                  >
-                    <Eye className="h-3.5 w-3.5" aria-hidden />
-                  </Button>
                 </Td>
               </tr>
             );

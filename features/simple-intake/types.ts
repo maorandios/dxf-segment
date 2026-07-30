@@ -378,10 +378,24 @@ export type SimpleIntakeSession = {
    */
   weightPricingSummaryPayload: import("./weightPricing/types").WeightPricingSummaryPayload | null;
   /**
+   * Final quotation draft (metadata / VAT / notes) keyed by quotationId.
+   * Survives pricing ↔ summary navigation within the same quotation session.
+   */
+  finalQuotationDraft: import("./finalQuotation/types").FinalQuotationDraft | null;
+  /**
    * When returning from weight pricing, keep the final quote-list subview
    * until the user explicitly opens gap resolution again.
    */
   forcedReviewWorkspaceView: "GAP_RESOLUTION" | "FINAL_TABLE" | null;
+  /**
+   * Canonical user resolutions / field overrides keyed by materialRowId.
+   * Survives gap ↔ final list ↔ pricing navigation and remounts.
+   */
+  materialRowUserResolutions: import("./materialRowUserResolution").MaterialRowUserResolutionsMap;
+  /**
+   * Confirmed manual DXF match result-row IDs (session-persisted).
+   */
+  confirmedManualMatchIds: string[];
 };
 
 export const SIMPLE_INTAKE_TIMEOUT_MS = 120_000;

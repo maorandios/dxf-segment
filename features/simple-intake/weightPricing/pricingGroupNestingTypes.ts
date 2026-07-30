@@ -50,6 +50,8 @@ export type PricingGroupNestingEstimate = {
   utilizationPercent: number | null;
   wastePercent: number | null;
   wasteWeightKg: number | null;
+  /** Canonical stock-sheet weight from the existing nesting estimate. */
+  totalSelectedStockWeightKg: number | null;
   selectedSheets: SelectedNestingStockSheet[];
   unplacedPartCount: number;
   errorMessage: string | null;
@@ -96,6 +98,7 @@ export function emptyPricingGroupNestingEstimate(
     utilizationPercent: null,
     wastePercent: null,
     wasteWeightKg: null,
+    totalSelectedStockWeightKg: null,
     selectedSheets: [],
     unplacedPartCount: 0,
     errorMessage: null,

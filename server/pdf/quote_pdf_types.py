@@ -68,6 +68,11 @@ class LineItem(BaseModel):
         default="",
         description="Hebrew plate-type label (finalize תיאור), e.g. סטנדרט / זוית.",
     )
+    geometry_preview_data_uri: str | None = None
+    geometry_preview_svg: str | None = None
+    price_per_kg: float | None = None
+    is_checkered_plate: bool | None = None
+    finish_code: str | None = None
 
 
 class PricingBlock(BaseModel):
@@ -88,12 +93,19 @@ class PricingBlock(BaseModel):
         return f if f > 0 else None
 
 
+class KpiOverrideCard(BaseModel):
+    label: str
+    value: str
+
+
 class QuotePdfPayload(BaseModel):
     company: CompanyBlock
     quote: QuoteBlock
     summary: SummaryBlock
     items: list[LineItem]
     pricing: PricingBlock
+    document_variant: str | None = None
+    kpi_override: list[KpiOverrideCard] | None = None
 
     @field_validator("items", mode="before")
     @classmethod

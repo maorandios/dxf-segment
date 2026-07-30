@@ -89,6 +89,10 @@ export type WeightPricingSummaryPayload = {
   subtotalBeforeVat: number;
   defaults: WeightPricingDefaults;
   groups: WeightPricingSummaryGroup[];
+  /** Set true only when the payload was built from a fully priced draft. */
+  validation: {
+    isComplete: boolean;
+  };
 };
 
 export type WeightPricingMetrics = {

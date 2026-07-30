@@ -103,9 +103,103 @@ export function formatNestingEstimateCell(
 export function formatSelectedNestingSheets(
   sheets: ReadonlyArray<SelectedNestingStockSheet>
 ): string[] {
-  return sheets.map(
+  return aggregateSelectedSheets(sheets).map(
     (s) => `${s.quantity} × ${s.widthMm}×${s.lengthMm} מ"מ`
   );
+}
+
+/**
+ * Merge identical stock dimensions into one line with summed quantity.
+ * Does not change which sizes were selected — display only.
+ */
+export function aggregateSelectedSheets(
+  sheets: ReadonlyArray<SelectedNestingStockSheet>
+): Array<{ widthMm: number; lengthMm: number; quantity: number }> {
+  const map = new Map<string, { widthMm: number; lengthMm: number; quantity: number }>();
+  for (const s of sheets) {
+    if (
+      !Number.isFinite(s.widthMm) ||
+      !Number.isFinite(s.lengthMm) ||
+      !Number.isFinite(s.quantity) ||
+      s.quantity <= 0
+    ) {
+      continue;
+    }
+    const key = `${s.widthMm}x${s.lengthMm}`;
+    const prev = map.get(key);
+    if (prev) {
+      prev.quantity += s.quantity;
+    } else {
+      map.set(key, {
+        widthMm: s.widthMm,
+        lengthMm: s.lengthMm,
+        quantity: s.quantity,
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.widthMm !== b.widthMm) return a.widthMm - b.widthMm;
+    return a.lengthMm - b.lengthMm;
+  });
+}
+
+/**
+ * Prefer canonical nesting stock weight; fall back to net + waste when READY.
+ */
+export function resolveEstimatedRawMaterialWeightKg(args: {
+  estimate: PricingGroupNestingEstimate;
+  netPartWeightKg: number;
+}): number | null {
+  const { estimate, netPartWeightKg } = args;
+  if (estimate.status !== "READY") return null;
+  if (
+    estimate.totalSelectedStockWeightKg != null &&
+    Number.isFinite(estimate.totalSelectedStockWeightKg)
+  ) {
+    return estimate.totalSelectedStockWeightKg;
+  }
+  if (
+    estimate.wasteWeightKg != null &&
+    Number.isFinite(estimate.wasteWeightKg) &&
+    Number.isFinite(netPartWeightKg)
+  ) {
+    return Math.max(0, netPartWeightKg) + Math.max(0, estimate.wasteWeightKg);
+  }
+  return null;
+}
+
+/** User-facing Hebrew reason when nesting is not READY. */
+export function formatNestingUnavailableReasonHe(
+  estimate: PricingGroupNestingEstimate
+): string {
+  const codes = new Set(estimate.failureDetails.map((d) => d.code));
+  if (
+    codes.has("EXCEEDS_ALL_STOCK_SHEETS") ||
+    codes.has("UNPLACED_INSTANCES")
+  ) {
+    return "לא ניתן למקם את כל הפריטים על מידות פחי הגלם הנתמכות.";
+  }
+  if (
+    codes.has("GEOMETRY_LOAD_FAILURE") ||
+    codes.has("DXF_INVALID") ||
+    codes.has("MISSING_OUTER_CONTOUR") ||
+    codes.has("INVALID_AREA") ||
+    codes.has("MISSING_DXF") ||
+    codes.has("MISSING_DIMENSIONS")
+  ) {
+    return "לא ניתן לטעון גאומטריה עבור אחד מקובצי ה-DXF.";
+  }
+  if (estimate.errorMessage?.trim()) {
+    // Prefer short Hebrew defaults over raw engine messages when possible.
+    const msg = estimate.errorMessage.trim();
+    if (/geometry|dxf|contour|area/i.test(msg)) {
+      return "לא ניתן לטעון גאומטריה עבור אחד מקובצי ה-DXF.";
+    }
+    if (/place|stock|oversize|unplaced/i.test(msg)) {
+      return "לא ניתן למקם את כל הפריטים על מידות פחי הגלם הנתמכות.";
+    }
+  }
+  return "לא ניתן לחשב אומדן נסטינג לקבוצה זו.";
 }
 
 function formatFailureDetailHe(d: PricingNestingFailureDetail): string {

@@ -21,11 +21,14 @@ export function FinalQuoteItemPreviewModal({
   open,
   onClose,
   onToggleFreeze,
+  readOnly = false,
 }: {
   row: FinalIntakeRow | null;
   open: boolean;
   onClose: () => void;
   onToggleFreeze: (row: FinalIntakeRow) => void;
+  /** When true, hide freeze/restore (final quotation preview). */
+  readOnly?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +179,7 @@ export function FinalQuoteItemPreviewModal({
           >
             סגור
           </Button>
+          {!readOnly ? (
           <Button
             type="button"
             className="h-10 flex-1 rounded-xl gap-2"
@@ -192,6 +196,7 @@ export function FinalQuoteItemPreviewModal({
             )}
             {frozen ? "החזר פריט" : "הקפא פריט"}
           </Button>
+          ) : null}
         </div>
       </div>
     </div>

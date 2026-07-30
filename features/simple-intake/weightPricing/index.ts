@@ -20,6 +20,8 @@ export {
 export {
   buildPricingGroupKey,
   formatPricingGroupLabelHe,
+  formatPricingGroupTitle,
+  formatPricingGroupMetaLine,
   comparePricingGroups,
   normalizeMaterialForPricingKey,
   normalizeThicknessForPricingKey,
@@ -93,6 +95,9 @@ export {
   formatNestingPercent,
   formatNestingWasteWeightKg,
   formatSelectedNestingSheets,
+  aggregateSelectedSheets,
+  resolveEstimatedRawMaterialWeightKg,
+  formatNestingUnavailableReasonHe,
   buildNestingEstimateTooltip,
 } from "./formatPricingNestingEstimate";
 export {
@@ -107,4 +112,14 @@ export {
   buildPricingNestingDiagnostics,
   assertPricingNestingInvariants,
 } from "./buildPricingNestingDiagnostics";
+export {
+  buildPricingGroupPanelDiagnostics,
+  assertPricingGroupPanelInvariants,
+  panelOpenTriggersNestingRun,
+  panelOpenTriggersPhysicalRecalculation,
+  newDxfViewerCreated,
+  legacyDetailListRendered,
+} from "./buildPricingGroupPanelDiagnostics";
+export type { PricingGroupPanelDiagnostics } from "./buildPricingGroupPanelDiagnostics";
 export { WeightPricingScreen } from "./WeightPricingScreen";
+export { WeightPricingGroupDetailsDrawer } from "./WeightPricingGroupDetailsDrawer";

@@ -86,15 +86,16 @@
     </section>
 
     <section class="section">
-      <h2 class="section-title">מדדי סיכום</h2>
+      <h2 class="section-title">{% if is_final_quotation %}סיכום הצעת מחיר{% else %}מדדי סיכום{% endif %}</h2>
       <div class="kpi-row">
         {% for card in kpi_cards %}
         <div class="kpi-card">
           <div class="kpi-label">{{ card.label }}</div>
-          <div class="kpi-value">{% if loop.last %}<span class="num" dir="ltr">{{ card.value }}</span>{% else %}{{ card.value }}{% endif %}</div>
+          <div class="kpi-value">{{ card.value }}</div>
         </div>
         {% endfor %}
       </div>
+      {% if technical_rows %}
       <div class="tech-box">
         <p class="tech-title">נתונים טכניים נוספים</p>
         <div class="tech-grid">
@@ -106,6 +107,7 @@
           {% endfor %}
         </div>
       </div>
+      {% endif %}
     </section>
 
     {% if scope_has %}
@@ -116,8 +118,56 @@
     {% endif %}
 
     <section class="section break-inside">
-      <h2 class="section-title">פירוט פלטות</h2>
+      <h2 class="section-title">{% if is_final_quotation %}פירוט פריטים{% else %}פירוט פלטות{% endif %}</h2>
       <div class="table-wrap">
+        {% if is_final_quotation %}
+        <table class="parts final-quotation-parts">
+          <thead>
+            <tr>
+              <th class="cen">#</th>
+              <th>שם פריט</th>
+              <th class="cen">גאומטריה</th>
+              <th class="num">עובי (מ״מ)</th>
+              <th class="cen">כמות</th>
+              <th>סוג חומר</th>
+              <th class="num">אורך (מ״מ)</th>
+              <th class="num">רוחב (מ״מ)</th>
+              <th class="num">משקל (ק״ג)</th>
+              <th>גימור</th>
+              <th class="cen">פח מרוג</th>
+              <th class="num">עלות לק״ג</th>
+              <th class="num">סה״כ עלות לפריט</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in item_rows %}
+            <tr>
+              <td class="cen">{{ loop.index }}</td>
+              <td class="pn num" dir="ltr">{{ row.part_number }}</td>
+              <td class="cen geo-cell">
+                {% if row.geometry_preview_data_uri %}
+                <img class="geo-thumb" src="{{ row.geometry_preview_data_uri }}" alt="" />
+                {% elif row.geometry_preview_svg %}
+                <div class="geo-thumb-svg">{{ row.geometry_preview_svg | safe }}</div>
+                {% else %}
+                —
+                {% endif %}
+              </td>
+              <td class="num" dir="ltr">{{ row.thickness }}</td>
+              <td class="cen">{{ row.qty }}</td>
+              <td>{{ row.material_grade }}</td>
+              <td class="num" dir="ltr">{{ row.length_mm }}</td>
+              <td class="num" dir="ltr">{{ row.width_mm }}</td>
+              <td class="num" dir="ltr">{{ row.weight }}</td>
+              <td>{{ row.finish }}</td>
+              <td class="cen">{{ row.is_checkered_plate }}</td>
+              <td class="num" dir="ltr">{{ row.price_per_kg }}</td>
+              <td class="num price" dir="ltr">{{ row.line_total }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
         <table class="parts">
           <colgroup>
             <col style="width: 9%" />
@@ -168,9 +218,11 @@
             {% endfor %}
           </tbody>
         </table>
+        {% endif %}
       </div>
     </section>
 
+    {% if not is_final_quotation %}
     <section class="section pricing-section">
       <h2 class="section-title">סיכום מחיר</h2>
       <div class="pricing-wrap">
@@ -200,6 +252,7 @@
         </div>
       </div>
     </section>
+    {% endif %}
 
     {% if notes_lines %}
     <section class="section">

@@ -482,3 +482,38 @@ table.parts td.price {
   text-align: left;
   max-width: 40%;
 }
+
+/* Final quotation geometry thumbnails */
+.geo-cell {
+  padding: 0.2rem !important;
+}
+.geo-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  display: inline-block;
+  vertical-align: middle;
+}
+.geo-thumb-svg {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.geo-thumb-svg svg {
+  max-width: 36px;
+  max-height: 36px;
+}
+.final-quotation-parts th,
+.final-quotation-parts td {
+  font-size: 0.72rem;
+  padding: 0.28rem 0.22rem;
+}
+.final-quotation-parts thead {
+  display: table-header-group;
+}
+.final-quotation-parts tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}

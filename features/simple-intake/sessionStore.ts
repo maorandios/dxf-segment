@@ -62,7 +62,18 @@ import {
   type WeightPricingDraft,
   type WeightPricingSummaryPayload,
 } from "./weightPricing/types";
+import {
+  assertUserResolutionInvariants,
+  buildUserResolutionDiagnostics,
+  fromDimensionMismatchResolution,
+  getMaterialRowUserResolution,
+  setDimensionDecisionOnResolution,
+  upsertFieldOverride,
+  validateMaterialOverride,
+  type MaterialRowFieldOverrides,
+} from "./materialRowUserResolution";
 import { parseSimpleDxfFiles } from "./parseSimpleDxfFiles";
+import type { DimensionMismatchResolution } from "./results/types";
 import type {
   OmegaQuoteStage,
   QuoteWorkspaceDetails,
@@ -158,7 +169,10 @@ function createEmptySession(): SimpleIntakeSession {
     finalQuoteListMembership: null,
     weightPricingDraft: null,
     weightPricingSummaryPayload: null,
+    finalQuotationDraft: null,
     forcedReviewWorkspaceView: null,
+    materialRowUserResolutions: {},
+    confirmedManualMatchIds: [],
   };
 }
 
@@ -410,6 +424,28 @@ export const simpleIntakeActions = {
     });
   },
 
+  /** Return from סיכום הצעת מחיר to תמחור הצעת מחיר — preserve drafts. */
+  backToWeightPricing(): void {
+    setSession({
+      ...session,
+      status: "FINAL_PRICING_TABLE",
+      quoteStage: "QUOTE_PRICING",
+      enteredQuoteStages: markEntered(
+        session.enteredQuoteStages,
+        "QUOTE_PRICING"
+      ),
+    });
+  },
+
+  setFinalQuotationDraft(
+    draft: import("./finalQuotation/types").FinalQuotationDraft | null
+  ): void {
+    setSession({
+      ...session,
+      finalQuotationDraft: draft,
+    });
+  },
+
   setWorkbook(file: File | null): void {
     const next = {
       ...session,
@@ -436,6 +472,8 @@ export const simpleIntakeActions = {
       next.coverageIssues = [];
       next.exactIdOccurrences = [];
       next.hasCoverageWarnings = false;
+      next.materialRowUserResolutions = {};
+      next.confirmedManualMatchIds = [];
     }
     setSession(next);
   },
@@ -694,7 +732,10 @@ export const simpleIntakeActions = {
       finalQuoteListMembership: null,
       weightPricingDraft: null,
       weightPricingSummaryPayload: null,
+      finalQuotationDraft: null,
       forcedReviewWorkspaceView: null,
+      materialRowUserResolutions: {},
+      confirmedManualMatchIds: [],
       timing: emptyTiming(),
     });
   },
@@ -1297,7 +1338,10 @@ export const simpleIntakeActions = {
       finalQuoteListMembership: null,
       weightPricingDraft: null,
       weightPricingSummaryPayload: null,
+      finalQuotationDraft: null,
       forcedReviewWorkspaceView: null,
+      materialRowUserResolutions: {},
+      confirmedManualMatchIds: [],
       // Preserve DXF registry parsed in stage 1.
       timing,
     });
@@ -2016,9 +2060,11 @@ export const simpleIntakeActions = {
     // Keep Stage 1 canonical list in sync with table/readiness edits.
     const touched = resultRows.find((r) => r.resultRowId === resultRowId);
     let materialListRows = session.materialListRows;
+    const materialRowUserResolutions = { ...session.materialRowUserResolutions };
     if (touched) {
+      const materialRowId = touched.extracted.rowId;
       materialListRows = session.materialListRows.map((ml) => {
-        if (ml.rowId !== touched.extracted.rowId) return ml;
+        if (ml.rowId !== materialRowId) return ml;
         const patch: MaterialListUserOverrides = {};
         if (Object.prototype.hasOwnProperty.call(edits, "material")) {
           patch.material = edits.material ?? null;
@@ -2046,8 +2092,148 @@ export const simpleIntakeActions = {
           keepApprovedWithMissing: session.materialListApproved,
         });
       });
+
+      // Persist canonical MaterialRowUserResolution overrides (do not mutate source).
+      let res = getMaterialRowUserResolution(
+        materialRowUserResolutions,
+        materialRowId
+      );
+      const runId = session.runId;
+      const fieldMap: Array<{
+        editKey: keyof SimpleResultRow["edits"];
+        resKey: keyof MaterialRowFieldOverrides;
+      }> = [
+        { editKey: "partId", resKey: "partId" },
+        { editKey: "material", resKey: "material" },
+        { editKey: "thicknessMm", resKey: "thicknessMm" },
+        { editKey: "quantity", resKey: "quantity" },
+        { editKey: "widthMm", resKey: "widthMm" },
+        { editKey: "lengthMm", resKey: "lengthMm" },
+      ];
+      for (const { editKey, resKey } of fieldMap) {
+        if (!Object.prototype.hasOwnProperty.call(edits, editKey)) continue;
+        const raw = edits[editKey];
+        if (raw == null) continue;
+        const err = validateMaterialOverride(resKey, raw);
+        if (err) continue;
+        res = upsertFieldOverride(
+          res,
+          materialRowId,
+          runId,
+          resKey,
+          raw as string | number,
+          "MANUAL_ENTRY"
+        );
+      }
+      // Manual width+length → dimension decision when both present.
+      if (res) {
+        const w = res.overrides.widthMm?.value;
+        const l = res.overrides.lengthMm?.value;
+        if (
+          typeof w === "number" &&
+          w > 0 &&
+          typeof l === "number" &&
+          l > 0 &&
+          (Object.prototype.hasOwnProperty.call(edits, "widthMm") ||
+            Object.prototype.hasOwnProperty.call(edits, "lengthMm"))
+        ) {
+          res = setDimensionDecisionOnResolution(
+            res,
+            materialRowId,
+            runId,
+            "USE_MANUAL_DIMENSIONS",
+            null
+          );
+        }
+        materialRowUserResolutions[materialRowId] = res;
+      }
     }
-    setSession({ ...session, resultRows, materialListRows, ...refreshed });
+    setSession({
+      ...session,
+      resultRows,
+      materialListRows,
+      materialRowUserResolutions,
+      ...refreshed,
+    });
+  },
+
+  /**
+   * Persist dimension mismatch resolution by canonical materialRowId.
+   */
+  setMaterialRowDimensionResolution(
+    materialRowId: string,
+    resolution: DimensionMismatchResolution,
+    resolvedDxfId: string | null = null
+  ): void {
+    if (!materialRowId) return;
+    const decision = fromDimensionMismatchResolution(resolution);
+    const current = getMaterialRowUserResolution(
+      session.materialRowUserResolutions,
+      materialRowId
+    );
+    const next = setDimensionDecisionOnResolution(
+      current,
+      materialRowId,
+      session.runId,
+      decision,
+      resolvedDxfId
+    );
+    setSession({
+      ...session,
+      materialRowUserResolutions: {
+        ...session.materialRowUserResolutions,
+        [materialRowId]: next,
+      },
+    });
+  },
+
+  /** Persist USE_DXF_DIMENSIONS using a result-row id (resolves materialRowId). */
+  resolveMaterialRowWithDxfDimensions(resultRowId: string): void {
+    const row = session.resultRows.find((r) => r.resultRowId === resultRowId);
+    if (!row) return;
+    const materialRowId = row.extracted.rowId;
+    const dxfId = row.match.matchedDxfId;
+    this.setMaterialRowDimensionResolution(
+      materialRowId,
+      "USE_DXF_DIMENSIONS",
+      dxfId
+    );
+  },
+
+  clearMaterialRowDimensionResolution(materialRowId: string): void {
+    this.setMaterialRowDimensionResolution(materialRowId, "UNRESOLVED", null);
+  },
+
+  confirmManualMatch(resultRowId: string): void {
+    if (session.confirmedManualMatchIds.includes(resultRowId)) return;
+    setSession({
+      ...session,
+      confirmedManualMatchIds: [
+        ...session.confirmedManualMatchIds,
+        resultRowId,
+      ],
+    });
+  },
+
+  /** Dev diagnostics for persisted user resolutions. */
+  patchUserResolutionDiagnostics(extra?: {
+    totalMaterialRows?: number;
+  }): void {
+    const diagnostics = buildUserResolutionDiagnostics({
+      quotationId: session.runId ?? "local",
+      analysisRunId: session.runId ?? "local",
+      totalMaterialRows:
+        extra?.totalMaterialRows ?? session.materialListRows.length,
+      resolutions: session.materialRowUserResolutions,
+    });
+    assertUserResolutionInvariants(diagnostics);
+    setSession({
+      ...session,
+      lastDebug: {
+        ...(session.lastDebug ?? {}),
+        userResolutionDiagnostics: diagnostics,
+      },
+    });
   },
 
   /**

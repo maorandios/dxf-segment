@@ -50,7 +50,7 @@ const STANDARD_CARDS: ReadonlyArray<{
     label: 'סה"כ לפני מע"מ',
     icon: Sigma,
     fractionDigits: 2,
-    badge: "סכום קבוצות ללא מע״מ",
+    badge: 'סה"כ עלות לחיוב לפני מע"מ',
   },
 ];
 

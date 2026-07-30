@@ -231,6 +231,27 @@ export {
 } from "./buildAnalyzeRequest";
 export { normalizePartIdForMatch } from "./normalizePartId";
 export {
+  deriveEffectiveMaterialRowValues,
+  buildUserResolutionDiagnostics,
+  assertUserResolutionInvariants,
+  buildDimensionResolutionsMapFromSession,
+  emptyMaterialRowUserResolution,
+  setDimensionDecisionOnResolution,
+  upsertFieldOverride,
+  userDecisionStoredOnlyInComponentState,
+  useDxfDecisionSurvivesNavigation,
+  manualFieldOverridesSurviveNavigation,
+  finalListGuardUsesEffectiveRows,
+  backFromPricingDestination,
+} from "./materialRowUserResolution";
+export type {
+  MaterialRowUserResolution,
+  MaterialRowUserResolutionsMap,
+  DimensionResolutionDecision,
+  EffectiveMaterialRowValues,
+  UserResolutionDiagnostics,
+} from "./materialRowUserResolution";
+export {
   deriveFinalRows,
   summarizeFinalRows,
   ResultsReviewScreen,
