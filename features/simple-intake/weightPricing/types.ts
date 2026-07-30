@@ -94,6 +94,15 @@ export type WeightPricingSummaryPayload = {
 export type WeightPricingMetrics = {
   pricingGroupCount: number;
   totalWeightKg: number;
+  /** Purchased stock-plate weight from nesting estimates (READY groups). */
+  totalStockPlateWeightKg: number;
+  /** Nesting waste weight summed from READY groups. */
+  totalWasteWeightKg: number;
+  /**
+   * Share of purchased plate weight that is utilized parts:
+   * (stock − waste) / stock × 100.
+   */
+  buyVsWasteUtilizationPercent: number;
   weightedAveragePricePerKg: number;
   subtotalBeforeVat: number;
 };

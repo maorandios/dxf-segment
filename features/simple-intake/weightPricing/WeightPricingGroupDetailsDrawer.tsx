@@ -12,16 +12,23 @@ import type { FinalIntakeRow } from "../results/types";
 import { formatPricingGroupLabelHe } from "./buildPricingGroupKey";
 import { calculateWeightPricingGroup } from "./calculateWeightPricingGroup";
 import {
+  formatNestingPercent,
+  formatNestingWasteWeightKg,
+  formatSelectedNestingSheets,
+} from "./formatPricingNestingEstimate";
+import {
   formatMoneyIls,
   formatPricePerKg,
   formatPricingWeightKg,
 } from "./formatWeightPricing";
+import type { PricingGroupNestingEstimate } from "./pricingGroupNestingTypes";
 import type { WeightPricingDefaults, WeightPricingGroup } from "./types";
 
 export function WeightPricingGroupDetailsDrawer({
   group,
   defaults,
   rows,
+  nestingEstimate,
   open,
   onClose,
   onViewItem,
@@ -29,6 +36,7 @@ export function WeightPricingGroupDetailsDrawer({
   group: WeightPricingGroup | null;
   defaults: WeightPricingDefaults;
   rows: FinalIntakeRow[];
+  nestingEstimate?: PricingGroupNestingEstimate | null;
   open: boolean;
   onClose: () => void;
   onViewItem: (rowId: string) => void;
@@ -113,6 +121,45 @@ export function WeightPricingGroupDetailsDrawer({
             <dt style={{ color: "var(--ow-text-muted)" }}>סה״כ קבוצה</dt>
             <dd>{formatMoneyIls(calc.groupTotal)}</dd>
           </dl>
+
+          {nestingEstimate ? (
+            <section data-pricing-nesting-details="true">
+              <h3 className="mb-2 font-medium">אומדן נסטינג</h3>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+                <dt style={{ color: "var(--ow-text-muted)" }}>ניצול משוער</dt>
+                <dd>
+                  {nestingEstimate.status === "READY" &&
+                  nestingEstimate.utilizationPercent != null
+                    ? `${formatNestingPercent(nestingEstimate.utilizationPercent)}%`
+                    : nestingEstimate.status === "RUNNING"
+                      ? "מחשב..."
+                      : "לא זמין"}
+                </dd>
+                <dt style={{ color: "var(--ow-text-muted)" }}>פחת משוער</dt>
+                <dd>
+                  {nestingEstimate.status === "READY" &&
+                  nestingEstimate.wastePercent != null
+                    ? `${formatNestingPercent(nestingEstimate.wastePercent)}%`
+                    : "—"}
+                </dd>
+                <dt style={{ color: "var(--ow-text-muted)" }}>משקל פחת</dt>
+                <dd>
+                  {nestingEstimate.status === "READY" &&
+                  nestingEstimate.wasteWeightKg != null
+                    ? `${formatNestingWasteWeightKg(nestingEstimate.wasteWeightKg)} ק״ג`
+                    : "—"}
+                </dd>
+                <dt style={{ color: "var(--ow-text-muted)" }}>פחי גלם שנבחרו</dt>
+                <dd className="whitespace-pre-line">
+                  {nestingEstimate.selectedSheets.length > 0
+                    ? formatSelectedNestingSheets(
+                        nestingEstimate.selectedSheets
+                      ).join("\n")
+                    : "—"}
+                </dd>
+              </dl>
+            </section>
+          ) : null}
 
           <section>
             <h3 className="mb-2 font-medium">פריטי הקבוצה</h3>

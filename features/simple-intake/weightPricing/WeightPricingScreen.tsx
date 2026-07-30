@@ -24,14 +24,20 @@ import {
   buildWeightPricingSummaryPayload,
   canOpenWeightPricingScreen,
   computeWeightPricingMetrics,
+  mergeNestingComparisonIntoMetrics,
   patchGroupPricingInDraft,
   selectApprovedPricingRows,
   validateWeightPricingGroups,
 } from "./index";
+import {
+  assertPricingNestingInvariants,
+  buildPricingNestingDiagnostics,
+} from "./buildPricingNestingDiagnostics";
 import type {
   PricingGroupKey,
   WeightPricingGroupDraft,
 } from "./types";
+import { usePricingGroupNestingEstimates } from "./usePricingGroupNestingEstimates";
 import { WeightPricingGroupDetailsDrawer } from "./WeightPricingGroupDetailsDrawer";
 import { WeightPricingMetricCards } from "./WeightPricingMetricCards";
 import { WeightPricingQuickBar } from "./WeightPricingQuickBar";
@@ -110,10 +116,6 @@ export function WeightPricingScreen() {
 
   const defaults = rebuiltDraft.defaults;
 
-  const metrics = useMemo(
-    () => computeWeightPricingMetrics(groups, defaults),
-    [groups, defaults]
-  );
   const validation = useMemo(
     () => validateWeightPricingGroups(groups, defaults),
     [groups, defaults]
@@ -121,6 +123,28 @@ export function WeightPricingScreen() {
   const invalidSet = useMemo(
     () => new Set(validation.invalidGroupKeys),
     [validation.invalidGroupKeys]
+  );
+
+  const {
+    estimatesByKey: nestingEstimatesByKey,
+    frozenRowsIncludedInNesting,
+    nonMemberRowsIncludedInNesting,
+  } = usePricingGroupNestingEstimates({
+    groups,
+    approvedRows,
+    membership,
+    dxfParts: session.dxfParts,
+    dxfFiles: session.dxfFiles,
+  });
+
+  const metrics = useMemo(
+    () =>
+      mergeNestingComparisonIntoMetrics(
+        computeWeightPricingMetrics(groups, defaults),
+        groups,
+        nestingEstimatesByKey
+      ),
+    [groups, defaults, nestingEstimatesByKey]
   );
 
   const detailsGroup =
@@ -154,10 +178,41 @@ export function WeightPricingScreen() {
       draft: session.weightPricingDraft,
     });
     assertWeightPricingInvariants(diagnostics);
+    const nestingDiagnostics = buildPricingNestingDiagnostics({
+      pricingGroupCount: groups.length,
+      estimates: groups.map(
+        (g) =>
+          nestingEstimatesByKey.get(g.groupKey) ?? {
+            groupKey: g.groupKey,
+            status: "IDLE" as const,
+            utilizationPercent: null,
+            wastePercent: null,
+            wasteWeightKg: null,
+            selectedSheets: [],
+            unplacedPartCount: 0,
+            errorMessage: null,
+            failureDetails: [],
+            inputSignature: null,
+          }
+      ),
+      frozenRowsIncludedInNesting,
+      nonMemberRowsIncludedInNesting,
+    });
+    assertPricingNestingInvariants(nestingDiagnostics);
     simpleIntakeActions.patchLastDebug({
       weightPricingDiagnostics: diagnostics,
+      pricingNestingDiagnostics: nestingDiagnostics,
     });
-  }, [approvedRows, membership, groups, defaults, session.weightPricingDraft]);
+  }, [
+    approvedRows,
+    membership,
+    groups,
+    defaults,
+    session.weightPricingDraft,
+    nestingEstimatesByKey,
+    frozenRowsIncludedInNesting,
+    nonMemberRowsIncludedInNesting,
+  ]);
 
   // Persist migrated draft shape once when legacy drafts are loaded.
   useEffect(() => {
@@ -252,7 +307,8 @@ export function WeightPricingScreen() {
       data-review-workspace-width-token={REVIEW_WORKSPACE_WIDTH_TOKEN}
       data-weight-pricing-screen="true"
       data-weight-pricing-model="finish-v2"
-      data-nesting-enabled="false"
+      data-nesting-enabled="estimate"
+      data-pricing-group-nesting-uses-existing-engine="true"
       dir="rtl"
     >
       <div
@@ -287,6 +343,7 @@ export function WeightPricingScreen() {
         invalidGroupKeys={invalidSet}
         focusGroupKey={focusInvalidKey}
         focusRequestId={focusRequestId}
+        nestingEstimatesByKey={nestingEstimatesByKey}
         onPatchGroup={patchGroup}
         onViewGroup={setDetailsGroupKey}
       />
@@ -295,6 +352,11 @@ export function WeightPricingScreen() {
         group={detailsGroup}
         defaults={defaults}
         rows={approvedRows}
+        nestingEstimate={
+          detailsGroup
+            ? nestingEstimatesByKey.get(detailsGroup.groupKey) ?? null
+            : null
+        }
         open={detailsGroupKey != null}
         onClose={() => setDetailsGroupKey(null)}
         onViewItem={(rowId) => {

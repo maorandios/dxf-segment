@@ -172,21 +172,6 @@ function fitScore(fr: FreeRect, fw: number, fh: number, mode: ScoreMode): number
 }
 
 // ---------------------------------------------------------------------------
-// Instance expansion
-// ---------------------------------------------------------------------------
-
-function expandInstances(parts: RectPackPart[], mode: SortMode): Instance[] {
-  const out: Instance[] = [];
-  for (const p of parts) {
-    const qty = Math.max(0, Math.min(Math.round(p.qty), 50_000));
-    const w = Math.max(0, p.widthMm);
-    const h = Math.max(0, p.lengthMm);
-    for (let i = 0; i < qty; i++) out.push({ w, h, areaMm2: w * h });
-  }
-  return applySortMode(out, mode);
-}
-
-// ---------------------------------------------------------------------------
 // MaxRects free-rect maintenance
 // ---------------------------------------------------------------------------
 
@@ -475,10 +460,15 @@ function estimateForThickness(
       oversizeParts: pack.oversizeParts,
     };
 
+    // Prefer a feasible pack (no oversize) over an infeasible one with fake
+    // sheetCount. Among equals: fewest sheets, then least waste.
     if (
       bestResult === null ||
-      candidate.sheetCount < bestResult.sheetCount ||
-      (candidate.sheetCount === bestResult.sheetCount &&
+      candidate.oversizeParts < bestResult.oversizeParts ||
+      (candidate.oversizeParts === bestResult.oversizeParts &&
+        candidate.sheetCount < bestResult.sheetCount) ||
+      (candidate.oversizeParts === bestResult.oversizeParts &&
+        candidate.sheetCount === bestResult.sheetCount &&
         candidate.wasteAreaM2 < bestResult.wasteAreaM2)
     ) {
       bestResult = candidate;

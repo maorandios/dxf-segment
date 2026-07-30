@@ -171,8 +171,61 @@ export function computeWeightPricingMetrics(
   return {
     pricingGroupCount: groups.length,
     totalWeightKg,
+    totalStockPlateWeightKg: 0,
+    totalWasteWeightKg: 0,
+    buyVsWasteUtilizationPercent: 0,
     weightedAveragePricePerKg,
     subtotalBeforeVat,
+  };
+}
+
+/**
+ * Aggregate nesting stock/waste weights from READY group estimates.
+ * Buy (stock) weight ≈ group part weight + waste weight.
+ */
+export function mergeNestingComparisonIntoMetrics(
+  metrics: WeightPricingMetrics,
+  groups: ReadonlyArray<WeightPricingGroup>,
+  nestingEstimatesByKey:
+    | ReadonlyMap<string, { status: string; wasteWeightKg: number | null }>
+    | null
+    | undefined
+): WeightPricingMetrics {
+  if (!nestingEstimatesByKey || nestingEstimatesByKey.size === 0) {
+    return metrics;
+  }
+
+  let totalWasteWeightKg = 0;
+  let totalStockPlateWeightKg = 0;
+
+  for (const group of groups) {
+    const est = nestingEstimatesByKey.get(group.groupKey);
+    if (
+      !est ||
+      est.status !== "READY" ||
+      est.wasteWeightKg == null ||
+      !Number.isFinite(est.wasteWeightKg)
+    ) {
+      continue;
+    }
+    const waste = Math.max(0, est.wasteWeightKg);
+    const stock = Math.max(0, group.totalWeightKg) + waste;
+    totalWasteWeightKg += waste;
+    totalStockPlateWeightKg += stock;
+  }
+
+  const buyVsWasteUtilizationPercent =
+    totalStockPlateWeightKg > 0
+      ? ((totalStockPlateWeightKg - totalWasteWeightKg) /
+          totalStockPlateWeightKg) *
+        100
+      : 0;
+
+  return {
+    ...metrics,
+    totalStockPlateWeightKg,
+    totalWasteWeightKg,
+    buyVsWasteUtilizationPercent,
   };
 }
 
