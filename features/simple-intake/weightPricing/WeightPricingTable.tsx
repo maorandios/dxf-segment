@@ -5,10 +5,13 @@ import {
   type ReactNode,
   useEffect,
 } from "react";
-import { Eye } from "lucide-react";
+import { Eye, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatFinishLabelHe, formatCheckeredPlateExportHe } from "../quoteItemCommercialOptions";
+import {
+  formatCheckeredPlateExportHe,
+  formatFinishLabelHe,
+} from "../quoteItemCommercialOptions";
 import { formatPricingGroupLabelHe } from "./buildPricingGroupKey";
 import { calculateWeightPricingGroup } from "./calculateWeightPricingGroup";
 import {
@@ -19,6 +22,7 @@ import {
 } from "./formatWeightPricing";
 import type {
   PricingGroupKey,
+  WeightPricingDefaults,
   WeightPricingGroup,
   WeightPricingGroupDraft,
 } from "./types";
@@ -65,55 +69,51 @@ function Td({
   style?: CSSProperties;
 }) {
   return (
-    <td className={className} style={style}>
+    <td
+      className={className}
+      style={{
+        borderBottom: "1px solid var(--ow-border, #e4e7ec)",
+        ...style,
+      }}
+    >
       {children}
     </td>
   );
 }
 
-function PriceCellInput({
-  value,
-  disabled,
+function FinalPriceCellInput({
+  displayValue,
   invalid,
   ariaLabel,
   dataGroupKey,
-  dataField,
   onCommit,
 }: {
-  value: number | null;
-  disabled?: boolean;
+  displayValue: number | null;
   invalid?: boolean;
   ariaLabel: string;
   dataGroupKey: string;
-  dataField: string;
   onCommit: (next: number | null) => void;
 }) {
   const display =
-    value == null || !Number.isFinite(value) ? "" : String(value);
+    displayValue == null || !Number.isFinite(displayValue)
+      ? ""
+      : String(displayValue);
 
   return (
     <Input
       type="number"
       min={0}
       step={0.01}
-      disabled={disabled}
       aria-label={ariaLabel}
       aria-invalid={invalid || undefined}
       data-pricing-group-key={dataGroupKey}
-      data-pricing-field={dataField}
+      data-pricing-field="finalPricePerKg"
       defaultValue={display}
-      key={`${dataGroupKey}:${dataField}:${display}`}
+      key={`${dataGroupKey}:final:${display}`}
       className="h-8 w-[5.5rem] rounded-lg px-2 text-[13px] tabular-nums"
-      style={
-        invalid
-          ? { backgroundColor: ATTENTION_SOFT }
-          : disabled
-            ? { opacity: 0.55 }
-            : undefined
-      }
+      style={invalid ? { backgroundColor: ATTENTION_SOFT } : undefined}
       inputMode="decimal"
       onBlur={(e) => {
-        if (disabled) return;
         const parsed = parseNonNegativePriceInput(e.target.value);
         if (parsed === undefined) {
           e.target.value = display;
@@ -132,6 +132,7 @@ function PriceCellInput({
 
 export function WeightPricingTable({
   groups,
+  defaults,
   invalidGroupKeys,
   focusGroupKey,
   focusRequestId = 0,
@@ -139,6 +140,7 @@ export function WeightPricingTable({
   onViewGroup,
 }: {
   groups: WeightPricingGroup[];
+  defaults: WeightPricingDefaults;
   invalidGroupKeys: ReadonlySet<PricingGroupKey>;
   focusGroupKey: PricingGroupKey | null;
   focusRequestId?: number;
@@ -151,7 +153,7 @@ export function WeightPricingTable({
   useEffect(() => {
     if (!focusGroupKey) return;
     const el = document.querySelector<HTMLElement>(
-      `[data-pricing-group-key="${CSS.escape(focusGroupKey)}"][data-pricing-field="basePricePerKg"]`
+      `[data-pricing-group-key="${CSS.escape(focusGroupKey)}"][data-pricing-field="finalPricePerKg"]`
     );
     if (el) {
       el.focus();
@@ -170,7 +172,7 @@ export function WeightPricingTable({
     >
       <div className="overflow-x-auto">
         <table
-          className="w-full min-w-[1180px] border-separate border-spacing-0 text-right text-[13px]"
+          className="w-full min-w-[1100px] border-separate border-spacing-0 text-right text-[13px]"
           aria-label="טבלת תמחור לפי משקל"
         >
           <thead>
@@ -179,35 +181,31 @@ export function WeightPricingTable({
               <ColHeader label={'עובי (מ"מ)'} className="w-20" />
               <ColHeader label="סוג חומר" />
               <ColHeader label="גימור" className="w-24" />
-              <ColHeader label="פח מרוג" className="w-24" />
+              <ColHeader label="פח מרוג" className="w-20" />
               <ColHeader label="פריטים" className="w-16" />
               <ColHeader label="כמות" className="w-16" />
               <ColHeader label={'משקל (ק"ג)'} className="w-24" />
-              <ColHeader label={'מחיר בסיס לק"ג'} className="w-[7rem]" />
-              <ColHeader label="תוספת גלוון" className="w-[6.5rem]" />
-              <ColHeader label="תוספת עובי" className="w-[6.5rem]" />
-              <ColHeader label="תוספת פח מרוג" className="w-[7rem]" />
-              <ColHeader label={'מחיר סופי לק"ג'} className="w-24" />
+              <ColHeader label="מחיר לפי גימור" className="w-28" />
+              <ColHeader label="תוספת פח מרוג" className="w-28" />
+              <ColHeader label={'מחיר סופי לק"ג'} className="w-[8.5rem]" />
               <ColHeader label='סה"כ' className="w-28" />
               <ColHeader label="צפייה" className="w-14 text-center" />
             </tr>
           </thead>
           <tbody>
             {groups.map((group, index) => {
-              const calc = calculateWeightPricingGroup(group);
+              const calc = calculateWeightPricingGroup(group, defaults);
               const invalid = invalidGroupKeys.has(group.groupKey);
-              const baseInvalid =
-                invalid &&
-                (group.pricing.basePricePerKg == null ||
-                  !(group.pricing.basePricePerKg > 0));
               const groupLabel = formatPricingGroupLabelHe(group);
               return (
                 <tr
                   key={group.groupKey}
                   data-pricing-group={group.groupKey}
-                  style={{ borderBottom: "1px solid var(--ow-border)" }}
                 >
-                  <Td className="px-2.5 py-2.5 text-center tabular-nums" style={{ color: MUTED_GRAY }}>
+                  <Td
+                    className="px-2.5 py-2.5 text-center tabular-nums"
+                    style={{ color: MUTED_GRAY }}
+                  >
                     {(index + 1).toLocaleString("he-IL")}
                   </Td>
                   <Td className="px-2.5 py-2.5 tabular-nums whitespace-nowrap">
@@ -231,67 +229,49 @@ export function WeightPricingTable({
                   <Td className="px-2.5 py-2.5 tabular-nums">
                     {formatPricingWeightKg(group.totalWeightKg)}
                   </Td>
-                  <Td className="px-2.5 py-2.5">
-                    <PriceCellInput
-                      value={group.pricing.basePricePerKg}
-                      invalid={baseInvalid}
-                      ariaLabel={`מחיר בסיס לק״ג עבור ${groupLabel}`}
-                      dataGroupKey={group.groupKey}
-                      dataField="basePricePerKg"
-                      onCommit={(next) =>
-                        onPatchGroup(group.groupKey, { basePricePerKg: next })
-                      }
-                    />
-                  </Td>
-                  <Td className="px-2.5 py-2.5">
-                    {group.finish === "GALVANIZED" ? (
-                      <PriceCellInput
-                        value={group.pricing.galvanizedAddonPerKg}
-                        ariaLabel="תוספת גלוון"
-                        dataGroupKey={group.groupKey}
-                        dataField="galvanizedAddonPerKg"
-                        onCommit={(next) =>
-                          onPatchGroup(group.groupKey, {
-                            galvanizedAddonPerKg: next ?? 0,
-                          })
-                        }
-                      />
-                    ) : (
-                      <span style={{ color: MUTED_GRAY }}>—</span>
-                    )}
-                  </Td>
-                  <Td className="px-2.5 py-2.5">
-                    <PriceCellInput
-                      value={group.pricing.thicknessAddonPerKg}
-                      ariaLabel="תוספת עובי"
-                      dataGroupKey={group.groupKey}
-                      dataField="thicknessAddonPerKg"
-                      onCommit={(next) =>
-                        onPatchGroup(group.groupKey, {
-                          thicknessAddonPerKg: next ?? 0,
-                        })
-                      }
-                    />
-                  </Td>
-                  <Td className="px-2.5 py-2.5">
-                    {group.isCheckeredPlate ? (
-                      <PriceCellInput
-                        value={group.pricing.checkeredPlateAddonPerKg}
-                        ariaLabel="תוספת פח מרוג"
-                        dataGroupKey={group.groupKey}
-                        dataField="checkeredPlateAddonPerKg"
-                        onCommit={(next) =>
-                          onPatchGroup(group.groupKey, {
-                            checkeredPlateAddonPerKg: next ?? 0,
-                          })
-                        }
-                      />
-                    ) : (
-                      <span style={{ color: MUTED_GRAY }}>—</span>
-                    )}
+                  <Td className="px-2.5 py-2.5 tabular-nums whitespace-nowrap">
+                    {formatPricePerKg(calc.finishBasePricePerKg)}
                   </Td>
                   <Td className="px-2.5 py-2.5 tabular-nums whitespace-nowrap">
-                    {formatPricePerKg(calc.finalPricePerKg)}
+                    {group.isCheckeredPlate
+                      ? formatPricePerKg(calc.applicableCheckeredAddonPerKg)
+                      : (
+                          <span style={{ color: MUTED_GRAY }}>—</span>
+                        )}
+                  </Td>
+                  <Td className="px-2.5 py-2.5">
+                    <div className="inline-flex items-center gap-1">
+                      <FinalPriceCellInput
+                        displayValue={calc.finalPricePerKg}
+                        invalid={invalid}
+                        ariaLabel={`מחיר סופי לק״ג עבור ${groupLabel}`}
+                        dataGroupKey={group.groupKey}
+                        onCommit={(next) =>
+                          onPatchGroup(group.groupKey, {
+                            manualFinalPricePerKg: next,
+                          })
+                        }
+                      />
+                      {calc.isManualOverride ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 rounded-lg p-0 shadow-none"
+                          style={{ color: "var(--ow-text-secondary)" }}
+                          title="איפוס למחיר המחושב"
+                          aria-label="איפוס למחיר המחושב"
+                          data-reset-manual={group.groupKey}
+                          onClick={() =>
+                            onPatchGroup(group.groupKey, {
+                              manualFinalPricePerKg: null,
+                            })
+                          }
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                        </Button>
+                      ) : null}
+                    </div>
                   </Td>
                   <Td className="px-2.5 py-2.5 tabular-nums whitespace-nowrap font-medium">
                     {formatMoneyIls(calc.groupTotal)}

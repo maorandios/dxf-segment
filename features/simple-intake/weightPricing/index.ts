@@ -1,5 +1,6 @@
 export type {
   PricingGroupKey,
+  WeightPricingDefaults,
   WeightPricingGroupDraft,
   WeightPricingDraft,
   WeightPricingGroup,
@@ -9,8 +10,10 @@ export type {
   WeightPricingSummaryPayload,
   WeightPricingMetrics,
   WeightPricingDiagnostics,
+  LegacyWeightPricingGroupDraft,
 } from "./types";
 export {
+  defaultWeightPricingDefaults,
   defaultWeightPricingGroupDraft,
   createEmptyWeightPricingDraft,
 } from "./types";
@@ -26,12 +29,17 @@ export {
   canOpenWeightPricingScreen,
   materialRowIdOf,
 } from "./selectApprovedPricingRows";
-export { calculateWeightPricingGroup } from "./calculateWeightPricingGroup";
+export {
+  calculateWeightPricingGroup,
+  finishBasePricePerKg,
+} from "./calculateWeightPricingGroup";
 export {
   buildWeightPricingGroups,
   computeWeightPricingMetrics,
+  applyQuickPricingDefaults,
   applyQuickPricingToDraft,
   patchGroupPricingInDraft,
+  patchPricingDefaultsInDraft,
 } from "./buildWeightPricingGroups";
 export {
   validateWeightPricingGroups,
@@ -42,6 +50,11 @@ export {
   buildWeightPricingDiagnostics,
   assertWeightPricingInvariants,
 } from "./buildWeightPricingDiagnostics";
+export {
+  migrateWeightPricingDraft,
+  migrateWeightPricingGroupDraft,
+  migrateWeightPricingDefaults,
+} from "./migrateWeightPricingDraft";
 export {
   formatPricingWeightKg,
   formatPricePerKg,

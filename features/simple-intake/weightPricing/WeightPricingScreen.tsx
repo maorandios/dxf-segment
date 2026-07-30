@@ -17,7 +17,7 @@ import {
   REVIEW_WORKSPACE_WIDTH_TOKEN,
 } from "../ui/ReviewWorkspaceContainer";
 import {
-  applyQuickPricingToDraft,
+  applyQuickPricingDefaults,
   assertWeightPricingInvariants,
   buildWeightPricingDiagnostics,
   buildWeightPricingGroups,
@@ -39,10 +39,10 @@ import { WeightPricingTable } from "./WeightPricingTable";
 import { WeightPricingToolbar } from "./WeightPricingToolbar";
 
 const PRICING_VALIDATION_MESSAGE =
-  "לא ניתן להמשיך — יש להשלים מחיר בסיס לכל קבוצות התמחור.";
+  "לא ניתן להמשיך — יש להשלים מחיר לכל קבוצות התמחור.";
 
 /**
- * Weight-based pricing workspace after אישור רשימה.
+ * Weight-based pricing workspace after אישור רשימה (finish-based v2).
  */
 export function WeightPricingScreen() {
   const session = useSimpleIntakeSession();
@@ -108,10 +108,15 @@ export function WeightPricingScreen() {
     ]
   );
 
-  const metrics = useMemo(() => computeWeightPricingMetrics(groups), [groups]);
+  const defaults = rebuiltDraft.defaults;
+
+  const metrics = useMemo(
+    () => computeWeightPricingMetrics(groups, defaults),
+    [groups, defaults]
+  );
   const validation = useMemo(
-    () => validateWeightPricingGroups(groups),
-    [groups]
+    () => validateWeightPricingGroups(groups, defaults),
+    [groups, defaults]
   );
   const invalidSet = useMemo(
     () => new Set(validation.invalidGroupKeys),
@@ -145,13 +150,35 @@ export function WeightPricingScreen() {
       approvedRows,
       membership,
       groups,
+      defaults,
       draft: session.weightPricingDraft,
     });
     assertWeightPricingInvariants(diagnostics);
     simpleIntakeActions.patchLastDebug({
       weightPricingDiagnostics: diagnostics,
     });
-  }, [approvedRows, membership, groups, session.weightPricingDraft]);
+  }, [approvedRows, membership, groups, defaults, session.weightPricingDraft]);
+
+  // Persist migrated draft shape once when legacy drafts are loaded.
+  useEffect(() => {
+    if (!canOpen) return;
+    const current = session.weightPricingDraft;
+    const needsMigrate =
+      current == null ||
+      current.defaults == null ||
+      Object.values(current.groupPricingByKey).some(
+        (g) =>
+          g != null &&
+          ("basePricePerKg" in g ||
+            "galvanizedAddonPerKg" in g ||
+            "thicknessAddonPerKg" in g)
+      );
+    if (needsMigrate) {
+      simpleIntakeActions.setWeightPricingDraft(rebuiltDraft);
+    }
+    // Only on open / draft identity change — avoid loops on every rebuild.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional migrate-once gate
+  }, [canOpen, quotationId]);
 
   const patchGroup = useCallback(
     (groupKey: PricingGroupKey, patch: Partial<WeightPricingGroupDraft>) => {
@@ -169,13 +196,12 @@ export function WeightPricingScreen() {
   );
 
   function handleQuickApply(values: {
-    basePricePerKg: number | null;
-    galvanizedAddonPerKg: number | null;
+    blackPricePerKg: number | null;
+    galvanizedPricePerKg: number | null;
     checkeredPlateAddonPerKg: number | null;
   }): void {
-    const next = applyQuickPricingToDraft({
+    const next = applyQuickPricingDefaults({
       draft: session.weightPricingDraft ?? rebuiltDraft,
-      groups,
       ...values,
     });
     simpleIntakeActions.setWeightPricingDraft(next);
@@ -193,7 +219,7 @@ export function WeightPricingScreen() {
   }
 
   function handleContinue(): void {
-    const live = validateWeightPricingGroups(groups);
+    const live = validateWeightPricingGroups(groups, defaults);
     if (!live.isComplete) {
       setValidationMessage(PRICING_VALIDATION_MESSAGE);
       setFocusInvalidKey(live.firstInvalidGroupKey);
@@ -203,6 +229,7 @@ export function WeightPricingScreen() {
     const payload = buildWeightPricingSummaryPayload({
       quotationId,
       groups,
+      defaults,
     });
     if (!payload) {
       setValidationMessage(PRICING_VALIDATION_MESSAGE);
@@ -224,6 +251,7 @@ export function WeightPricingScreen() {
       data-review-workspace-container="true"
       data-review-workspace-width-token={REVIEW_WORKSPACE_WIDTH_TOKEN}
       data-weight-pricing-screen="true"
+      data-weight-pricing-model="finish-v2"
       data-nesting-enabled="false"
       dir="rtl"
     >
@@ -252,9 +280,10 @@ export function WeightPricingScreen() {
       ) : null}
 
       <WeightPricingMetricCards metrics={metrics} />
-      <WeightPricingQuickBar onApply={handleQuickApply} />
+      <WeightPricingQuickBar defaults={defaults} onApply={handleQuickApply} />
       <WeightPricingTable
         groups={groups}
+        defaults={defaults}
         invalidGroupKeys={invalidSet}
         focusGroupKey={focusInvalidKey}
         focusRequestId={focusRequestId}
@@ -264,6 +293,7 @@ export function WeightPricingScreen() {
 
       <WeightPricingGroupDetailsDrawer
         group={detailsGroup}
+        defaults={defaults}
         rows={approvedRows}
         open={detailsGroupKey != null}
         onClose={() => setDetailsGroupKey(null)}

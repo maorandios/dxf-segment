@@ -16,16 +16,18 @@ import {
   formatPricePerKg,
   formatPricingWeightKg,
 } from "./formatWeightPricing";
-import type { WeightPricingGroup } from "./types";
+import type { WeightPricingDefaults, WeightPricingGroup } from "./types";
 
 export function WeightPricingGroupDetailsDrawer({
   group,
+  defaults,
   rows,
   open,
   onClose,
   onViewItem,
 }: {
   group: WeightPricingGroup | null;
+  defaults: WeightPricingDefaults;
   rows: FinalIntakeRow[];
   open: boolean;
   onClose: () => void;
@@ -45,7 +47,7 @@ export function WeightPricingGroupDetailsDrawer({
 
   if (!open || !group) return null;
 
-  const calc = calculateWeightPricingGroup(group);
+  const calc = calculateWeightPricingGroup(group, defaults);
   const idSet = new Set(group.materialRowIds);
   const groupRows = rows.filter((row) => {
     const id = getCanonicalMaterialItemId(row) ?? row.materialRowId ?? row.id;

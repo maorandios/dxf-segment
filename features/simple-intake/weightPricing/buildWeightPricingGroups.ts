@@ -1,5 +1,5 @@
 /**
- * Build / rebuild weight pricing groups from approved rows + draft.
+ * Build / rebuild weight pricing groups from approved rows + draft (v2).
  */
 
 import {
@@ -13,8 +13,10 @@ import {
   comparePricingGroups,
 } from "./buildPricingGroupKey";
 import { calculateWeightPricingGroup } from "./calculateWeightPricingGroup";
+import { migrateWeightPricingDraft } from "./migrateWeightPricingDraft";
 import type {
   PricingGroupKey,
+  WeightPricingDefaults,
   WeightPricingDraft,
   WeightPricingGroup,
   WeightPricingGroupDraft,
@@ -48,7 +50,7 @@ function resolveMaterial(row: FinalIntakeRow): string {
 }
 
 /**
- * Rebuild groups from approved rows. Preserves draft values for surviving keys.
+ * Rebuild groups from approved rows. Migrates draft; preserves manual overrides.
  * Does not recalculate item weights — uses commercial.totalWeightKg.
  */
 export function buildWeightPricingGroups(args: {
@@ -61,10 +63,9 @@ export function buildWeightPricingGroups(args: {
   draft: WeightPricingDraft;
 } {
   const quotationId =
-    args.draft?.quotationId ??
-    args.quotationId ??
-    "local";
-  const prevByKey = args.draft?.groupPricingByKey ?? {};
+    args.draft?.quotationId ?? args.quotationId ?? "local";
+  const migrated = migrateWeightPricingDraft(args.draft, quotationId);
+  const prevByKey = migrated.groupPricingByKey;
   const buckets = new Map<PricingGroupKey, MutableGroup>();
 
   for (const row of args.approvedRows) {
@@ -88,7 +89,6 @@ export function buildWeightPricingGroups(args: {
       row.quantity != null && Number.isFinite(row.quantity) && row.quantity > 0
         ? row.quantity
         : 0;
-    // Canonical total weight — never recalculate from dims/density here.
     const weight =
       row.commercial.totalWeightKg != null &&
       Number.isFinite(row.commercial.totalWeightKg)
@@ -125,24 +125,12 @@ export function buildWeightPricingGroups(args: {
       ...defaultWeightPricingGroupDraft(),
       ...(prevByKey[bucket.groupKey] ?? {}),
     };
-    // Normalize non-negative supplements.
-    pricing.galvanizedAddonPerKg = Math.max(
-      0,
-      Number(pricing.galvanizedAddonPerKg) || 0
-    );
-    pricing.thicknessAddonPerKg = Math.max(
-      0,
-      Number(pricing.thicknessAddonPerKg) || 0
-    );
-    pricing.checkeredPlateAddonPerKg = Math.max(
-      0,
-      Number(pricing.checkeredPlateAddonPerKg) || 0
-    );
     if (
-      pricing.basePricePerKg != null &&
-      (!Number.isFinite(pricing.basePricePerKg) || pricing.basePricePerKg < 0)
+      pricing.manualFinalPricePerKg != null &&
+      (!Number.isFinite(pricing.manualFinalPricePerKg) ||
+        pricing.manualFinalPricePerKg < 0)
     ) {
-      pricing.basePricePerKg = null;
+      pricing.manualFinalPricePerKg = null;
     }
 
     nextPricingByKey[bucket.groupKey] = pricing;
@@ -157,8 +145,7 @@ export function buildWeightPricingGroups(args: {
   const draft: WeightPricingDraft = {
     quotationId,
     updatedAt: new Date().toISOString(),
-    // Keep only active keys — drop obsolete groups from the active table map
-    // while still allowing rebuild to start clean.
+    defaults: migrated.defaults,
     groupPricingByKey: nextPricingByKey,
   };
 
@@ -166,14 +153,15 @@ export function buildWeightPricingGroups(args: {
 }
 
 export function computeWeightPricingMetrics(
-  groups: ReadonlyArray<WeightPricingGroup>
+  groups: ReadonlyArray<WeightPricingGroup>,
+  defaults: WeightPricingDefaults
 ): WeightPricingMetrics {
   let totalWeightKg = 0;
   let subtotalBeforeVat = 0;
 
   for (const group of groups) {
     totalWeightKg += group.totalWeightKg;
-    const calc = calculateWeightPricingGroup(group);
+    const calc = calculateWeightPricingGroup(group, defaults);
     if (calc.groupTotal != null) subtotalBeforeVat += calc.groupTotal;
   }
 
@@ -188,50 +176,64 @@ export function computeWeightPricingMetrics(
   };
 }
 
+/**
+ * Apply finish defaults. Never overwrites manualFinalPricePerKg.
+ */
+export function applyQuickPricingDefaults(args: {
+  draft: WeightPricingDraft;
+  blackPricePerKg: number | null;
+  galvanizedPricePerKg: number | null;
+  checkeredPlateAddonPerKg: number | null;
+}): WeightPricingDraft {
+  const nextDefaults = { ...args.draft.defaults };
+
+  if (args.blackPricePerKg != null && Number.isFinite(args.blackPricePerKg)) {
+    nextDefaults.blackPricePerKg = Math.max(0, args.blackPricePerKg);
+  }
+  if (
+    args.galvanizedPricePerKg != null &&
+    Number.isFinite(args.galvanizedPricePerKg)
+  ) {
+    nextDefaults.galvanizedPricePerKg = Math.max(0, args.galvanizedPricePerKg);
+  }
+  if (
+    args.checkeredPlateAddonPerKg != null &&
+    Number.isFinite(args.checkeredPlateAddonPerKg)
+  ) {
+    nextDefaults.checkeredPlateAddonPerKg = Math.max(
+      0,
+      args.checkeredPlateAddonPerKg
+    );
+  }
+
+  return {
+    ...args.draft,
+    updatedAt: new Date().toISOString(),
+    defaults: nextDefaults,
+    // Group drafts untouched — manual overrides preserved.
+    groupPricingByKey: { ...args.draft.groupPricingByKey },
+  };
+}
+
+/** @deprecated use applyQuickPricingDefaults */
 export function applyQuickPricingToDraft(args: {
   draft: WeightPricingDraft;
   groups: ReadonlyArray<WeightPricingGroup>;
-  basePricePerKg: number | null;
-  galvanizedAddonPerKg: number | null;
+  basePricePerKg?: number | null;
+  blackPricePerKg?: number | null;
+  galvanizedPricePerKg?: number | null;
+  galvanizedAddonPerKg?: number | null;
   checkeredPlateAddonPerKg: number | null;
 }): WeightPricingDraft {
-  const next = {
-    ...args.draft,
-    updatedAt: new Date().toISOString(),
-    groupPricingByKey: { ...args.draft.groupPricingByKey },
-  };
-
-  for (const group of args.groups) {
-    const current =
-      next.groupPricingByKey[group.groupKey] ??
-      defaultWeightPricingGroupDraft();
-    const patched: WeightPricingGroupDraft = { ...current };
-
-    if (args.basePricePerKg != null && Number.isFinite(args.basePricePerKg)) {
-      patched.basePricePerKg = Math.max(0, args.basePricePerKg);
-    }
-    if (
-      args.galvanizedAddonPerKg != null &&
-      Number.isFinite(args.galvanizedAddonPerKg) &&
-      group.finish === "GALVANIZED"
-    ) {
-      patched.galvanizedAddonPerKg = Math.max(0, args.galvanizedAddonPerKg);
-    }
-    if (
-      args.checkeredPlateAddonPerKg != null &&
-      Number.isFinite(args.checkeredPlateAddonPerKg) &&
-      group.isCheckeredPlate
-    ) {
-      patched.checkeredPlateAddonPerKg = Math.max(
-        0,
-        args.checkeredPlateAddonPerKg
-      );
-    }
-
-    next.groupPricingByKey[group.groupKey] = patched;
-  }
-
-  return next;
+  void args.groups;
+  void args.basePricePerKg;
+  void args.galvanizedAddonPerKg;
+  return applyQuickPricingDefaults({
+    draft: args.draft,
+    blackPricePerKg: args.blackPricePerKg ?? null,
+    galvanizedPricePerKg: args.galvanizedPricePerKg ?? null,
+    checkeredPlateAddonPerKg: args.checkeredPlateAddonPerKg,
+  });
 }
 
 export function patchGroupPricingInDraft(args: {
@@ -241,7 +243,9 @@ export function patchGroupPricingInDraft(args: {
   patch: Partial<WeightPricingGroupDraft>;
 }): WeightPricingDraft {
   const base =
-    args.draft ?? createEmptyWeightPricingDraft(args.quotationId);
+    args.draft != null
+      ? migrateWeightPricingDraft(args.draft, args.quotationId)
+      : createEmptyWeightPricingDraft(args.quotationId);
   const current =
     base.groupPricingByKey[args.groupKey] ?? defaultWeightPricingGroupDraft();
   return {
@@ -253,6 +257,25 @@ export function patchGroupPricingInDraft(args: {
         ...current,
         ...args.patch,
       },
+    },
+  };
+}
+
+export function patchPricingDefaultsInDraft(args: {
+  draft: WeightPricingDraft | null | undefined;
+  quotationId: string;
+  defaults: Partial<WeightPricingDefaults>;
+}): WeightPricingDraft {
+  const base =
+    args.draft != null
+      ? migrateWeightPricingDraft(args.draft, args.quotationId)
+      : createEmptyWeightPricingDraft(args.quotationId);
+  return {
+    ...base,
+    updatedAt: new Date().toISOString(),
+    defaults: {
+      ...base.defaults,
+      ...args.defaults,
     },
   };
 }

@@ -211,6 +211,7 @@ function Td({
       className={className}
       title={title}
       style={{
+        borderBottom: "1px solid var(--ow-border, #e4e7ec)",
         ...style,
         borderInlineStart: withSeparator ? GROUP_SEPARATOR : undefined,
       }}
@@ -930,7 +931,6 @@ export function GapResolutionWorkspace({
                         }
                         aria-selected={isActiveRow}
                         style={{
-                          borderBottom: "1px solid var(--ow-border)",
                           backgroundColor: frozen
                             ? "color-mix(in srgb, var(--ow-surface-muted) 55%, transparent)"
                             : isActiveRow

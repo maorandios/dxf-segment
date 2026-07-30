@@ -1,38 +1,48 @@
 /**
- * Canonical weight × ₪/kg pricing formula.
+ * Canonical finish-based weight pricing formula (v2).
  * Supplements affect price only — never physical weight.
  */
 
+import type { QuoteItemFinish } from "../quoteItemCommercialOptions";
 import type {
   WeightPricingCalculation,
+  WeightPricingDefaults,
   WeightPricingGroup,
 } from "./types";
 
+export function finishBasePricePerKg(
+  finish: QuoteItemFinish,
+  defaults: WeightPricingDefaults
+): number | null {
+  if (finish === "BLACK") {
+    const v = defaults.blackPricePerKg;
+    return v != null && Number.isFinite(v) ? v : null;
+  }
+  const v = defaults.galvanizedPricePerKg;
+  return v != null && Number.isFinite(v) ? v : null;
+}
+
 export function calculateWeightPricingGroup(
-  group: WeightPricingGroup
+  group: WeightPricingGroup,
+  defaults: WeightPricingDefaults
 ): WeightPricingCalculation {
-  const applicableGalvanizedAddonPerKg =
-    group.finish === "GALVANIZED"
-      ? Math.max(0, group.pricing.galvanizedAddonPerKg)
-      : 0;
+  const finishBase = finishBasePricePerKg(group.finish, defaults);
 
-  const applicableThicknessAddonPerKg = Math.max(
-    0,
-    group.pricing.thicknessAddonPerKg
-  );
-
-  const applicableCheckeredPlateAddonPerKg = group.isCheckeredPlate
-    ? Math.max(0, group.pricing.checkeredPlateAddonPerKg)
+  // Critical: never apply the other finish's price.
+  const applicableCheckeredAddonPerKg = group.isCheckeredPlate
+    ? Math.max(0, defaults.checkeredPlateAddonPerKg || 0)
     : 0;
 
-  const base = group.pricing.basePricePerKg;
-  const finalPricePerKg =
-    base == null || !Number.isFinite(base)
-      ? null
-      : base +
-        applicableGalvanizedAddonPerKg +
-        applicableThicknessAddonPerKg +
-        applicableCheckeredPlateAddonPerKg;
+  const calculatedPricePerKg =
+    finishBase == null ? null : finishBase + applicableCheckeredAddonPerKg;
+
+  const manual = group.pricing.manualFinalPricePerKg;
+  const isManualOverride =
+    manual != null && Number.isFinite(manual) && manual >= 0;
+
+  const finalPricePerKg = isManualOverride
+    ? manual
+    : calculatedPricePerKg;
 
   const groupTotal =
     finalPricePerKg == null
@@ -40,10 +50,11 @@ export function calculateWeightPricingGroup(
       : group.totalWeightKg * finalPricePerKg;
 
   return {
-    applicableGalvanizedAddonPerKg,
-    applicableThicknessAddonPerKg,
-    applicableCheckeredPlateAddonPerKg,
+    finishBasePricePerKg: finishBase,
+    applicableCheckeredAddonPerKg,
+    calculatedPricePerKg,
     finalPricePerKg,
     groupTotal,
+    isManualOverride,
   };
 }

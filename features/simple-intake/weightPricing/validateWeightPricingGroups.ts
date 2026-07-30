@@ -1,33 +1,43 @@
 /**
- * Weight pricing validation — base price required; zero supplements OK.
+ * Weight pricing validation v2 — finish price or manual final > 0.
  */
 
 import type {
   PricingGroupKey,
+  WeightPricingDefaults,
   WeightPricingGroup,
   WeightPricingValidation,
 } from "./types";
 
 export function isWeightPricingGroupValid(
-  group: WeightPricingGroup
+  group: WeightPricingGroup,
+  defaults: WeightPricingDefaults
 ): boolean {
-  const { pricing } = group;
+  const manual = group.pricing.manualFinalPricePerKg;
+  if (manual != null && Number.isFinite(manual) && manual > 0) {
+    return true;
+  }
+  if (group.finish === "BLACK") {
+    return (
+      defaults.blackPricePerKg != null &&
+      Number.isFinite(defaults.blackPricePerKg) &&
+      defaults.blackPricePerKg > 0
+    );
+  }
   return (
-    pricing.basePricePerKg != null &&
-    Number.isFinite(pricing.basePricePerKg) &&
-    pricing.basePricePerKg > 0 &&
-    pricing.galvanizedAddonPerKg >= 0 &&
-    pricing.thicknessAddonPerKg >= 0 &&
-    pricing.checkeredPlateAddonPerKg >= 0
+    defaults.galvanizedPricePerKg != null &&
+    Number.isFinite(defaults.galvanizedPricePerKg) &&
+    defaults.galvanizedPricePerKg > 0
   );
 }
 
 export function validateWeightPricingGroups(
-  groups: ReadonlyArray<WeightPricingGroup>
+  groups: ReadonlyArray<WeightPricingGroup>,
+  defaults: WeightPricingDefaults
 ): WeightPricingValidation {
   const invalidGroupKeys: PricingGroupKey[] = [];
   for (const group of groups) {
-    if (!isWeightPricingGroupValid(group)) {
+    if (!isWeightPricingGroupValid(group, defaults)) {
       invalidGroupKeys.push(group.groupKey);
     }
   }

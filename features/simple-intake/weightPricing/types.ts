@@ -1,5 +1,5 @@
 /**
- * Weight-based pricing model — pure types and defaults.
+ * Weight-based pricing model v2 — finish prices + checkered addon + manual override.
  * Physical weights are never recalculated here.
  */
 
@@ -7,16 +7,31 @@ import type { QuoteItemFinish } from "../quoteItemCommercialOptions";
 
 export type PricingGroupKey = string;
 
-export type WeightPricingGroupDraft = {
-  basePricePerKg: number | null;
-  galvanizedAddonPerKg: number;
-  thicknessAddonPerKg: number;
+/** Shared finish/checkered defaults applied via quick pricing. */
+export type WeightPricingDefaults = {
+  blackPricePerKg: number | null;
+  galvanizedPricePerKg: number | null;
   checkeredPlateAddonPerKg: number;
+};
+
+/** Per-group override only — finish prices live in defaults. */
+export type WeightPricingGroupDraft = {
+  manualFinalPricePerKg: number | null;
+};
+
+/** @deprecated v1 draft shape — migrated on load. */
+export type LegacyWeightPricingGroupDraft = {
+  basePricePerKg?: number | null;
+  galvanizedAddonPerKg?: number;
+  thicknessAddonPerKg?: number;
+  checkeredPlateAddonPerKg?: number;
+  manualFinalPricePerKg?: number | null;
 };
 
 export type WeightPricingDraft = {
   quotationId: string;
   updatedAt: string;
+  defaults: WeightPricingDefaults;
   groupPricingByKey: Record<PricingGroupKey, WeightPricingGroupDraft>;
 };
 
@@ -34,11 +49,12 @@ export type WeightPricingGroup = {
 };
 
 export type WeightPricingCalculation = {
-  applicableGalvanizedAddonPerKg: number;
-  applicableThicknessAddonPerKg: number;
-  applicableCheckeredPlateAddonPerKg: number;
+  finishBasePricePerKg: number | null;
+  applicableCheckeredAddonPerKg: number;
+  calculatedPricePerKg: number | null;
   finalPricePerKg: number | null;
   groupTotal: number | null;
+  isManualOverride: boolean;
 };
 
 export type WeightPricingValidation = {
@@ -56,10 +72,9 @@ export type WeightPricingSummaryGroup = {
   itemCount: number;
   totalQuantity: number;
   totalWeightKg: number;
-  basePricePerKg: number;
-  galvanizedAddonPerKg: number;
-  thicknessAddonPerKg: number;
+  finishBasePricePerKg: number;
   checkeredPlateAddonPerKg: number;
+  manualFinalPricePerKg: number | null;
   finalPricePerKg: number;
   groupTotal: number;
   materialRowIds: string[];
@@ -72,6 +87,7 @@ export type WeightPricingSummaryPayload = {
   totalWeightKg: number;
   weightedAveragePricePerKg: number;
   subtotalBeforeVat: number;
+  defaults: WeightPricingDefaults;
   groups: WeightPricingSummaryGroup[];
 };
 
@@ -87,11 +103,15 @@ export type WeightPricingDiagnostics = {
   pricingGroupCount: number;
   totalQuantity: number;
   totalWeightKg: number;
-  groupsWithoutBasePrice: number;
-  invalidSupplementGroupCount: number;
+  groupsWithoutValidPrice: number;
   blackGroupCount: number;
   galvanizedGroupCount: number;
   checkeredPlateGroupCount: number;
+  manualOverrideCount: number;
+  blackGroupUsesGalvanizedPrice: number;
+  galvanizedGroupUsesBlackPrice: number;
+  groupUsesBothFinishPrices: number;
+  plainGroupCheckeredAddonApplied: number;
   subtotalBeforeVat: number;
   weightedAveragePricePerKg: number;
   frozenRowsIncludedInPricing: number;
@@ -101,12 +121,17 @@ export type WeightPricingDiagnostics = {
   pricingDraftPersisted: boolean;
 };
 
+export function defaultWeightPricingDefaults(): WeightPricingDefaults {
+  return {
+    blackPricePerKg: null,
+    galvanizedPricePerKg: null,
+    checkeredPlateAddonPerKg: 0,
+  };
+}
+
 export function defaultWeightPricingGroupDraft(): WeightPricingGroupDraft {
   return {
-    basePricePerKg: null,
-    galvanizedAddonPerKg: 0,
-    thicknessAddonPerKg: 0,
-    checkeredPlateAddonPerKg: 0,
+    manualFinalPricePerKg: null,
   };
 }
 
@@ -117,6 +142,7 @@ export function createEmptyWeightPricingDraft(
   return {
     quotationId,
     updatedAt,
+    defaults: defaultWeightPricingDefaults(),
     groupPricingByKey: {},
   };
 }

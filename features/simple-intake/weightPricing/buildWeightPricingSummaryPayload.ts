@@ -1,11 +1,11 @@
 /**
- * Pricing summary payload for the future quotation-summary screen.
- * No VAT / discount / delivery.
+ * Pricing summary payload for the future quotation-summary screen (v2).
  */
 
 import { calculateWeightPricingGroup } from "./calculateWeightPricingGroup";
 import { computeWeightPricingMetrics } from "./buildWeightPricingGroups";
 import type {
+  WeightPricingDefaults,
   WeightPricingGroup,
   WeightPricingSummaryPayload,
 } from "./types";
@@ -13,19 +13,17 @@ import type {
 export function buildWeightPricingSummaryPayload(args: {
   quotationId: string;
   groups: ReadonlyArray<WeightPricingGroup>;
+  defaults: WeightPricingDefaults;
 }): WeightPricingSummaryPayload | null {
-  const metrics = computeWeightPricingMetrics(args.groups);
+  const metrics = computeWeightPricingMetrics(args.groups, args.defaults);
   const groups = [];
 
   for (const group of args.groups) {
-    const calc = calculateWeightPricingGroup(group);
-    if (
-      group.pricing.basePricePerKg == null ||
-      calc.finalPricePerKg == null ||
-      calc.groupTotal == null
-    ) {
+    const calc = calculateWeightPricingGroup(group, args.defaults);
+    if (calc.finalPricePerKg == null || calc.groupTotal == null) {
       return null;
     }
+    if (!(calc.finalPricePerKg > 0)) return null;
     groups.push({
       groupKey: group.groupKey,
       material: group.material,
@@ -35,10 +33,9 @@ export function buildWeightPricingSummaryPayload(args: {
       itemCount: group.itemCount,
       totalQuantity: group.totalQuantity,
       totalWeightKg: group.totalWeightKg,
-      basePricePerKg: group.pricing.basePricePerKg,
-      galvanizedAddonPerKg: calc.applicableGalvanizedAddonPerKg,
-      thicknessAddonPerKg: calc.applicableThicknessAddonPerKg,
-      checkeredPlateAddonPerKg: calc.applicableCheckeredPlateAddonPerKg,
+      finishBasePricePerKg: calc.finishBasePricePerKg ?? 0,
+      checkeredPlateAddonPerKg: calc.applicableCheckeredAddonPerKg,
+      manualFinalPricePerKg: group.pricing.manualFinalPricePerKg,
       finalPricePerKg: calc.finalPricePerKg,
       groupTotal: calc.groupTotal,
       materialRowIds: [...group.materialRowIds],
@@ -59,6 +56,7 @@ export function buildWeightPricingSummaryPayload(args: {
     totalWeightKg: metrics.totalWeightKg,
     weightedAveragePricePerKg: metrics.weightedAveragePricePerKg,
     subtotalBeforeVat: metrics.subtotalBeforeVat,
+    defaults: { ...args.defaults },
     groups,
   };
 }

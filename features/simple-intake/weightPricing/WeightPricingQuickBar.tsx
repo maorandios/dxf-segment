@@ -4,30 +4,47 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { parseNonNegativePriceInput } from "./formatWeightPricing";
+import type { WeightPricingDefaults } from "./types";
 
 export function WeightPricingQuickBar({
+  defaults,
   onApply,
 }: {
+  defaults: WeightPricingDefaults;
   onApply: (values: {
-    basePricePerKg: number | null;
-    galvanizedAddonPerKg: number | null;
+    blackPricePerKg: number | null;
+    galvanizedPricePerKg: number | null;
     checkeredPlateAddonPerKg: number | null;
   }) => void;
 }) {
-  const [base, setBase] = useState("");
-  const [galv, setGalv] = useState("");
-  const [checkered, setCheckered] = useState("");
+  const [black, setBlack] = useState(
+    defaults.blackPricePerKg != null ? String(defaults.blackPricePerKg) : ""
+  );
+  const [galv, setGalv] = useState(
+    defaults.galvanizedPricePerKg != null
+      ? String(defaults.galvanizedPricePerKg)
+      : ""
+  );
+  const [checkered, setCheckered] = useState(
+    defaults.checkeredPlateAddonPerKg > 0
+      ? String(defaults.checkeredPlateAddonPerKg)
+      : ""
+  );
 
   function handleApply(): void {
-    const baseParsed = parseNonNegativePriceInput(base);
+    const blackParsed = parseNonNegativePriceInput(black);
     const galvParsed = parseNonNegativePriceInput(galv);
     const checkParsed = parseNonNegativePriceInput(checkered);
-    if (baseParsed === undefined || galvParsed === undefined || checkParsed === undefined) {
+    if (
+      blackParsed === undefined ||
+      galvParsed === undefined ||
+      checkParsed === undefined
+    ) {
       return;
     }
     onApply({
-      basePricePerKg: baseParsed,
-      galvanizedAddonPerKg: galvParsed,
+      blackPricePerKg: blackParsed,
+      galvanizedPricePerKg: galvParsed,
       checkeredPlateAddonPerKg: checkParsed,
     });
   }
@@ -42,7 +59,10 @@ export function WeightPricingQuickBar({
       data-weight-pricing-quick-bar="true"
       dir="rtl"
     >
-      <div className="mb-2 text-[13px] font-semibold" style={{ color: "var(--ow-text)" }}>
+      <div
+        className="mb-2 text-[13px] font-semibold"
+        style={{ color: "var(--ow-text)" }}
+      >
         החלה מהירה
       </div>
       <div className="flex flex-wrap items-end gap-3">
@@ -51,16 +71,17 @@ export function WeightPricingQuickBar({
             className="block text-[11px] font-medium"
             style={{ color: "var(--ow-text-muted)" }}
           >
-            מחיר בסיס לק״ג
+            מחיר שחור לק״ג
           </span>
           <Input
             type="number"
             min={0}
             step={0.01}
-            value={base}
-            onChange={(e) => setBase(e.target.value)}
+            value={black}
+            onChange={(e) => setBlack(e.target.value)}
             className="h-9 rounded-xl"
             inputMode="decimal"
+            data-quick-field="blackPricePerKg"
           />
         </label>
         <label className="min-w-[7.5rem] flex-1 space-y-1">
@@ -68,7 +89,7 @@ export function WeightPricingQuickBar({
             className="block text-[11px] font-medium"
             style={{ color: "var(--ow-text-muted)" }}
           >
-            תוספת גלוון
+            מחיר מגולוון לק״ג
           </span>
           <Input
             type="number"
@@ -78,6 +99,7 @@ export function WeightPricingQuickBar({
             onChange={(e) => setGalv(e.target.value)}
             className="h-9 rounded-xl"
             inputMode="decimal"
+            data-quick-field="galvanizedPricePerKg"
           />
         </label>
         <label className="min-w-[7.5rem] flex-1 space-y-1">
@@ -85,7 +107,7 @@ export function WeightPricingQuickBar({
             className="block text-[11px] font-medium"
             style={{ color: "var(--ow-text-muted)" }}
           >
-            תוספת פח מרוג
+            תוספת פח מרוג לק״ג
           </span>
           <Input
             type="number"
@@ -95,6 +117,7 @@ export function WeightPricingQuickBar({
             onChange={(e) => setCheckered(e.target.value)}
             className="h-9 rounded-xl"
             inputMode="decimal"
+            data-quick-field="checkeredPlateAddonPerKg"
           />
         </label>
         <Button
