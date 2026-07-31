@@ -1,8 +1,10 @@
-/* OMEGA Simple Intake — final quotation PDF (matches סיכום הצעת מחיר web screen) */
+/* OMEGA Simple Intake — final quotation PDF (portrait A4) */
 
 @page {
-  size: A4 landscape;
-  margin: 0;
+  size: A4 portrait;
+  /* Inset on EVERY page (incl. page breaks). Do not use margin:0 here —
+     that cancels Playwright margins and pins content to the paper edge. */
+  margin: 20mm;
 }
 
 * {
@@ -19,10 +21,12 @@ body {
   margin: 0;
   padding: 0;
   font-family:
-    "Noto Sans Hebrew",
-    "Noto Sans",
     "Segoe UI",
-    system-ui,
+    "Arial Hebrew",
+    "Noto Sans Hebrew",
+    "David",
+    Arial,
+    Helvetica,
     sans-serif;
   color: #101828;
   background: #fff;
@@ -34,16 +38,147 @@ body {
 .doc {
   max-width: 100%;
   background: #fff;
-  min-height: 100%;
-  padding: 12mm 14mm 14mm;
+  padding: 0;
+  min-height: 0;
 }
 
-.page-title {
-  margin: 0 0 1.2rem;
-  font-size: 2rem;
+/* —— Header (matches classic OMEGA quotation letterhead) —— */
+.doc-header {
+  margin-bottom: 1.1rem;
+}
+
+.header-main {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.header-title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.header-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.header-title {
+  font-size: 2.15rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #101828;
+  line-height: 1.15;
+}
+
+.header-quote-number {
+  font-size: 2.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #98a2b3;
+  line-height: 1.15;
+  unicode-bidi: isolate;
+}
+
+.header-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.header-date-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.65rem;
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.header-date-label {
+  color: #98a2b3;
+  font-weight: 400;
+}
+
+.header-date-value {
+  color: #101828;
+  font-weight: 500;
+  font-feature-settings: "tnum" 1;
+  unicode-bidi: isolate;
+}
+
+.header-company {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) minmax(7rem, 11rem);
+  gap: 0.85rem 1.35rem;
+  text-align: right;
+}
+
+.company-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.company-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.company-label {
+  font-size: 0.92rem;
+  font-weight: 400;
+  color: #98a2b3;
+  line-height: 1.2;
+}
+
+.company-value {
+  font-size: 1.12rem;
+  font-weight: 600;
+  color: #101828;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.header-rule {
+  margin-top: 0.95rem;
+  height: 1px;
+  width: 100%;
+  background: #d0d5dd;
+}
+
+/* —— Party (customer / project) —— */
+.party-block {
+  margin-bottom: 1rem;
+}
+
+.party-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  font-size: 1.15rem;
+  line-height: 1.5;
+}
+
+.party-label {
+  color: #667085;
+  font-weight: 500;
+}
+
+.party-value {
+  color: #101828;
+  font-weight: 600;
 }
 
 .section {
@@ -64,59 +199,29 @@ body {
   padding: 1rem 1.1rem;
 }
 
-.meta-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.meta-field .label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 1rem;
-  font-weight: 500;
-  color: #475467;
-}
-
-.meta-field .value {
-  min-height: 2.2rem;
-  padding: 0.45rem 0.65rem;
-  border: 1px solid #e4e7ec;
-  border-radius: 8px;
-  background: #ffffff;
-  font-size: 1.15rem;
-  color: #101828;
-}
-
-.meta-field .value.ltr {
-  direction: ltr;
-  text-align: left;
-  unicode-bidi: isolate;
-}
-
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
 }
 
 .kpi-card {
   border: 1px solid #e4e7ec;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
-  padding: 0.75rem 0.85rem;
-  min-height: 5.5rem;
+  padding: 0.65rem 0.75rem;
+  min-height: 5rem;
 }
 
 .kpi-label {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 500;
   color: #475467;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.4rem;
 }
 
 .kpi-value {
-  font-size: 1.55rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: #101828;
   font-feature-settings: "tnum" 1;
@@ -124,14 +229,14 @@ body {
 }
 
 .kpi-badge {
-  margin-top: 0.35rem;
-  font-size: 0.9rem;
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
   color: #667085;
 }
 
 .table-wrap {
   border: 1px solid #e4e7ec;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   background: #ffffff;
 }
@@ -149,18 +254,18 @@ table.items thead {
 table.items th {
   background: #f2f4f7;
   color: #475467;
-  font-size: 0.95rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  padding: 0.55rem 0.35rem;
+  padding: 0.45rem 0.2rem;
   border-bottom: 1px solid #e4e7ec;
   text-align: center;
   white-space: nowrap;
 }
 
 table.items td {
-  padding: 0.45rem 0.35rem;
+  padding: 0.38rem 0.2rem;
   border-bottom: 1px solid #e4e7ec;
-  font-size: 1.05rem;
+  font-size: 0.88rem;
   text-align: center;
   color: #101828;
   vertical-align: middle;
@@ -169,6 +274,10 @@ table.items td {
 table.items tbody tr {
   break-inside: avoid;
   page-break-inside: avoid;
+}
+
+table.items tbody tr:nth-child(even) td {
+  background: #f9fafb;
 }
 
 table.items tbody tr:last-child td {
@@ -183,7 +292,7 @@ table.items tbody tr:last-child td {
 .notes-body {
   margin: 0;
   white-space: pre-wrap;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   line-height: 1.55;
   color: #101828;
 }

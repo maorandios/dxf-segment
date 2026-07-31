@@ -24,6 +24,7 @@ import { FinalQuotationSummaryStrip } from "./FinalQuotationSummaryStrip";
 import { FinalQuotationToolbar } from "./FinalQuotationToolbar";
 import {
   createEmptyFinalQuotationDraft,
+  normalizeFinalQuotationDraft,
   type FinalQuotationDraft,
   type FinalQuotationMetadata,
 } from "./types";
@@ -58,7 +59,13 @@ export function FinalQuotationScreen() {
   useEffect(() => {
     if (!canOpen) return;
     const existing = session.finalQuotationDraft;
-    if (existing && existing.quotationId === quotationId) return;
+    if (existing && existing.quotationId === quotationId) {
+      const normalized = normalizeFinalQuotationDraft(existing);
+      if (normalized !== existing) {
+        simpleIntakeActions.setFinalQuotationDraft(normalized);
+      }
+      return;
+    }
     const seed = createEmptyFinalQuotationDraft(quotationId, {
       customerName: session.quoteDetails?.customerName ?? "",
       projectName: session.quoteDetails?.projectName ?? "",
@@ -75,7 +82,7 @@ export function FinalQuotationScreen() {
   const draft: FinalQuotationDraft =
     session.finalQuotationDraft &&
     session.finalQuotationDraft.quotationId === quotationId
-      ? session.finalQuotationDraft
+      ? normalizeFinalQuotationDraft(session.finalQuotationDraft)
       : createEmptyFinalQuotationDraft(quotationId, {
           customerName: session.quoteDetails?.customerName ?? "",
           projectName: session.quoteDetails?.projectName ?? "",

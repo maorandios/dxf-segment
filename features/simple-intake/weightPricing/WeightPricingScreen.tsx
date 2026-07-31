@@ -143,6 +143,13 @@ export function WeightPricingScreen() {
     () => defaultWeightPricingGroupFilters()
   );
 
+  /** Non-blocking toast — never leave a full-screen scrim that freezes the UI. */
+  useEffect(() => {
+    if (!validationMessage) return;
+    const timer = window.setTimeout(() => setValidationMessage(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [validationMessage]);
+
   const [railOpen, setRailOpen] = useState(false);
   const [panelSlideIn, setPanelSlideIn] = useState(false);
   const [layoutMotion, setLayoutMotion] = useState(false);
@@ -498,6 +505,7 @@ export function WeightPricingScreen() {
       simpleIntakeActions.setWeightPricingDraft(next);
       setSaveSuccess(false);
       setValidationMessage(null);
+      setFocusInvalidKey(null);
     },
     [session.weightPricingDraft, rebuiltDraft, quotationId]
   );
@@ -514,6 +522,7 @@ export function WeightPricingScreen() {
     simpleIntakeActions.setWeightPricingDraft(next);
     setSaveSuccess(false);
     setValidationMessage(null);
+    setFocusInvalidKey(null);
   }
 
   function handleQuickReset(): void {
@@ -523,6 +532,7 @@ export function WeightPricingScreen() {
     simpleIntakeActions.setWeightPricingDraft(next);
     setSaveSuccess(false);
     setValidationMessage(null);
+    setFocusInvalidKey(null);
   }
 
   function handleSave(): void {
@@ -550,8 +560,10 @@ export function WeightPricingScreen() {
     if (!payload) {
       setValidationMessage(PRICING_VALIDATION_MESSAGE);
       setFocusInvalidKey(live.firstInvalidGroupKey);
+      setFocusRequestId((n) => n + 1);
       return;
     }
+    setValidationMessage(null);
     simpleIntakeActions.advanceToQuotationSummary(payload);
   }
 
@@ -706,53 +718,52 @@ export function WeightPricingScreen() {
         </div>
       </div>
 
-      {validationMessage ? (
-        <div className="fixed inset-0 z-[60]" dir="rtl">
-          <button
-            type="button"
-            className="ow-toast-scrim absolute inset-0"
-            aria-label="סגור"
-            onClick={() => setValidationMessage(null)}
-          />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
+      {validationMessage && typeof document !== "undefined"
+        ? createPortal(
             <div
-              role="alert"
-              aria-live="assertive"
-              data-pricing-validation-message="true"
-              className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
-              style={{
-                backgroundColor: "#ffffff",
-                borderColor: "#E5E9EE",
-                color: "#13202B",
-                textAlign: "center",
-              }}
+              className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-5 sm:pb-7"
+              dir="rtl"
+              data-pricing-validation-toast="true"
             >
-              <p
-                className="text-center text-[15px] font-semibold"
-                style={{ color: "#13202B", textAlign: "center" }}
+              <div
+                role="alert"
+                aria-live="assertive"
+                data-pricing-validation-message="true"
+                className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
+                style={{
+                  backgroundColor: "#ffffff",
+                  borderColor: "#E5E9EE",
+                  color: "#13202B",
+                  textAlign: "center",
+                }}
               >
-                לא ניתן להמשיך
-              </p>
-              <p
-                className="mt-1.5 text-center text-[13px] leading-relaxed"
-                style={{ color: "#5C6978", textAlign: "center" }}
-              >
-                {validationMessage}
-              </p>
-              <div className="mt-4 flex items-center justify-center">
-                <button
-                  type="button"
-                  onClick={() => setValidationMessage(null)}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
-                  style={{ borderColor: "var(--ow-border, #e4e7ec)" }}
+                <p
+                  className="text-center text-[15px] font-semibold"
+                  style={{ color: "#13202B", textAlign: "center" }}
                 >
-                  הבנתי
-                </button>
+                  לא ניתן להמשיך
+                </p>
+                <p
+                  className="mt-1.5 text-center text-[13px] leading-relaxed"
+                  style={{ color: "#5C6978", textAlign: "center" }}
+                >
+                  {validationMessage}
+                </p>
+                <div className="mt-4 flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setValidationMessage(null)}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                    style={{ borderColor: "var(--ow-border, #e4e7ec)" }}
+                  >
+                    הבנתי
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

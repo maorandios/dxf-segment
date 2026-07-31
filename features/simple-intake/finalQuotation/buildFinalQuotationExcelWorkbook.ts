@@ -121,6 +121,11 @@ export async function buildFinalQuotationExcelWorkbook(args: {
   addMetaRow(sheet, "שם הלקוח", meta.customerName || "");
   addMetaRow(sheet, "שם הפרויקט", meta.projectName || "");
   addMetaRow(sheet, "תאריך", formatQuotationDateHe(meta.quotationDate || ""));
+  addMetaRow(
+    sheet,
+    "תוקף הצעה",
+    formatQuotationDateHe(meta.quotationValidityDate || "")
+  );
   addMetaRow(sheet, "מספר הצעה", meta.quotationNumber || "");
 
   sheet.addRow([]);

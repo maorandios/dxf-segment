@@ -17,6 +17,7 @@ export type FinalQuotationPdfApiPayload = {
     customer_name: string;
     project_name: string;
     quotation_date: string;
+    quotation_validity_date: string;
     quotation_number: string;
   };
   totals: {
@@ -42,7 +43,12 @@ export type FinalQuotationPdfApiPayload = {
     line_total: number;
   }>;
   notes: string;
-  company: { name: string };
+  company: {
+    name: string;
+    email?: string;
+    address?: string;
+    registration_number?: string;
+  };
 };
 
 export function buildFinalQuotationPdfPayload(args: {
@@ -59,6 +65,7 @@ export function buildFinalQuotationPdfPayload(args: {
       customer_name: meta.customerName,
       project_name: meta.projectName,
       quotation_date: meta.quotationDate,
+      quotation_validity_date: meta.quotationValidityDate,
       quotation_number: meta.quotationNumber,
     },
     totals: {
@@ -86,6 +93,9 @@ export function buildFinalQuotationPdfPayload(args: {
     notes: draft.notes.trim(),
     company: {
       name: company.name.trim() || "OMEGA",
+      email: company.email.trim(),
+      address: company.address.trim(),
+      registration_number: (company.registrationNumber ?? "").trim(),
     },
   };
 
@@ -108,15 +118,25 @@ export async function downloadFinalQuotationPdf(args: {
     return { ok: false, pageCount: null, error: "empty" };
   }
   const { payload, filename } = buildFinalQuotationPdfPayload(args);
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 50_000);
   try {
     const res = await fetch("/api/simple-intake/export-quotation-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return { ok: false, pageCount: null, error: text || res.statusText };
+      let detail = res.statusText;
+      try {
+        const j = (await res.json()) as { error?: string; hint?: string };
+        detail = [j.error, j.hint].filter(Boolean).join(" — ") || detail;
+      } catch {
+        const text = await res.text().catch(() => "");
+        if (text) detail = text;
+      }
+      return { ok: false, pageCount: null, error: detail };
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -127,10 +147,19 @@ export async function downloadFinalQuotationPdf(args: {
     URL.revokeObjectURL(url);
     return { ok: true, pageCount: null };
   } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      return {
+        ok: false,
+        pageCount: null,
+        error: "ייצוא ה־PDF ארך יותר מדי זמן. נסו שוב.",
+      };
+    }
     return {
       ok: false,
       pageCount: null,
       error: e instanceof Error ? e.message : String(e),
     };
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }

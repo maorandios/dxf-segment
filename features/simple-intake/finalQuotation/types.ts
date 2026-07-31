@@ -9,6 +9,8 @@ export type FinalQuotationMetadata = {
   projectName: string;
   /** ISO date YYYY-MM-DD (local date when first created). */
   quotationDate: string;
+  /** ISO date YYYY-MM-DD — offer validity; defaults to quotation date + 7 days. */
+  quotationValidityDate: string;
   /** Free-text quotation number (preserves leading zeroes). */
   quotationNumber: string;
 };
@@ -87,27 +89,74 @@ export const FINAL_QUOTATION_NOTES_PLACEHOLDER =
   "לדוגמה: אספקת החומר תתבצע תוך 7 ימי עסקים";
 
 export function todayLocalIsoDate(): string {
-  const d = new Date();
+  return localIsoDateFromDate(new Date());
+}
+
+/** Local calendar date + N days as YYYY-MM-DD. */
+export function addDaysLocalIsoDate(days: number, from: Date = new Date()): string {
+  const d = new Date(
+    from.getFullYear(),
+    from.getMonth(),
+    from.getDate() + days
+  );
+  return localIsoDateFromDate(d);
+}
+
+function localIsoDateFromDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
+/** Default offer validity: one week after the quotation date (or today). */
+export function defaultQuotationValidityDate(
+  quotationDate?: string | null
+): string {
+  if (quotationDate && /^\d{4}-\d{2}-\d{2}$/.test(quotationDate.trim())) {
+    const [y, m, d] = quotationDate.trim().split("-").map(Number);
+    return addDaysLocalIsoDate(7, new Date(y!, m! - 1, d!));
+  }
+  return addDaysLocalIsoDate(7);
+}
+
 export function createEmptyFinalQuotationDraft(
   quotationId: string,
   seed?: Partial<FinalQuotationMetadata>
 ): FinalQuotationDraft {
+  const quotationDate = seed?.quotationDate ?? todayLocalIsoDate();
   return {
     quotationId,
     metadata: {
       customerName: seed?.customerName ?? "",
       projectName: seed?.projectName ?? "",
-      quotationDate: seed?.quotationDate ?? todayLocalIsoDate(),
+      quotationDate,
+      quotationValidityDate:
+        seed?.quotationValidityDate ??
+        defaultQuotationValidityDate(quotationDate),
       quotationNumber: seed?.quotationNumber ?? "",
     },
     vatRatePercent: DEFAULT_VAT_RATE_PERCENT,
     notes: NEW_QUOTATION_NOTES_DEFAULT,
     updatedAt: new Date().toISOString(),
+  };
+}
+
+/** Fill missing validity date on drafts persisted before this field existed. */
+export function normalizeFinalQuotationDraft(
+  draft: FinalQuotationDraft
+): FinalQuotationDraft {
+  const validity = draft.metadata.quotationValidityDate?.trim();
+  if (validity && /^\d{4}-\d{2}-\d{2}$/.test(validity)) {
+    return draft;
+  }
+  return {
+    ...draft,
+    metadata: {
+      ...draft.metadata,
+      quotationValidityDate: defaultQuotationValidityDate(
+        draft.metadata.quotationDate
+      ),
+    },
   };
 }

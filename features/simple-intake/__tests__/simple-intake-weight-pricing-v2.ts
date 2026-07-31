@@ -382,4 +382,53 @@ console.log("OMEGA — Simplify Weight Pricing by Finish v2");
   console.log("✓ removed supplement fields from formula");
 }
 
+{
+  const screenSrc = fs.readFileSync(
+    path.join(root, "weightPricing/WeightPricingScreen.tsx"),
+    "utf8"
+  );
+  assert_(
+    screenSrc.includes("data-pricing-validation-toast"),
+    "non-blocking validation toast marker"
+  );
+  assert_(
+    screenSrc.includes('createPortal(') &&
+      screenSrc.includes("data-pricing-validation-message"),
+    "validation toast portaled"
+  );
+  // Blocking full-screen scrim locked the screen after missing מגולוון price.
+  assert_(!screenSrc.includes("ow-toast-scrim"), "no toast scrim on pricing screen");
+  assert_(
+    screenSrc.includes(
+      'className="pointer-events-none fixed inset-x-0 bottom-0 z-[60]'
+    ),
+    "toast wrapper does not capture clicks"
+  );
+  assert_(
+    screenSrc.includes("setTimeout(() => setValidationMessage(null), 4500)"),
+    "auto-dismiss validation toast"
+  );
+  console.log("✓ validation toast does not freeze UI");
+}
+
+{
+  const tableSrc = fs.readFileSync(
+    path.join(root, "weightPricing/WeightPricingTable.tsx"),
+    "utf8"
+  );
+  assert_(
+    tableSrc.includes("data-pricing-field=\"finalPricePerKg\""),
+    "focus targets final price cell"
+  );
+  assert_(
+    !tableSrc.includes("}, [focusGroupKey, focusRequestId, groups]);"),
+    "focus effect must not re-run on groups updates"
+  );
+  assert_(
+    tableSrc.includes("}, [focusGroupKey, focusRequestId]);"),
+    "focus only on explicit request"
+  );
+  console.log("✓ focus does not trap caret after typing price");
+}
+
 console.log("\nOMEGA — Simplify Weight Pricing by Finish v2 — all checks passed.");

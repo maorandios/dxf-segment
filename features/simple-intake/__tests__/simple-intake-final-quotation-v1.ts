@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  addDaysLocalIsoDate,
   buildFinalQuotationDiagnostics,
   buildFinalQuotationRows,
   calculateFinalQuotationTotals,
@@ -16,6 +17,7 @@ import {
   FINAL_QUOTATION_NOTES_PLACEHOLDER,
   FINAL_QUOTATION_TABLE_HEADERS,
   NEW_QUOTATION_NOTES_DEFAULT,
+  normalizeFinalQuotationDraft,
   PLACEHOLDER_TEXT_EXPORTED_AS_NOTES,
   QUOTATION_SUMMARY_RENDERED_ABOVE_TABLE,
   QUOTATION_SUMMARY_RENDERED_BELOW_TABLE,
@@ -102,6 +104,31 @@ console.log("OMEGA — Final Quotation Summary and Export Screen v1");
   assertEq(draft.metadata.projectName, "", "project default");
   assertEq(draft.metadata.quotationNumber, "", "number default");
   assert_(/^\d{4}-\d{2}-\d{2}$/.test(draft.metadata.quotationDate), "date ISO");
+  assertEq(
+    draft.metadata.quotationValidityDate,
+    addDaysLocalIsoDate(7),
+    "validity default +7 days"
+  );
+  assertEq(
+    draft.metadata.quotationValidityDate,
+    addDaysLocalIsoDate(7, new Date(draft.metadata.quotationDate + "T12:00:00")),
+    "validity is quotation date + 7"
+  );
+
+  const legacy = createEmptyFinalQuotationDraft("legacy");
+  const withoutValidity = {
+    ...legacy,
+    metadata: {
+      ...legacy.metadata,
+      quotationValidityDate: "" as string,
+    },
+  };
+  const migrated = normalizeFinalQuotationDraft(withoutValidity);
+  assertEq(
+    migrated.metadata.quotationValidityDate,
+    addDaysLocalIsoDate(7, new Date(legacy.metadata.quotationDate + "T12:00:00")),
+    "normalize fills validity"
+  );
 
   draft.metadata.quotationNumber = "000127";
   assertEq(draft.metadata.quotationNumber, "000127", "preserves leading zeroes");
@@ -316,6 +343,7 @@ function mockRow(partial: {
   assert_(excelSrc.includes('addWorksheet("הצעת מחיר"'), "sheet name");
   assert_(!excelSrc.includes("autoFilter"), "no autofilter");
   assert_(!excelSrc.includes("frozen"), "no freeze panes");
+  assert_(excelSrc.includes("תוקף הצעה"), "excel validity");
   assert_(excelSrc.includes("הערות להצעה"), "excel notes");
   assert_(excelSrc.includes("FFF2F4F7"), "soft header fill");
   assert_(excelSrc.includes('"₪"#,##0.00'), "ils number format");
@@ -328,6 +356,7 @@ function mockRow(partial: {
     path.join(root, "finalQuotation/buildFinalQuotationPdfPayload.ts"),
     "utf8"
   );
+  assert_(pdfSrc.includes("quotation_validity_date"), "pdf validity field");
   assert_(
     pdfSrc.includes("/api/simple-intake/export-quotation-pdf"),
     "uses simple-intake pdf api"
@@ -355,9 +384,67 @@ function mockRow(partial: {
         path.join(root, "../../server/pdf/final_quotation_template.html"),
         "utf8"
       )
-      .includes("סיכום הצעת מחיר"),
-    "matches summary screen title"
+      .includes("הצעת מחיר"),
+    "classic quotation title"
   );
+  assert_(
+    fs
+      .readFileSync(
+        path.join(root, "../../server/pdf/final_quotation_template.css"),
+        "utf8"
+      )
+      .includes("A4 portrait"),
+    "portrait page"
+  );
+  const cssSrc = fs.readFileSync(
+    path.join(root, "../../server/pdf/final_quotation_template.css"),
+    "utf8"
+  );
+  assert_(cssSrc.includes("margin: 20mm"), "css @page inset margins");
+  assert_(
+    /@page\s*\{[\s\S]*?margin:\s*20mm/.test(cssSrc),
+    "css @page uses 20mm margins"
+  );
+  assert_(
+    !/@page\s*\{[^}]*margin:\s*0\s*;/.test(cssSrc),
+    "css @page must not zero-out margins"
+  );
+  const renderSrc = fs.readFileSync(
+    path.join(root, "../../server/pdf/render_final_quotation_pdf.py"),
+    "utf8"
+  );
+  assert_(renderSrc.includes('"top": "20mm"'), "playwright matching margins");
+  assert_(
+    renderSrc.includes("prefer_css_page_size=True"),
+    "honor css @page margins"
+  );
+  assert_(
+    fs
+      .readFileSync(
+        path.join(root, "../../server/pdf/render_final_quotation_pdf.py"),
+        "utf8"
+      )
+      .includes('wait_until="domcontentloaded"'),
+    "pdf does not wait for networkidle"
+  );
+  assert_(
+    !fs
+      .readFileSync(
+        path.join(root, "../../server/pdf/final_quotation_template.html"),
+        "utf8"
+      )
+      .includes("fonts.googleapis.com"),
+    "pdf template has no Google Fonts CDN"
+  );
+  const routeSrc = fs.readFileSync(
+    path.join(root, "../../app/api/simple-intake/export-quotation-pdf/route.ts"),
+    "utf8"
+  );
+  assert_(
+    routeSrc.includes("quotation_validity_date"),
+    "api accepts validity date"
+  );
+  assert_(routeSrc.includes("timeout: PYTHON_PDF_TIMEOUT_MS"), "api kills hung pdf");
 
   const thumbSrc = fs.readFileSync(
     path.join(root, "finalQuotation/renderExistingDxfThumbnail.ts"),
@@ -377,13 +464,30 @@ function mockRow(partial: {
   assert_(metaForm.includes("שם הלקוח"), "customer");
   assert_(metaForm.includes("שם הפרויקט"), "project");
   assert_(metaForm.includes("תאריך"), "date");
+  assert_(metaForm.includes("תוקף הצעה"), "validity");
   assert_(metaForm.includes("מספר הצעה"), "number");
   assert_(metaForm.includes('type="date"'), "date input");
+  assert_(metaForm.includes('data-field="quotationValidityDate"'), "validity field");
   assert_(metaForm.includes('data-field="quotationNumber"'), "manual number");
   assert_(metaForm.includes("Building2"), "customer icon");
   assert_(metaForm.includes("FolderKanban"), "project icon");
   assert_(metaForm.includes("CalendarDays"), "date icon");
+  assert_(metaForm.includes("CalendarClock"), "validity icon");
+  assert_(metaForm.includes("lg:grid-cols-5"), "five columns");
   assert_(metaForm.includes("15%"), "section opacity");
+
+  const pdfTpl = fs.readFileSync(
+    path.join(root, "../../server/pdf/final_quotation_template.html"),
+    "utf8"
+  );
+  assert_(pdfTpl.includes("doc-header"), "classic header");
+  assert_(pdfTpl.includes("תאריך הנפקה"), "issue date label");
+  assert_(pdfTpl.includes("בתוקף עד"), "validity label");
+  assert_(pdfTpl.includes("שם החברה"), "company name label");
+  assert_(pdfTpl.includes("מספר ח.פ"), "company reg label");
+  assert_(pdfTpl.includes("דוא״ל") || pdfTpl.includes('דוא"ל'), "email label");
+  assert_(pdfTpl.includes("quotation_validity_date"), "pdf template validity var");
+  assert_(pdfTpl.includes("header-rule"), "header divider");
 
   const strip = fs.readFileSync(
     path.join(root, "finalQuotation/FinalQuotationSummaryStrip.tsx"),

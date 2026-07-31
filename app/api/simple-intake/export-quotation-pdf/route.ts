@@ -11,11 +11,15 @@ export const maxDuration = 60;
 
 const execFileAsync = promisify(execFile);
 
+/** Kill hung Chromium/Python before Next's route budget is exhausted. */
+const PYTHON_PDF_TIMEOUT_MS = 45_000;
+
 const bodySchema = z.object({
   metadata: z.object({
     customer_name: z.string(),
     project_name: z.string(),
     quotation_date: z.string(),
+    quotation_validity_date: z.string().optional().default(""),
     quotation_number: z.string(),
   }),
   totals: z.object({
@@ -47,6 +51,9 @@ const bodySchema = z.object({
   notes: z.string().optional().default(""),
   company: z.object({
     name: z.string().min(1),
+    email: z.string().optional().default(""),
+    address: z.string().optional().default(""),
+    registration_number: z.string().optional().default(""),
   }),
 });
 
@@ -64,7 +71,7 @@ function safeFilename(ref: string): string {
 
 /**
  * POST /api/simple-intake/export-quotation-pdf
- * Renders the Simple Intake final quotation PDF (matches סיכום הצעת מחיר screen).
+ * Renders the Simple Intake final quotation PDF (portrait, classic header).
  */
 export async function POST(req: Request) {
   let parsed: z.infer<typeof bodySchema>;
@@ -90,6 +97,8 @@ export async function POST(req: Request) {
         cwd: pdfDir,
         env: { ...process.env, PYTHONUTF8: "1" },
         maxBuffer: 32 * 1024 * 1024,
+        timeout: PYTHON_PDF_TIMEOUT_MS,
+        killSignal: "SIGTERM",
       }
     );
 

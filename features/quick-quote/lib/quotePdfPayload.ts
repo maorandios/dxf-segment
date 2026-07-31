@@ -45,6 +45,8 @@ export interface QuotePdfCompanyBlock {
   website: string;
   /** Letterhead address (multi-line supported). */
   address: string;
+  /** Company registration / ח.פ (optional; env until Settings field exists). */
+  registrationNumber?: string;
 }
 
 /** Full POST body including company (finalize step). */
@@ -134,6 +136,8 @@ function envCompanyDefaults(): QuotePdfCompanyBlock {
     phone: process.env.NEXT_PUBLIC_QUOTE_COMPANY_PHONE?.trim() || "",
     website: process.env.NEXT_PUBLIC_QUOTE_COMPANY_WEBSITE?.trim() || "",
     address: process.env.NEXT_PUBLIC_QUOTE_COMPANY_ADDRESS?.trim() || "",
+    registrationNumber:
+      process.env.NEXT_PUBLIC_QUOTE_COMPANY_REGISTRATION?.trim() || "",
   };
 }
 
@@ -148,6 +152,7 @@ export function getDefaultPdfCompany(): QuotePdfCompanyBlock {
     phone: (p.companyPhone?.trim() ?? base.phone) || "",
     website: (p.companyWebsite?.trim() ?? base.website) || "",
     address: (p.companyAddress?.trim() ?? base.address) || "",
+    registrationNumber: base.registrationNumber || "",
   };
 }
 

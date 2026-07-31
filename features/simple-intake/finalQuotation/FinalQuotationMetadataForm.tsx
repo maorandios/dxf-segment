@@ -1,13 +1,31 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Building2, CalendarDays, FolderKanban, Hash } from "lucide-react";
+import { Building2, CalendarClock, CalendarDays, FolderKanban, Hash } from "lucide-react";
 import type { FinalQuotationMetadata } from "./types";
 
 const MUTED = "var(--ow-text-muted, #667085)";
 /** Same translucent shell language as metric cards (~15% surface). */
 const SECTION_SURFACE =
   "color-mix(in srgb, var(--ow-surface, #ffffff) 15%, transparent)";
+
+const DATE_INPUT_EXTRA = [
+  "relative pl-10 pr-3",
+  "[color-scheme:light]",
+  "[&::-webkit-datetime-edit]:m-0",
+  "[&::-webkit-datetime-edit]:w-full",
+  "[&::-webkit-datetime-edit]:p-0",
+  "[&::-webkit-datetime-edit]:text-right",
+  "[&::-webkit-datetime-edit-fields-wrapper]:ms-auto",
+  "[&::-webkit-datetime-edit-fields-wrapper]:me-0",
+  "[&::-webkit-datetime-edit-fields-wrapper]:p-0",
+  "[&::-webkit-date-and-time-value]:w-full",
+  "[&::-webkit-date-and-time-value]:text-right",
+  "[&::-webkit-calendar-picker-indicator]:absolute",
+  "[&::-webkit-calendar-picker-indicator]:left-3",
+  "[&::-webkit-calendar-picker-indicator]:right-auto",
+  "[&::-webkit-calendar-picker-indicator]:cursor-pointer",
+].join(" ");
 
 function FieldLabel({
   icon: Icon,
@@ -38,6 +56,11 @@ export function FinalQuotationMetadataForm({
   const fieldClass =
     "h-10 w-full rounded-lg border bg-[var(--ow-surface,#fff)] px-3 text-right text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ow-accent)]";
   const border = { borderColor: "var(--ow-border, #e4e7ec)" };
+  const dateStyle = {
+    ...border,
+    textAlign: "right" as const,
+    direction: "rtl" as const,
+  };
 
   return (
     <section
@@ -56,7 +79,7 @@ export function FinalQuotationMetadataForm({
       >
         פרטי ההצעה
       </h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <label className="block">
           <FieldLabel icon={Building2}>שם הלקוח</FieldLabel>
           <input
@@ -89,30 +112,25 @@ export function FinalQuotationMetadataForm({
               dir="rtl"
               value={metadata.quotationDate}
               onChange={(e) => onChange({ quotationDate: e.target.value })}
-              className={[
-                fieldClass,
-                "relative pl-10 pr-3",
-                "[color-scheme:light]",
-                "[&::-webkit-datetime-edit]:m-0",
-                "[&::-webkit-datetime-edit]:w-full",
-                "[&::-webkit-datetime-edit]:p-0",
-                "[&::-webkit-datetime-edit]:text-right",
-                "[&::-webkit-datetime-edit-fields-wrapper]:ms-auto",
-                "[&::-webkit-datetime-edit-fields-wrapper]:me-0",
-                "[&::-webkit-datetime-edit-fields-wrapper]:p-0",
-                "[&::-webkit-date-and-time-value]:w-full",
-                "[&::-webkit-date-and-time-value]:text-right",
-                "[&::-webkit-calendar-picker-indicator]:absolute",
-                "[&::-webkit-calendar-picker-indicator]:left-3",
-                "[&::-webkit-calendar-picker-indicator]:right-auto",
-                "[&::-webkit-calendar-picker-indicator]:cursor-pointer",
-              ].join(" ")}
-              style={{
-                ...border,
-                textAlign: "right",
-                direction: "rtl",
-              }}
+              className={[fieldClass, DATE_INPUT_EXTRA].join(" ")}
+              style={dateStyle}
               data-field="quotationDate"
+            />
+          </div>
+        </label>
+        <label className="block">
+          <FieldLabel icon={CalendarClock}>תוקף הצעה</FieldLabel>
+          <div className="relative">
+            <input
+              type="date"
+              dir="rtl"
+              value={metadata.quotationValidityDate}
+              onChange={(e) =>
+                onChange({ quotationValidityDate: e.target.value })
+              }
+              className={[fieldClass, DATE_INPUT_EXTRA].join(" ")}
+              style={dateStyle}
+              data-field="quotationValidityDate"
             />
           </div>
         </label>

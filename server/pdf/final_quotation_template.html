@@ -3,37 +3,66 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>סיכום הצעת מחיר {{ quotation_number }}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@400;500;600;700&family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet" />
+  <title>הצעת מחיר {{ quotation_number }}</title>
   <style>{{ css_text | safe }}</style>
 </head>
 <body>
   <div class="doc">
-    <h1 class="page-title">סיכום הצעת מחיר</h1>
-
-    <section class="section">
-      <h2 class="section-title">פרטי ההצעה</h2>
-      <div class="panel">
-        <div class="meta-grid">
-          <div class="meta-field">
-            <span class="label">שם הלקוח</span>
-            <div class="value">{{ customer_name or "—" }}</div>
+    <header class="doc-header">
+      <div class="header-main">
+        <div class="header-title-block">
+          <div class="header-title-row">
+            <span class="header-title">הצעת מחיר</span>
+            {% if quotation_number and quotation_number != "—" %}
+            <span class="header-quote-number" dir="ltr">{{ quotation_number }}</span>
+            {% endif %}
           </div>
-          <div class="meta-field">
-            <span class="label">שם הפרויקט</span>
-            <div class="value">{{ project_name or "—" }}</div>
-          </div>
-          <div class="meta-field">
-            <span class="label">תאריך</span>
-            <div class="value ltr">{{ quotation_date or "—" }}</div>
-          </div>
-          <div class="meta-field">
-            <span class="label">מספר הצעה</span>
-            <div class="value ltr">{{ quotation_number or "—" }}</div>
+          <div class="header-dates">
+            <div class="header-date-row">
+              <span class="header-date-label">תאריך הנפקה</span>
+              <span class="header-date-value" dir="ltr">{{ quotation_date or "—" }}</span>
+            </div>
+            <div class="header-date-row">
+              <span class="header-date-label">בתוקף עד</span>
+              <span class="header-date-value" dir="ltr">{{ quotation_validity_date or "—" }}</span>
+            </div>
           </div>
         </div>
+
+        <div class="header-company">
+          <div class="company-col">
+            <div class="company-field">
+              <span class="company-label">שם החברה</span>
+              <span class="company-value">{{ company_name or "—" }}</span>
+            </div>
+            <div class="company-field">
+              <span class="company-label">כתובת</span>
+              <span class="company-value">{{ company_address or "—" }}</span>
+            </div>
+          </div>
+          <div class="company-col">
+            <div class="company-field">
+              <span class="company-label">מספר ח.פ</span>
+              <span class="company-value" dir="ltr">{{ company_registration or "—" }}</span>
+            </div>
+            <div class="company-field">
+              <span class="company-label">דוא״ל</span>
+              <span class="company-value" dir="ltr">{{ company_email or "—" }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="header-rule" aria-hidden="true"></div>
+    </header>
+
+    <section class="section party-block">
+      <div class="party-row">
+        <span class="party-label">שם הלקוח:</span>
+        <span class="party-value">{{ customer_name or "—" }}</span>
+      </div>
+      <div class="party-row">
+        <span class="party-label">שם הפרויקט:</span>
+        <span class="party-value">{{ project_name or "—" }}</span>
       </div>
     </section>
 

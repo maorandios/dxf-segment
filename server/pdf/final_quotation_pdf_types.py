@@ -11,6 +11,7 @@ class FinalQuotationPdfMetadata(BaseModel):
     customer_name: str = ""
     project_name: str = ""
     quotation_date: str = ""
+    quotation_validity_date: str = ""
     quotation_number: str = ""
 
 
@@ -40,6 +41,10 @@ class FinalQuotationPdfRow(BaseModel):
 
 class FinalQuotationPdfCompany(BaseModel):
     name: str = Field(..., min_length=1)
+    email: str = ""
+    address: str = ""
+    # Company registration / ח.פ (optional).
+    registration_number: str = ""
 
 
 class FinalQuotationPdfPayload(BaseModel):

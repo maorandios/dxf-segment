@@ -13,7 +13,10 @@ export {
   PLACEHOLDER_TEXT_EXPORTED_AS_NOTES,
   QUOTATION_SUMMARY_RENDERED_ABOVE_TABLE,
   QUOTATION_SUMMARY_RENDERED_BELOW_TABLE,
+  addDaysLocalIsoDate,
   createEmptyFinalQuotationDraft,
+  defaultQuotationValidityDate,
+  normalizeFinalQuotationDraft,
   todayLocalIsoDate,
 } from "./types";
 export { buildFinalQuotationRows } from "./buildFinalQuotationRows";

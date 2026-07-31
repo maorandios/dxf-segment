@@ -219,7 +219,10 @@ export function WeightPricingTable({
       el.focus();
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
-  }, [focusGroupKey, focusRequestId, groups]);
+    // Intentionally omit `groups`: re-focusing on every draft/group update trapped
+    // the caret in the empty cell and blocked clicking elsewhere after typing a price.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus only on explicit request
+  }, [focusGroupKey, focusRequestId]);
 
   return (
     <div

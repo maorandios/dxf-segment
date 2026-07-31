@@ -96,22 +96,30 @@ def build_template_context(payload: FinalQuotationPdfPayload) -> dict:
     notes_text = (payload.notes or "").strip()
     css_text = (DIR / "final_quotation_template.css").read_text(encoding="utf-8")
 
-    date_display = meta.quotation_date
-    try:
-        date_display = format_date_il(meta.quotation_date) if meta.quotation_date else "—"
-    except Exception:
-        date_display = meta.quotation_date or "—"
+    def format_meta_date(raw: str) -> str:
+        value = (raw or "").strip()
+        if not value:
+            return "—"
+        try:
+            return format_date_il(value)
+        except Exception:
+            return value
 
     return {
         "css_text": css_text,
         "customer_name": meta.customer_name.strip() or "—",
         "project_name": meta.project_name.strip() or "—",
-        "quotation_date": date_display,
+        "quotation_date": format_meta_date(meta.quotation_date),
+        "quotation_validity_date": format_meta_date(meta.quotation_validity_date),
         "quotation_number": meta.quotation_number.strip() or "—",
         "kpi_cards": kpi_cards,
         "item_rows": item_rows,
         "notes_text": notes_text,
-        "company_name": payload.company.name,
+        "company_name": payload.company.name.strip() or "—",
+        "company_email": (payload.company.email or "").strip() or "—",
+        "company_address": (payload.company.address or "").strip() or "—",
+        "company_registration": (payload.company.registration_number or "").strip()
+        or "—",
     }
 
 
@@ -125,23 +133,43 @@ def render_html(payload: FinalQuotationPdfPayload) -> str:
 
 
 async def html_to_pdf_bytes(html: str) -> bytes:
+    """Render HTML → PDF without waiting on external network (fonts/CDN)."""
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+            ],
+        )
         try:
             page = await browser.new_page()
-            await page.set_content(html, wait_until="networkidle", timeout=60_000)
+            # Offline render: Google Fonts / CDN waits were causing 30–60s hangs
+            # and failed retries when networkidle never settled.
+            await page.route(
+                "**/*",
+                lambda route: (
+                    route.abort()
+                    if route.request.url.startswith(("http://", "https://"))
+                    else route.continue_()
+                ),
+            )
+            await page.set_content(html, wait_until="domcontentloaded", timeout=15_000)
+            # Prefer CSS @page margin (20mm) so inset repeats on every page.
+            # Also pass matching PDF margins as a fallback.
             return await page.pdf(
                 format="A4",
-                landscape=True,
+                landscape=False,
                 print_background=True,
-                prefer_css_page_size=False,
+                prefer_css_page_size=True,
                 margin={
-                    "top": "12mm",
-                    "right": "10mm",
-                    "bottom": "12mm",
-                    "left": "10mm",
+                    "top": "20mm",
+                    "right": "20mm",
+                    "bottom": "20mm",
+                    "left": "20mm",
                 },
             )
         finally:
