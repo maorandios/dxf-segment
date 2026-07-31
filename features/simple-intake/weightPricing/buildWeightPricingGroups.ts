@@ -268,6 +268,22 @@ export function applyQuickPricingDefaults(args: {
   };
 }
 
+/** Clear quick-bar finish defaults. Preserves per-group manual overrides. */
+export function resetQuickPricingDefaults(
+  draft: WeightPricingDraft
+): WeightPricingDraft {
+  return {
+    ...draft,
+    updatedAt: new Date().toISOString(),
+    defaults: {
+      blackPricePerKg: null,
+      galvanizedPricePerKg: null,
+      checkeredPlateAddonPerKg: 0,
+    },
+    groupPricingByKey: { ...draft.groupPricingByKey },
+  };
+}
+
 /** @deprecated use applyQuickPricingDefaults */
 export function applyQuickPricingToDraft(args: {
   draft: WeightPricingDraft;

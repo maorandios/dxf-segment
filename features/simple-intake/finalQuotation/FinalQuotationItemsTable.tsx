@@ -4,7 +4,6 @@ import {
   formatCheckeredPlateExportHe,
   formatFinishLabelHe,
 } from "../quoteItemCommercialOptions";
-import { SimpleDxfThumbnail } from "../results/SimpleDxfThumbnail";
 import {
   formatMoneyIls,
   formatPricePerKg,
@@ -16,7 +15,6 @@ import type { FinalQuotationItemRow } from "./types";
 export const FINAL_QUOTATION_TABLE_HEADERS = [
   "#",
   "שם פריט",
-  "גאומטריה",
   'עובי (מ"מ)',
   "כמות",
   "סוג חומר",
@@ -31,10 +29,8 @@ export const FINAL_QUOTATION_TABLE_HEADERS = [
 
 export function FinalQuotationItemsTable({
   rows,
-  onOpenGeometry,
 }: {
   rows: ReadonlyArray<FinalQuotationItemRow>;
-  onOpenGeometry: (row: FinalQuotationItemRow) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -62,7 +58,7 @@ export function FinalQuotationItemsTable({
       data-final-quotation-table="true"
       data-summary-below-table="false"
     >
-      <table className="w-full min-w-[1100px] border-collapse text-[13px]" dir="rtl">
+      <table className="w-full min-w-[1000px] border-collapse text-[13px]" dir="rtl">
         <thead>
           <tr
             style={{
@@ -91,22 +87,6 @@ export function FinalQuotationItemsTable({
             >
               <td className="px-2 py-2 text-center tabular-nums">{index + 1}</td>
               <td className="px-2 py-2 text-center font-medium">{row.partId}</td>
-              <td className="px-2 py-2 text-center">
-                <button
-                  type="button"
-                  className="mx-auto inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ow-accent)]"
-                  onClick={() => onOpenGeometry(row)}
-                  title="תצוגת גאומטריה"
-                  aria-label={`תצוגת גאומטריה ${row.partId}`}
-                  data-geometry-thumb="true"
-                >
-                  <SimpleDxfThumbnail
-                    widthMm={row.geometryAvailable ? row.widthMm : null}
-                    lengthMm={row.geometryAvailable ? row.lengthMm : null}
-                    size="sm"
-                  />
-                </button>
-              </td>
               <td className="px-2 py-2 text-center tabular-nums">
                 {formatPricingMetricValue(row.thicknessMm, 0)}
               </td>

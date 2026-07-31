@@ -40,6 +40,7 @@ export {
   computeWeightPricingMetrics,
   mergeNestingComparisonIntoMetrics,
   applyQuickPricingDefaults,
+  resetQuickPricingDefaults,
   applyQuickPricingToDraft,
   patchGroupPricingInDraft,
   patchPricingDefaultsInDraft,
@@ -114,12 +115,35 @@ export {
 } from "./buildPricingNestingDiagnostics";
 export {
   buildPricingGroupPanelDiagnostics,
+  buildCompactPricingPanelDiagnostics,
   assertPricingGroupPanelInvariants,
+  assertCompactPricingPanelInvariants,
   panelOpenTriggersNestingRun,
+  panelOpenTriggersPricingCalculation,
   panelOpenTriggersPhysicalRecalculation,
+  panelSectionCount,
+  panelItemTableRendered,
+  panelPricingSummarySectionRendered,
+  panelInternalScrollRequiredOnDesktop,
+  selectedRowHighlightUsesGroupKey,
   newDxfViewerCreated,
   legacyDetailListRendered,
 } from "./buildPricingGroupPanelDiagnostics";
-export type { PricingGroupPanelDiagnostics } from "./buildPricingGroupPanelDiagnostics";
+export type {
+  PricingGroupPanelDiagnostics,
+  CompactPricingPanelDiagnostics,
+} from "./buildPricingGroupPanelDiagnostics";
+export {
+  buildPricingGroupRelativeMetrics,
+  groupWeightSharePercent,
+  groupValueSharePercent,
+} from "./buildPricingGroupRelativeMetrics";
+export type { PricingGroupRelativeMetrics } from "./buildPricingGroupRelativeMetrics";
+export {
+  COMPACT_PRICING_PANEL_DESKTOP_VIEWPORT,
+  COMPACT_PRICING_PANEL_AVAILABLE_BODY_HEIGHT_PX,
+  COMPACT_PRICING_PANEL_CONTENT_HEIGHT_BUDGET_PX,
+  compactPricingPanelInternalOverflowPx,
+} from "./compactPricingPanelLayout";
 export { WeightPricingScreen } from "./WeightPricingScreen";
 export { WeightPricingGroupDetailsDrawer } from "./WeightPricingGroupDetailsDrawer";

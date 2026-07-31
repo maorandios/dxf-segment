@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { simpleIntakeActions } from "../sessionStore";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
 import { deriveFinalRows } from "../results/deriveFinalRows";
-import { FinalQuoteItemPreviewModal } from "../results/FinalQuoteItemPreviewModal";
-import type { FinalIntakeRow } from "../results/types";
 import { ScreenHeader } from "../ui";
 import {
   REVIEW_WORKSPACE_CONTENT_MAX_PX,
@@ -41,7 +39,6 @@ export function FinalQuotationScreen() {
   const session = useSimpleIntakeSession();
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [previewRowId, setPreviewRowId] = useState<string | null>(null);
 
   const pricingSummary = session.weightPricingSummaryPayload;
   const canOpen = canOpenFinalQuotationScreen(pricingSummary);
@@ -149,11 +146,6 @@ export function FinalQuotationScreen() {
     }
   }, [canOpen, quotationId, quotationRows, totals, draft]);
 
-  const previewRow: FinalIntakeRow | null = useMemo(() => {
-    if (!previewRowId) return null;
-    return finalRows.find((r) => r.id === previewRowId) ?? null;
-  }, [finalRows, previewRowId]);
-
   function patchDraft(
     patch: Partial<Omit<FinalQuotationDraft, "metadata">> & {
       metadata?: Partial<FinalQuotationMetadata>;
@@ -258,10 +250,7 @@ export function FinalQuotationScreen() {
           onVatRateChange={(vatRatePercent) => patchDraft({ vatRatePercent })}
         />
 
-        <FinalQuotationItemsTable
-          rows={quotationRows}
-          onOpenGeometry={(row) => setPreviewRowId(row.resultRowId)}
-        />
+        <FinalQuotationItemsTable rows={quotationRows} />
 
         <FinalQuotationNotes
           notes={draft.notes}
@@ -277,14 +266,6 @@ export function FinalQuotationScreen() {
             {exportError}
           </p>
         ) : null}
-
-        <FinalQuoteItemPreviewModal
-          row={previewRow}
-          open={previewRow != null}
-          onClose={() => setPreviewRowId(null)}
-          onToggleFreeze={() => undefined}
-          readOnly
-        />
       </div>
     </div>
   );

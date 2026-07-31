@@ -1,7 +1,7 @@
 "use client";
 
 import { type TdHTMLAttributes, useEffect } from "react";
-import { RotateCcw } from "lucide-react";
+import { Eye, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -188,15 +188,18 @@ export function WeightPricingTable({
   invalidGroupKeys,
   focusGroupKey,
   focusRequestId = 0,
+  selectedPricingGroupKey = null,
   nestingEstimatesByKey,
   onPatchGroup,
-  onViewGroup: _onViewGroup,
+  onViewGroup,
 }: {
   groups: WeightPricingGroup[];
   defaults: WeightPricingDefaults;
   invalidGroupKeys: ReadonlySet<PricingGroupKey>;
   focusGroupKey: PricingGroupKey | null;
   focusRequestId?: number;
+  /** Row open in the side panel — same accent highlight as gaps/final tables. */
+  selectedPricingGroupKey?: PricingGroupKey | null;
   nestingEstimatesByKey?: ReadonlyMap<
     PricingGroupKey,
     PricingGroupNestingEstimate
@@ -205,10 +208,8 @@ export function WeightPricingTable({
     groupKey: PricingGroupKey,
     patch: Partial<WeightPricingGroupDraft>
   ) => void;
-  /** Reserved — view column hidden for now. */
-  onViewGroup?: (groupKey: PricingGroupKey) => void;
+  onViewGroup: (groupKey: PricingGroupKey) => void;
 }) {
-  void _onViewGroup;
   useEffect(() => {
     if (!focusGroupKey) return;
     const el = document.querySelector<HTMLElement>(
@@ -247,8 +248,9 @@ export function WeightPricingTable({
           <col style={{ width: "6.5%" }} />
           <col style={{ width: "8%" }} />
           <col style={{ width: "7%" }} />
-          <col style={{ width: "11%" }} />
           <col style={{ width: "10%" }} />
+          <col style={{ width: "9%" }} />
+          <col style={{ width: "4.5%" }} />
         </colgroup>
         <thead>
           <tr style={{ backgroundColor: "var(--ow-surface-muted, #F2F4F7)" }}>
@@ -267,6 +269,7 @@ export function WeightPricingTable({
             <ColHeader label="תוספת פח מרוג" />
             <ColHeader label={'מחיר סופי לק"ג'} />
             <ColHeader label='סה"כ' />
+            <ColHeader label="צפייה" className="text-center" />
           </tr>
         </thead>
         <tbody>
@@ -278,10 +281,28 @@ export function WeightPricingTable({
               nestingEstimatesByKey?.get(group.groupKey) ??
               emptyPricingGroupNestingEstimate(group.groupKey, "IDLE");
             const highWaste = isHighWastePercent(nesting);
+            const isSelectedRow =
+              selectedPricingGroupKey != null &&
+              selectedPricingGroupKey === group.groupKey;
             return (
               <tr
                 key={group.groupKey}
                 data-pricing-group={group.groupKey}
+                data-selected={isSelectedRow ? "true" : "false"}
+                aria-selected={isSelectedRow}
+                style={{
+                  backgroundColor: isSelectedRow
+                    ? "color-mix(in srgb, var(--ow-accent) 12%, white)"
+                    : undefined,
+                  boxShadow: isSelectedRow
+                    ? "inset -3px 0 0 var(--ow-accent)"
+                    : undefined,
+                }}
+                className={
+                  isSelectedRow
+                    ? undefined
+                    : "hover:bg-[color-mix(in_srgb,var(--ow-surface-muted)_55%,transparent)]"
+                }
               >
                 <Td
                   className="px-1.5 py-2 text-center tabular-nums"
@@ -383,6 +404,21 @@ export function WeightPricingTable({
                 </Td>
                 <Td className="px-1.5 py-2 tabular-nums whitespace-nowrap font-medium overflow-hidden text-ellipsis">
                   {formatMoneyIls(calc.groupTotal)}
+                </Td>
+                <Td className="px-1 py-2 text-center">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 rounded-lg p-0 shadow-none"
+                    style={{ color: "var(--ow-text-secondary)" }}
+                    aria-label={`צפה בקבוצה ${groupLabel}`}
+                    title="צפייה בקבוצה"
+                    data-view-group={group.groupKey}
+                    onClick={() => onViewGroup(group.groupKey)}
+                  >
+                    <Eye className="h-4 w-4" aria-hidden />
+                  </Button>
                 </Td>
               </tr>
             );

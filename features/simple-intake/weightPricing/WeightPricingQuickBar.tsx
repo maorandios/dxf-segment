@@ -139,6 +139,7 @@ export function WeightPricingQuickBar({
   filters,
   onFiltersChange,
   onApply,
+  onReset,
 }: {
   defaults: WeightPricingDefaults;
   groups: ReadonlyArray<WeightPricingGroup>;
@@ -149,6 +150,7 @@ export function WeightPricingQuickBar({
     galvanizedPricePerKg: number | null;
     checkeredPlateAddonPerKg: number | null;
   }) => void;
+  onReset: () => void;
 }) {
   const [black, setBlack] = useState(
     defaults.blackPricePerKg != null ? String(defaults.blackPricePerKg) : ""
@@ -196,6 +198,13 @@ export function WeightPricingQuickBar({
       galvanizedPricePerKg: galvParsed,
       checkeredPlateAddonPerKg: checkParsed,
     });
+  }
+
+  function handleReset(): void {
+    setBlack("");
+    setGalv("");
+    setCheckered("");
+    onReset();
   }
 
   return (
@@ -268,6 +277,16 @@ export function WeightPricingQuickBar({
             data-quick-apply="true"
           >
             עדכן תעריפים
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 rounded-xl px-4 shadow-none"
+            onClick={handleReset}
+            data-quick-reset="true"
+            title="איפוס תעריפים"
+          >
+            איפוס
           </Button>
         </div>
       </PanelShell>

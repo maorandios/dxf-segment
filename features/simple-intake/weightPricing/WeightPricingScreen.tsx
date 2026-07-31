@@ -34,6 +34,7 @@ import {
   computeWeightPricingMetrics,
   mergeNestingComparisonIntoMetrics,
   patchGroupPricingInDraft,
+  resetQuickPricingDefaults,
   selectApprovedPricingRows,
   validateWeightPricingGroups,
 } from "./index";
@@ -50,9 +51,11 @@ import type {
   WeightPricingGroup,
   WeightPricingGroupDraft,
 } from "./types";
-import { getCanonicalMaterialItemId } from "../results/canonicalMaterialItemId";
 import { usePricingGroupNestingEstimates } from "./usePricingGroupNestingEstimates";
-import { WeightPricingGroupDetailsDrawer } from "./WeightPricingGroupDetailsDrawer";
+import {
+  COMPACT_PRICING_PANEL_RADIUS_PX,
+  WeightPricingGroupDetailsDrawer,
+} from "./WeightPricingGroupDetailsDrawer";
 import { WeightPricingMetricCards } from "./WeightPricingMetricCards";
 import {
   WeightPricingQuickBar,
@@ -64,7 +67,7 @@ import { WeightPricingTable } from "./WeightPricingTable";
 import { WeightPricingToolbar } from "./WeightPricingToolbar";
 
 const PRICING_VALIDATION_MESSAGE =
-  "לא ניתן להמשיך — יש להשלים מחיר לכל קבוצות התמחור.";
+  "יש להשלים מחיר לכל קבוצות התמחור.";
 
 /** Same stage panel geometry helpers as ResultsReviewScreen / GapResolutionWorkspace. */
 const PANEL_EDGE_PAD = 16;
@@ -433,26 +436,20 @@ export function WeightPricingScreen() {
     const panelEstimate = panelGroup
       ? nestingEstimatesByKey.get(panelGroup.groupKey) ?? null
       : null;
-    const panelItemMaterialRowIds = panelGroup
-      ? approvedRows
-          .filter((row) => {
-            const id =
-              getCanonicalMaterialItemId(row) ?? row.materialRowId ?? row.id;
-            return panelGroup.materialRowIds.includes(id);
-          })
-          .map((row) => getCanonicalMaterialItemId(row) ?? row.materialRowId)
-      : [];
     const panelDiagnostics = buildPricingGroupPanelDiagnostics({
       group: panelGroup,
       defaults,
       nestingEstimate: panelEstimate,
-      panelItemMaterialRowIds,
+      quotationWeightKg: metrics.totalWeightKg,
+      quotationSubtotalBeforeVat: metrics.subtotalBeforeVat,
+      selectedPricingGroupKey: detailsGroupKey,
     });
     assertPricingGroupPanelInvariants(panelDiagnostics);
 
     simpleIntakeActions.patchLastDebug({
       weightPricingDiagnostics: diagnostics,
       pricingNestingDiagnostics: nestingDiagnostics,
+      compactPricingPanelDiagnostics: panelDiagnostics,
       pricingGroupPanelDiagnostics: panelDiagnostics,
     });
   }, [
@@ -465,6 +462,8 @@ export function WeightPricingScreen() {
     frozenRowsIncludedInNesting,
     nonMemberRowsIncludedInNesting,
     detailsGroupKey,
+    metrics.totalWeightKg,
+    metrics.subtotalBeforeVat,
   ]);
 
   // Persist migrated draft shape once when legacy drafts are loaded.
@@ -512,6 +511,15 @@ export function WeightPricingScreen() {
       draft: session.weightPricingDraft ?? rebuiltDraft,
       ...values,
     });
+    simpleIntakeActions.setWeightPricingDraft(next);
+    setSaveSuccess(false);
+    setValidationMessage(null);
+  }
+
+  function handleQuickReset(): void {
+    const next = resetQuickPricingDefaults(
+      session.weightPricingDraft ?? rebuiltDraft
+    );
     simpleIntakeActions.setWeightPricingDraft(next);
     setSaveSuccess(false);
     setValidationMessage(null);
@@ -603,6 +611,7 @@ export function WeightPricingScreen() {
                   height: panelBox.maxHeight,
                   maxHeight: panelBox.maxHeight,
                   overflow: "hidden",
+                  borderRadius: COMPACT_PRICING_PANEL_RADIUS_PX,
                   boxSizing: "border-box",
                   display: "flex",
                   flexDirection: "column",
@@ -632,15 +641,13 @@ export function WeightPricingScreen() {
                   <WeightPricingGroupDetailsDrawer
                     group={panelGroup}
                     defaults={defaults}
-                    rows={approvedRows}
+                    quotationWeightKg={metrics.totalWeightKg}
+                    quotationSubtotalBeforeVat={metrics.subtotalBeforeVat}
                     nestingEstimate={
                       nestingEstimatesByKey.get(panelGroup.groupKey) ?? null
                     }
                     open={panelSlideIn}
                     onClose={closeSidePanel}
-                    onViewItem={(rowId) => {
-                      setItemPreviewId(rowId);
-                    }}
                   />
                 ) : null}
               </div>,
@@ -673,17 +680,6 @@ export function WeightPricingScreen() {
             />
           </div>
 
-          {validationMessage ? (
-            <p
-              className="text-[13px]"
-              style={{ color: "var(--ow-attention, #b45309)" }}
-              role="alert"
-              data-pricing-validation-message="true"
-            >
-              {validationMessage}
-            </p>
-          ) : null}
-
           <WeightPricingMetricCards metrics={metrics} />
           <WeightPricingQuickBar
             defaults={defaults}
@@ -691,6 +687,7 @@ export function WeightPricingScreen() {
             filters={groupFilters}
             onFiltersChange={setGroupFilters}
             onApply={handleQuickApply}
+            onReset={handleQuickReset}
           />
           <WeightPricingTable
             groups={filteredGroups}
@@ -698,6 +695,7 @@ export function WeightPricingScreen() {
             invalidGroupKeys={invalidSet}
             focusGroupKey={focusInvalidKey}
             focusRequestId={focusRequestId}
+            selectedPricingGroupKey={detailsGroupKey}
             nestingEstimatesByKey={nestingEstimatesByKey}
             onPatchGroup={patchGroup}
             onViewGroup={(key) => {
@@ -707,6 +705,54 @@ export function WeightPricingScreen() {
           />
         </div>
       </div>
+
+      {validationMessage ? (
+        <div className="fixed inset-0 z-[60]" dir="rtl">
+          <button
+            type="button"
+            className="ow-toast-scrim absolute inset-0"
+            aria-label="סגור"
+            onClick={() => setValidationMessage(null)}
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
+            <div
+              role="alert"
+              aria-live="assertive"
+              data-pricing-validation-message="true"
+              className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
+              style={{
+                backgroundColor: "#ffffff",
+                borderColor: "#E5E9EE",
+                color: "#13202B",
+                textAlign: "center",
+              }}
+            >
+              <p
+                className="text-center text-[15px] font-semibold"
+                style={{ color: "#13202B", textAlign: "center" }}
+              >
+                לא ניתן להמשיך
+              </p>
+              <p
+                className="mt-1.5 text-center text-[13px] leading-relaxed"
+                style={{ color: "#5C6978", textAlign: "center" }}
+              >
+                {validationMessage}
+              </p>
+              <div className="mt-4 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => setValidationMessage(null)}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                  style={{ borderColor: "var(--ow-border, #e4e7ec)" }}
+                >
+                  הבנתי
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

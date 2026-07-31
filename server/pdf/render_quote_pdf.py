@@ -52,37 +52,31 @@ def build_template_context(payload: QuotePdfPayload) -> dict:
     cur = q.currency.strip()
     cc = payload.company
     pr = payload.pricing
-    is_final = (payload.document_variant or "") == "final_quotation"
 
     area_sum_lines = sum(float(it.area_m2) for it in payload.items)
 
-    if payload.kpi_override:
-        kpi_cards = [{"label": c.label, "value": c.value} for c in payload.kpi_override]
-    else:
-        kpi_cards = [
-            {"label": "סוגי פלטות", "value": format_int_space(payload.summary.total_parts)},
-            {"label": "כמות פלטות", "value": format_qty(payload.summary.total_quantity)},
-            {"label": "שטח (מ״ר)", "value": format_m2(area_sum_lines)},
-            {"label": "משקל (ק״ג)", "value": format_kg(payload.summary.total_weight_kg)},
-            {"label": "הצעת מחיר", "value": format_currency(pr.total_price, cur)},
-        ]
+    kpi_cards = [
+        {"label": "סוגי פלטות", "value": format_int_space(payload.summary.total_parts)},
+        {"label": "כמות פלטות", "value": format_qty(payload.summary.total_quantity)},
+        {"label": "שטח (מ״ר)", "value": format_m2(area_sum_lines)},
+        {"label": "משקל (ק״ג)", "value": format_kg(payload.summary.total_weight_kg)},
+        {"label": "הצעת מחיר", "value": format_currency(pr.total_price, cur)},
+    ]
 
-    technical_rows = []
-    if not is_final:
-        technical_rows = [
-            {"label": "שטח נטו (לפי מערכת)", "value": format_m2(payload.summary.net_plate_area_m2)},
+    technical_rows = [
+        {"label": "שטח נטו (לפי מערכת)", "value": format_m2(payload.summary.net_plate_area_m2)},
+        {
+            "label": "שטח חומר גלם משוער",
+            "value": format_m2(payload.summary.gross_material_area_m2),
+        },
+    ]
+    if payload.summary.estimated_sheet_count is not None:
+        technical_rows.append(
             {
-                "label": "שטח חומר גלם משוער",
-                "value": format_m2(payload.summary.gross_material_area_m2),
-            },
-        ]
-        if payload.summary.estimated_sheet_count is not None:
-            technical_rows.append(
-                {
-                    "label": "מספר לוחות משוער",
-                    "value": format_int_space(int(payload.summary.estimated_sheet_count)),
-                }
-            )
+                "label": "מספר לוחות משוער",
+                "value": format_int_space(int(payload.summary.estimated_sheet_count)),
+            }
+        )
 
     scope_text = (q.scope_text or "").strip()
     scope_has = bool(scope_text)
@@ -90,8 +84,6 @@ def build_template_context(payload: QuotePdfPayload) -> dict:
     item_rows = []
     for it in payload.items:
         desc = (it.description or "").strip() or "—"
-        geo_uri = (it.geometry_preview_data_uri or "").strip() or None
-        geo_svg = (it.geometry_preview_svg or "").strip() or None
         item_rows.append(
             {
                 "description": desc,
@@ -106,12 +98,6 @@ def build_template_context(payload: QuotePdfPayload) -> dict:
                 "area_m2": format_m2(it.area_m2) if it.area_m2 else "—",
                 "weight": format_kg(it.weight_kg),
                 "line_total": format_currency(it.line_total, cur),
-                "geometry_preview_data_uri": geo_uri,
-                "geometry_preview_svg": geo_svg,
-                "price_per_kg": (
-                    format_currency(it.price_per_kg, cur) if it.price_per_kg is not None else "—"
-                ),
-                "is_checkered_plate": "כן" if it.is_checkered_plate else "לא",
             }
         )
 
@@ -164,8 +150,6 @@ def build_template_context(payload: QuotePdfPayload) -> dict:
         "notes_lines": notes_lines,
         "terms_lines": terms_lines,
         "footer_generated": "מסמך הופק אלקטרונית · ללא חתימה ידנית.",
-        "document_variant": payload.document_variant or "",
-        "is_final_quotation": is_final,
     }
 
 
@@ -179,10 +163,9 @@ def render_html(payload: QuotePdfPayload) -> str:
     return tpl.render(**ctx)
 
 
-async def html_to_pdf_bytes(html: str, *, landscape: bool = False) -> bytes:
+async def html_to_pdf_bytes(html: str) -> bytes:
     from playwright.async_api import async_playwright
 
-    is_final_landscape = landscape
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         try:
@@ -190,16 +173,16 @@ async def html_to_pdf_bytes(html: str, *, landscape: bool = False) -> bytes:
             await page.set_content(html, wait_until="networkidle", timeout=60_000)
             pdf = await page.pdf(
                 format="A4",
-                landscape=is_final_landscape,
+                landscape=False,
                 print_background=True,
                 # Let Playwright/Chromium apply margins below (CSS @page alone is unreliable here).
                 prefer_css_page_size=False,
                 # Standard print margins (~1 in / 2.5 cm), common for A4 business documents.
                 margin={
-                    "top": "18mm" if is_final_landscape else "25mm",
-                    "right": "12mm" if is_final_landscape else "25mm",
-                    "bottom": "18mm" if is_final_landscape else "25mm",
-                    "left": "12mm" if is_final_landscape else "25mm",
+                    "top": "25mm",
+                    "right": "25mm",
+                    "bottom": "25mm",
+                    "left": "25mm",
                 },
             )
             return pdf
@@ -209,8 +192,7 @@ async def html_to_pdf_bytes(html: str, *, landscape: bool = False) -> bytes:
 
 def render_pdf_bytes(payload: QuotePdfPayload) -> bytes:
     html = render_html(payload)
-    landscape = (payload.document_variant or "") == "final_quotation"
-    return asyncio.run(html_to_pdf_bytes(html, landscape=landscape))
+    return asyncio.run(html_to_pdf_bytes(html))
 
 
 def sample_payload() -> QuotePdfPayload:

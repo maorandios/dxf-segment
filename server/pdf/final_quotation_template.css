@@ -1,0 +1,200 @@
+/* OMEGA Simple Intake — final quotation PDF (matches סיכום הצעת מחיר web screen) */
+
+@page {
+  size: A4 landscape;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 10px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    "Noto Sans Hebrew",
+    "Noto Sans",
+    "Segoe UI",
+    system-ui,
+    sans-serif;
+  color: #101828;
+  background: #fff;
+  line-height: 1.45;
+  direction: rtl;
+  text-align: right;
+}
+
+.doc {
+  max-width: 100%;
+  background: #fff;
+  min-height: 100%;
+  padding: 12mm 14mm 14mm;
+}
+
+.page-title {
+  margin: 0 0 1.2rem;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #101828;
+}
+
+.section {
+  margin-bottom: 1.1rem;
+}
+
+.section-title {
+  margin: 0 0 0.55rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #101828;
+}
+
+.panel {
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 1rem 1.1rem;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.meta-field .label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #475467;
+}
+
+.meta-field .value {
+  min-height: 2.2rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 1.15rem;
+  color: #101828;
+}
+
+.meta-field .value.ltr {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.kpi-card {
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 0.75rem 0.85rem;
+  min-height: 5.5rem;
+}
+
+.kpi-label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #475467;
+  margin-bottom: 0.45rem;
+}
+
+.kpi-value {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #101828;
+  font-feature-settings: "tnum" 1;
+  unicode-bidi: isolate;
+}
+
+.kpi-badge {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: #667085;
+}
+
+.table-wrap {
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+table.items {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+table.items thead {
+  display: table-header-group;
+}
+
+table.items th {
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.55rem 0.35rem;
+  border-bottom: 1px solid #e4e7ec;
+  text-align: center;
+  white-space: nowrap;
+}
+
+table.items td {
+  padding: 0.45rem 0.35rem;
+  border-bottom: 1px solid #e4e7ec;
+  font-size: 1.05rem;
+  text-align: center;
+  color: #101828;
+  vertical-align: middle;
+}
+
+table.items tbody tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+table.items tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.num {
+  font-feature-settings: "tnum" 1;
+  unicode-bidi: isolate;
+}
+
+.notes-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 1.15rem;
+  line-height: 1.55;
+  color: #101828;
+}
+
+.footer {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e4e7ec;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.95rem;
+  color: #667085;
+}

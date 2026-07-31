@@ -79,12 +79,11 @@ console.log("OMEGA — Final Quotation Summary and Export Screen v1");
   assert_(pricingToolbar.includes("המשך לסיכום"), "pricing continue");
   assert_(pricing.includes("advanceToQuotationSummary"), "creates summary payload");
   assert_(screen.includes("REVIEW_WORKSPACE_CONTENT_MAX_PX"), "shared width");
-  assert_(screen.includes("SimpleDxfThumbnail") || fs
-    .readFileSync(path.join(root, "finalQuotation/FinalQuotationItemsTable.tsx"), "utf8")
-    .includes("SimpleDxfThumbnail"), "reuses DXF thumbnail");
   assert_(screen.includes("data-final-screen-dxf-parse=\"false\""), "no DXF parse");
   assert_(screen.includes("data-final-screen-ai-call=\"false\""), "no AI");
   assert_(!screen.includes("StickyActionBar"), "no floating footer");
+  assert_(!screen.includes("SimpleDxfThumbnail"), "no geometry column/thumbnail");
+  assert_(!screen.includes("onOpenGeometry"), "no geometry open handler");
 
   console.log("✓ navigation, access guard, chrome wiring");
 }
@@ -110,14 +109,17 @@ console.log("OMEGA — Final Quotation Summary and Export Screen v1");
 }
 
 {
-  assertEq(FINAL_QUOTATION_TABLE_HEADERS.length, 13, "13 columns");
+  assertEq(FINAL_QUOTATION_TABLE_HEADERS.length, 12, "12 columns");
   assertEq(FINAL_QUOTATION_TABLE_HEADERS[0], "#", "# first (RTL far-right)");
   assertEq(
     FINAL_QUOTATION_TABLE_HEADERS[FINAL_QUOTATION_TABLE_HEADERS.length - 1],
     'סה"כ עלות לפריט',
     "line total last (RTL far-left)"
   );
-  assert_(FINAL_QUOTATION_TABLE_HEADERS.includes("גאומטריה"), "geometry col");
+  assert_(
+    !(FINAL_QUOTATION_TABLE_HEADERS as readonly string[]).includes("גאומטריה"),
+    "no geometry col"
+  );
   assert_(FINAL_QUOTATION_TABLE_HEADERS.includes("שם פריט"), "part name");
   assert_(FINAL_QUOTATION_TABLE_HEADERS.includes("פח מרוג"), "checkered");
 
@@ -313,16 +315,43 @@ function mockRow(partial: {
   assert_(excelSrc.includes('addWorksheet("הצעת מחיר"'), "sheet name");
   assert_(excelSrc.includes("autoFilter"), "autofilter");
   assert_(excelSrc.includes("הערות להצעה"), "excel notes");
-  assert_(excelSrc.includes("renderExistingDxfThumbnail"), "excel geometry helper");
+  assert_(!excelSrc.includes("גאומטריה"), "excel no geometry col");
+  assert_(!excelSrc.includes("renderExistingDxfThumbnail"), "excel no thumbnails");
 
   const pdfSrc = fs.readFileSync(
     path.join(root, "finalQuotation/buildFinalQuotationPdfPayload.ts"),
     "utf8"
   );
-  assert_(pdfSrc.includes("document_variant"), "pdf variant");
-  assert_(pdfSrc.includes("kpi_override"), "six-value summary");
-  assert_(pdfSrc.includes("/api/quotes/export-pdf"), "reuses pdf api");
-  assert_(pdfSrc.includes("notesToLines"), "notes export");
+  assert_(
+    pdfSrc.includes("/api/simple-intake/export-quotation-pdf"),
+    "uses simple-intake pdf api"
+  );
+  assert_(!pdfSrc.includes("/api/quotes/export-pdf"), "not quick-quote pdf");
+  assert_(!pdfSrc.includes("document_variant"), "no quick-quote variant");
+  assert_(
+    fs.existsSync(
+      path.join(root, "../../server/pdf/final_quotation_template.html")
+    ),
+    "final quotation template exists"
+  );
+  assert_(
+    !fs
+      .readFileSync(
+        path.join(root, "../../server/pdf/final_quotation_template.html"),
+        "utf8"
+      )
+      .includes("Fabrication partner"),
+    "not quick-quote branding"
+  );
+  assert_(
+    fs
+      .readFileSync(
+        path.join(root, "../../server/pdf/final_quotation_template.html"),
+        "utf8"
+      )
+      .includes("סיכום הצעת מחיר"),
+    "matches summary screen title"
+  );
 
   const thumbSrc = fs.readFileSync(
     path.join(root, "finalQuotation/renderExistingDxfThumbnail.ts"),

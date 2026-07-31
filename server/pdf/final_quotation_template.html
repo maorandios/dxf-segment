@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>סיכום הצעת מחיר {{ quotation_number }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@400;500;600;700&family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet" />
+  <style>{{ css_text | safe }}</style>
+</head>
+<body>
+  <div class="doc">
+    <h1 class="page-title">סיכום הצעת מחיר</h1>
+
+    <section class="section">
+      <h2 class="section-title">פרטי ההצעה</h2>
+      <div class="panel">
+        <div class="meta-grid">
+          <div class="meta-field">
+            <span class="label">שם הלקוח</span>
+            <div class="value">{{ customer_name or "—" }}</div>
+          </div>
+          <div class="meta-field">
+            <span class="label">שם הפרויקט</span>
+            <div class="value">{{ project_name or "—" }}</div>
+          </div>
+          <div class="meta-field">
+            <span class="label">תאריך</span>
+            <div class="value ltr">{{ quotation_date or "—" }}</div>
+          </div>
+          <div class="meta-field">
+            <span class="label">מספר הצעה</span>
+            <div class="value ltr">{{ quotation_number or "—" }}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="kpi-row">
+        {% for card in kpi_cards %}
+        <div class="kpi-card">
+          <div class="kpi-label">{{ card.label }}</div>
+          <div class="kpi-value">{{ card.value }}</div>
+          {% if card.badge %}<div class="kpi-badge">{{ card.badge }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="table-wrap">
+        <table class="items">
+          <thead>
+            <tr>
+              <th style="width:4%">#</th>
+              <th style="width:9%">שם פריט</th>
+              <th style="width:7%">עובי (מ״מ)</th>
+              <th style="width:6%">כמות</th>
+              <th style="width:8%">סוג חומר</th>
+              <th style="width:8%">אורך (מ״מ)</th>
+              <th style="width:8%">רוחב (מ״מ)</th>
+              <th style="width:8%">משקל (ק״ג)</th>
+              <th style="width:7%">גימור</th>
+              <th style="width:7%">פח מרוג</th>
+              <th style="width:10%">עלות לק״ג</th>
+              <th style="width:12%">סה״כ עלות לפריט</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in item_rows %}
+            <tr>
+              <td class="num">{{ row.index }}</td>
+              <td class="num">{{ row.part_id }}</td>
+              <td class="num">{{ row.thickness }}</td>
+              <td class="num">{{ row.quantity }}</td>
+              <td>{{ row.material }}</td>
+              <td class="num">{{ row.length }}</td>
+              <td class="num">{{ row.width }}</td>
+              <td class="num">{{ row.weight }}</td>
+              <td>{{ row.finish }}</td>
+              <td>{{ row.checkered }}</td>
+              <td class="num">{{ row.price_per_kg }}</td>
+              <td class="num">{{ row.line_total }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {% if notes_text %}
+    <section class="section">
+      <h2 class="section-title">הערות להצעה</h2>
+      <div class="panel">
+        <p class="notes-body">{{ notes_text }}</p>
+      </div>
+    </section>
+    {% endif %}
+
+    <footer class="footer">
+      <span>{{ company_name }}</span>
+      <span>מסמך הופק אלקטרונית · ללא חתימה ידנית.</span>
+    </footer>
+  </div>
+</body>
+</html>
