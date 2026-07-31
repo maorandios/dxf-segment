@@ -18,11 +18,9 @@
             {% endif %}
           </div>
           <div class="header-dates">
-            <div class="header-date-row">
+            <div class="header-date-grid">
               <span class="header-date-label">תאריך הנפקה</span>
               <span class="header-date-value" dir="ltr">{{ quotation_date or "—" }}</span>
-            </div>
-            <div class="header-date-row">
               <span class="header-date-label">בתוקף עד</span>
               <span class="header-date-value" dir="ltr">{{ quotation_validity_date or "—" }}</span>
             </div>
@@ -56,82 +54,77 @@
     </header>
 
     <section class="section party-block">
-      <div class="party-row">
+      <div class="party-grid">
         <span class="party-label">שם הלקוח:</span>
         <span class="party-value">{{ customer_name or "—" }}</span>
-      </div>
-      <div class="party-row">
         <span class="party-label">שם הפרויקט:</span>
         <span class="party-value">{{ project_name or "—" }}</span>
       </div>
     </section>
 
-    <section class="section">
-      <div class="kpi-row">
-        {% for card in kpi_cards %}
-        <div class="kpi-card">
-          <div class="kpi-label">{{ card.label }}</div>
-          <div class="kpi-value">{{ card.value }}</div>
-          {% if card.badge %}<div class="kpi-badge">{{ card.badge }}</div>{% endif %}
-        </div>
-        {% endfor %}
-      </div>
+    <section class="section summary-section" aria-label="סיכום הצעה">
+      <table class="summary-table">
+        <tbody>
+          <tr>
+            {% for card in kpi_cards %}
+            <td class="summary-cell">
+              <div class="summary-stack">
+                <div class="summary-value">{{ card.value }}</div>
+                <div class="summary-label">{{ card.label }}</div>
+              </div>
+            </td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <section class="section">
-      <div class="table-wrap">
-        <table class="items">
-          <thead>
-            <tr>
-              <th style="width:4%">#</th>
-              <th style="width:9%">שם פריט</th>
-              <th style="width:7%">עובי (מ״מ)</th>
-              <th style="width:6%">כמות</th>
-              <th style="width:8%">סוג חומר</th>
-              <th style="width:8%">אורך (מ״מ)</th>
-              <th style="width:8%">רוחב (מ״מ)</th>
-              <th style="width:8%">משקל (ק״ג)</th>
-              <th style="width:7%">גימור</th>
-              <th style="width:7%">פח מרוג</th>
-              <th style="width:10%">עלות לק״ג</th>
-              <th style="width:12%">סה״כ עלות לפריט</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in item_rows %}
-            <tr>
-              <td class="num">{{ row.index }}</td>
-              <td class="num">{{ row.part_id }}</td>
-              <td class="num">{{ row.thickness }}</td>
-              <td class="num">{{ row.quantity }}</td>
-              <td>{{ row.material }}</td>
-              <td class="num">{{ row.length }}</td>
-              <td class="num">{{ row.width }}</td>
-              <td class="num">{{ row.weight }}</td>
-              <td>{{ row.finish }}</td>
-              <td>{{ row.checkered }}</td>
-              <td class="num">{{ row.price_per_kg }}</td>
-              <td class="num">{{ row.line_total }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+      <h2 class="section-title">רשימת פריטים</h2>
+      <table class="items">
+        <thead>
+          <tr>
+            <th style="width:4%">#</th>
+            <th style="width:9%">שם פריט</th>
+            <th style="width:7%">עובי (מ״מ)</th>
+            <th style="width:6%">כמות</th>
+            <th style="width:8%">סוג חומר</th>
+            <th style="width:8%">אורך (מ״מ)</th>
+            <th style="width:8%">רוחב (מ״מ)</th>
+            <th style="width:8%">משקל (ק״ג)</th>
+            <th style="width:7%">גימור</th>
+            <th style="width:7%">פח מרוג</th>
+            <th style="width:10%">מחיר לק״ג (₪)</th>
+            <th style="width:12%">סה״כ מחיר (₪)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in item_rows %}
+          <tr>
+            <td class="num">{{ row.index }}</td>
+            <td class="num">{{ row.part_id }}</td>
+            <td class="num">{{ row.thickness }}</td>
+            <td class="num">{{ row.quantity }}</td>
+            <td>{{ row.material }}</td>
+            <td class="num">{{ row.length }}</td>
+            <td class="num">{{ row.width }}</td>
+            <td class="num">{{ row.weight }}</td>
+            <td>{{ row.finish }}</td>
+            <td>{{ row.checkered }}</td>
+            <td class="num">{{ row.price_per_kg }}</td>
+            <td class="num">{{ row.line_total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </section>
 
     {% if notes_text %}
-    <section class="section">
+    <section class="section notes-section">
       <h2 class="section-title">הערות להצעה</h2>
-      <div class="panel">
-        <p class="notes-body">{{ notes_text }}</p>
-      </div>
+      <p class="notes-body">{{ notes_text }}</p>
     </section>
     {% endif %}
-
-    <footer class="footer">
-      <span>{{ company_name }}</span>
-      <span>מסמך הופק אלקטרונית · ללא חתימה ידנית.</span>
-    </footer>
   </div>
 </body>
 </html>

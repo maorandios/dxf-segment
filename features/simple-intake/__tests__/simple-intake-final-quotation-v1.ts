@@ -414,10 +414,12 @@ function mockRow(partial: {
     "utf8"
   );
   assert_(renderSrc.includes('"top": "20mm"'), "playwright matching margins");
-  assert_(
-    renderSrc.includes("prefer_css_page_size=True"),
-    "honor css @page margins"
-  );
+  assert_(renderSrc.includes("prefer_css_page_size=True"), "honor css @page margins");
+  assert_(renderSrc.includes("display_header_footer=True"), "pdf page footer enabled");
+  assert_(renderSrc.includes("pageNumber"), "page number in footer");
+  assert_(renderSrc.includes("totalPages"), "total pages in footer");
+  assert_(renderSrc.includes("www.Omegot.com"), "omegot attribution");
+  assert_(renderSrc.includes("עמוד"), "hebrew page label");
   assert_(
     fs
       .readFileSync(
@@ -488,6 +490,17 @@ function mockRow(partial: {
   assert_(pdfTpl.includes("דוא״ל") || pdfTpl.includes('דוא"ל'), "email label");
   assert_(pdfTpl.includes("quotation_validity_date"), "pdf template validity var");
   assert_(pdfTpl.includes("header-rule"), "header divider");
+  assert_(pdfTpl.includes("summary-table"), "bordered summary table");
+  assert_(pdfTpl.includes("summary-cell"), "summary cells");
+  assert_(!pdfTpl.includes("summary-strip"), "no borderless strip");
+  assert_(!pdfTpl.includes("kpi-card"), "no saas kpi cards");
+  assert_(pdfTpl.includes("רשימת פריטים"), "items list title");
+  assert_(!pdfTpl.includes("table-wrap"), "no rounded table shell");
+  const partyIdx = pdfTpl.indexOf("party-block");
+  const summaryIdx = pdfTpl.indexOf("summary-section");
+  assert_(pdfTpl.includes("party-grid"), "party label/value columns");
+  assert_(pdfTpl.includes("summary-stack"), "centered summary stack");
+  assert_(pdfTpl.includes("header-date-grid"), "date label/value columns");
 
   const strip = fs.readFileSync(
     path.join(root, "finalQuotation/FinalQuotationSummaryStrip.tsx"),

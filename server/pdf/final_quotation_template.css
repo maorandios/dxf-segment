@@ -1,10 +1,10 @@
-/* OMEGA Simple Intake — final quotation PDF (portrait A4) */
+/* OMEGA Simple Intake — final quotation PDF (portrait A4)
+   Print-oriented: darker ink, bordered summary row, classic letterhead. */
 
 @page {
   size: A4 portrait;
-  /* Inset on EVERY page (incl. page breaks). Do not use margin:0 here —
-     that cancels Playwright margins and pins content to the paper edge. */
-  margin: 20mm;
+  /* Bottom room for Playwright repeating footer (page X of Y). */
+  margin: 20mm 20mm 18mm 20mm;
 }
 
 * {
@@ -28,7 +28,7 @@ body {
     Arial,
     Helvetica,
     sans-serif;
-  color: #101828;
+  color: #0f172a;
   background: #fff;
   line-height: 1.45;
   direction: rtl;
@@ -42,9 +42,9 @@ body {
   min-height: 0;
 }
 
-/* —— Header (matches classic OMEGA quotation letterhead) —— */
+/* —— Header —— */
 .doc-header {
-  margin-bottom: 1.1rem;
+  margin-bottom: 0.85rem;
 }
 
 .header-main {
@@ -73,7 +73,7 @@ body {
   font-size: 2.15rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: #101828;
+  color: #0a0a0a;
   line-height: 1.15;
 }
 
@@ -81,36 +81,41 @@ body {
   font-size: 2.15rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: #98a2b3;
+  color: #475467;
   line-height: 1.15;
   unicode-bidi: isolate;
 }
 
 .header-dates {
-  display: flex;
-  flex-direction: column;
-  gap: 0.28rem;
+  display: block;
 }
 
-.header-date-row {
-  display: flex;
-  flex-wrap: wrap;
+.header-date-grid {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  column-gap: 0.65rem;
+  row-gap: 0.28rem;
   align-items: baseline;
-  gap: 0.45rem 0.65rem;
+  justify-content: start;
   font-size: 1.05rem;
   line-height: 1.35;
 }
 
 .header-date-label {
-  color: #98a2b3;
+  color: #344054;
   font-weight: 400;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .header-date-value {
-  color: #101828;
-  font-weight: 500;
+  color: #0a0a0a;
+  font-weight: 600;
   font-feature-settings: "tnum" 1;
   unicode-bidi: isolate;
+  text-align: left;
+  direction: ltr;
+  white-space: nowrap;
 }
 
 .header-company {
@@ -138,14 +143,14 @@ body {
 .company-label {
   font-size: 0.92rem;
   font-weight: 400;
-  color: #98a2b3;
+  color: #344054;
   line-height: 1.2;
 }
 
 .company-value {
   font-size: 1.12rem;
   font-weight: 600;
-  color: #101828;
+  color: #0a0a0a;
   line-height: 1.35;
   word-break: break-word;
 }
@@ -154,97 +159,119 @@ body {
   margin-top: 0.95rem;
   height: 1px;
   width: 100%;
-  background: #d0d5dd;
+  background: #98a2b3;
 }
 
-/* —— Party (customer / project) —— */
+/* —— Party (customer / project) — above summary —— */
 .party-block {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
-.party-row {
-  display: flex;
-  flex-wrap: wrap;
+.party-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.5rem;
+  row-gap: 0.28rem;
   align-items: baseline;
-  gap: 0.35rem 0.5rem;
-  font-size: 1.15rem;
-  line-height: 1.5;
+  justify-content: start;
+  font-size: 1.1rem;
+  line-height: 1.45;
 }
 
 .party-label {
-  color: #667085;
+  color: #344054;
   font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .party-value {
-  color: #101828;
-  font-weight: 600;
+  color: #0a0a0a;
+  font-weight: 700;
+  text-align: right;
+  min-width: 0;
 }
 
 .section {
-  margin-bottom: 1.1rem;
+  margin-bottom: 0.95rem;
 }
 
 .section-title {
-  margin: 0 0 0.55rem;
+  margin: 0 0 0.4rem;
   font-size: 1.15rem;
-  font-weight: 600;
-  color: #101828;
+  font-weight: 700;
+  color: #0a0a0a;
 }
 
-.panel {
-  border: 1px solid #e4e7ec;
-  border-radius: 14px;
-  background: #ffffff;
-  padding: 1rem 1.1rem;
+/* —— Summary details: bordered report row —— */
+.summary-section {
+  margin-bottom: 1rem;
 }
 
-.kpi-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.55rem;
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid #667085;
 }
 
-.kpi-card {
-  border: 1px solid #e4e7ec;
-  border-radius: 12px;
-  background: #ffffff;
-  padding: 0.65rem 0.75rem;
-  min-height: 5rem;
+.summary-table td.summary-cell {
+  width: 16.666%;
+  border: 1px solid #667085;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+  background: #fff;
 }
 
-.kpi-label {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #475467;
-  margin-bottom: 0.4rem;
+.summary-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  width: 100%;
+  height: 100%;
 }
 
-.kpi-value {
+.summary-value {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.3rem 0.4rem;
   font-size: 1.35rem;
   font-weight: 700;
-  color: #101828;
+  color: #0a0a0a;
+  line-height: 1.2;
   font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
   unicode-bidi: isolate;
+  white-space: nowrap;
+  text-align: center;
+  direction: ltr;
+  background: #fff;
 }
 
-.kpi-badge {
-  margin-top: 0.3rem;
-  font-size: 0.85rem;
-  color: #667085;
+.summary-label {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.32rem 0.3rem 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #344054;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-align: center;
+  background: #eef0f3;
+  border-top: 1px solid #667085;
 }
 
-.table-wrap {
-  border: 1px solid #e4e7ec;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #ffffff;
-}
-
+/* —— Items table —— */
 table.items {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+  border: 1px solid #98a2b3;
 }
 
 table.items thead {
@@ -252,22 +279,22 @@ table.items thead {
 }
 
 table.items th {
-  background: #f2f4f7;
-  color: #475467;
+  background: #e4e7ec;
+  color: #1d2939;
   font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.45rem 0.2rem;
-  border-bottom: 1px solid #e4e7ec;
+  font-weight: 700;
+  padding: 0.4rem 0.18rem;
+  border: 1px solid #98a2b3;
   text-align: center;
   white-space: nowrap;
 }
 
 table.items td {
-  padding: 0.38rem 0.2rem;
-  border-bottom: 1px solid #e4e7ec;
-  font-size: 0.88rem;
+  padding: 0.32rem 0.18rem;
+  border: 1px solid #d0d5dd;
+  font-size: 0.86rem;
   text-align: center;
-  color: #101828;
+  color: #0a0a0a;
   vertical-align: middle;
 }
 
@@ -277,11 +304,7 @@ table.items tbody tr {
 }
 
 table.items tbody tr:nth-child(even) td {
-  background: #f9fafb;
-}
-
-table.items tbody tr:last-child td {
-  border-bottom: none;
+  background: #f2f4f7;
 }
 
 .num {
@@ -289,21 +312,16 @@ table.items tbody tr:last-child td {
   unicode-bidi: isolate;
 }
 
+.notes-section {
+  margin-top: 1.75rem;
+}
+
 .notes-body {
   margin: 0;
   white-space: pre-wrap;
-  font-size: 1.1rem;
-  line-height: 1.55;
-  color: #101828;
-}
-
-.footer {
-  margin-top: 1.25rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #e4e7ec;
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.95rem;
-  color: #667085;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: #0a0a0a;
+  border-top: 1px solid #98a2b3;
+  padding-top: 0.45rem;
 }

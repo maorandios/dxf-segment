@@ -45,32 +45,26 @@ def build_template_context(payload: FinalQuotationPdfPayload) -> dict:
         {
             "label": "מספר פריטים",
             "value": format_qty(totals.item_count),
-            "badge": "פריטים פעילים",
         },
         {
             "label": "כמות כוללת",
             "value": format_qty(int(round(totals.total_quantity))),
-            "badge": "סכום כמויות",
         },
         {
-            "label": "משקל כולל",
+            "label": 'משקל (ק״ג)',
             "value": _fmt_weight(totals.total_weight_kg),
-            "badge": "ק״ג",
         },
         {
-            "label": "סה״כ לפני מע״מ",
+            "label": 'לפני מע״מ',
             "value": money(totals.subtotal_before_vat),
-            "badge": "לפני מע״מ",
         },
         {
-            "label": f"מע״מ ({_fmt_num(totals.vat_rate_percent, 0)}%)",
+            "label": f'מע״מ ({_fmt_num(totals.vat_rate_percent, 0)}%)',
             "value": money(totals.vat_amount),
-            "badge": "מע״מ",
         },
         {
-            "label": "סה״כ לתשלום",
+            "label": 'סה״כ לתשלום',
             "value": money(totals.total_including_vat),
-            "badge": "כולל מע״מ",
         },
     ]
 
@@ -158,17 +152,28 @@ async def html_to_pdf_bytes(html: str) -> bytes:
                 ),
             )
             await page.set_content(html, wait_until="domcontentloaded", timeout=15_000)
-            # Prefer CSS @page margin (20mm) so inset repeats on every page.
-            # Also pass matching PDF margins as a fallback.
+            # Prefer CSS @page margin so inset repeats on every page.
+            # Footer uses Playwright header/footer templates (pageNumber / totalPages).
+            footer_html = """
+<div style="width:100%;box-sizing:border-box;padding:4px 20mm 0;font-family:'Segoe UI','Arial Hebrew',Arial,sans-serif;font-size:9px;line-height:1.35;color:#344054;direction:rtl;">
+  <div style="border-top:1px solid #98a2b3;padding-top:6px;display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;">
+    <span style="white-space:nowrap;">הצעת המחיר הזו הופקה באמצעות מערכת אומגה - www.Omegot.com</span>
+    <span style="white-space:nowrap;">עמוד <span class="pageNumber"></span> מתוך <span class="totalPages"></span></span>
+  </div>
+</div>
+""".strip()
             return await page.pdf(
                 format="A4",
                 landscape=False,
                 print_background=True,
                 prefer_css_page_size=True,
+                display_header_footer=True,
+                header_template="<span></span>",
+                footer_template=footer_html,
                 margin={
                     "top": "20mm",
                     "right": "20mm",
-                    "bottom": "20mm",
+                    "bottom": "18mm",
                     "left": "20mm",
                 },
             )
