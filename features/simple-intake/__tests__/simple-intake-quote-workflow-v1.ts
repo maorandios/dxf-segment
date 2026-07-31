@@ -96,6 +96,22 @@ console.log("=== Quote Setup and Five-Step Workflow ===\n");
 }
 
 {
+  const progress = fs.readFileSync(
+    path.join(root, "quoteWorkflow/FiveStepProgressBar.tsx"),
+    "utf8"
+  );
+  assert(
+    progress.includes('data-quote-progress-interactive="false"'),
+    "display-only flag"
+  );
+  assert(progress.includes("pointer-events-none"), "no pointer events");
+  assert(!progress.includes("goToQuoteStage"), "no stage navigation");
+  assert(!progress.includes("cursor-pointer"), "no pointer cursor");
+  assert(!progress.includes("<button"), "no clickable buttons");
+  console.log("✓ Progress bar is display-only");
+}
+
+{
   const store = fs.readFileSync(path.join(root, "sessionStore.ts"), "utf8");
   assert(store.includes('quoteStage: "UNIFIED_REVIEW"'), "unified review stage");
   assert(store.includes("advanceToPricing"), "pricing advance");
@@ -153,10 +169,10 @@ console.log("=== Quote Setup and Five-Step Workflow ===\n");
 
 {
   const shell = fs.readFileSync(path.join(root, "SimpleIntakeShell.tsx"), "utf8");
-  assert(shell.includes("QuotePricingPlaceholder"), "pricing screen");
-  assert(shell.includes("QuoteCompletedPlaceholder"), "completed screen");
+  assert(shell.includes("WeightPricingScreen"), "pricing screen");
+  assert(shell.includes("FinalQuotationScreen"), "completed quotation screen");
   assert(!shell.includes("calculatePrice"), "no pricing calc in shell");
-  console.log("✓ Pricing and completed stages remain placeholders");
+  console.log("✓ Pricing and completed stages wire real screens");
 }
 
 console.log("\n=== All Quote Setup and Five-Step Workflow tests passed ===\n");

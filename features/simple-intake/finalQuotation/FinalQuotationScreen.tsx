@@ -16,6 +16,7 @@ import { buildFinalQuotationRows } from "./buildFinalQuotationRows";
 import { downloadFinalQuotationPdf } from "./buildFinalQuotationPdfPayload";
 import { calculateFinalQuotationTotals } from "./calculateFinalQuotationTotals";
 import { canOpenFinalQuotationScreen } from "./canOpenFinalQuotationScreen";
+import { filterFinalQuotationRowsBySearch } from "./filterFinalQuotationRowsBySearch";
 import { FinalQuotationItemsTable } from "./FinalQuotationItemsTable";
 import { FinalQuotationMetadataForm } from "./FinalQuotationMetadataForm";
 import { FinalQuotationNotes } from "./FinalQuotationNotes";
@@ -37,7 +38,7 @@ import {
  */
 export function FinalQuotationScreen() {
   const session = useSimpleIntakeSession();
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [exportError, setExportError] = useState<string | null>(null);
 
   const pricingSummary = session.weightPricingSummaryPayload;
@@ -128,6 +129,11 @@ export function FinalQuotationScreen() {
     [quotationRows, draft.vatRatePercent]
   );
 
+  const visibleRows = useMemo(
+    () => filterFinalQuotationRowsBySearch(quotationRows, searchQuery),
+    [quotationRows, searchQuery]
+  );
+
   useEffect(() => {
     if (!canOpen || process.env.NODE_ENV === "production") return;
     const diagnostics = buildFinalQuotationDiagnostics({
@@ -161,16 +167,6 @@ export function FinalQuotationScreen() {
       updatedAt: new Date().toISOString(),
     };
     simpleIntakeActions.setFinalQuotationDraft(next);
-    setSaveSuccess(false);
-  }
-
-  function handleSave(): void {
-    simpleIntakeActions.setFinalQuotationDraft({
-      ...draft,
-      updatedAt: new Date().toISOString(),
-    });
-    setSaveSuccess(true);
-    window.setTimeout(() => setSaveSuccess(false), 2500);
   }
 
   async function handleExportExcel(): Promise<void> {
@@ -230,11 +226,11 @@ export function FinalQuotationScreen() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <ScreenHeader title="סיכום הצעת מחיר" className="mb-0" />
           <FinalQuotationToolbar
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
             onBack={() => simpleIntakeActions.backToWeightPricing()}
-            onSave={handleSave}
             onExportExcel={() => void handleExportExcel()}
             onExportPdf={() => void handleExportPdf()}
-            saveSuccess={saveSuccess}
             exportDisabled={quotationRows.length === 0}
           />
         </div>
@@ -250,7 +246,7 @@ export function FinalQuotationScreen() {
           onVatRateChange={(vatRatePercent) => patchDraft({ vatRatePercent })}
         />
 
-        <FinalQuotationItemsTable rows={quotationRows} />
+        <FinalQuotationItemsTable rows={visibleRows} />
 
         <FinalQuotationNotes
           notes={draft.notes}

@@ -37,4 +37,8 @@ export {
 export { buildFinalQuotationFilename } from "./formatQuotationFilename";
 export { FinalQuotationScreen } from "./FinalQuotationScreen";
 export { FinalQuotationToolbar } from "./FinalQuotationToolbar";
+export {
+  filterFinalQuotationRowsBySearch,
+  matchesFinalQuotationSearch,
+} from "./filterFinalQuotationRowsBySearch";
 export { FINAL_QUOTATION_TABLE_HEADERS } from "./FinalQuotationItemsTable";

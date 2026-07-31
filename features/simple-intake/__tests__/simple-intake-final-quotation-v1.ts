@@ -72,8 +72,9 @@ console.log("OMEGA — Final Quotation Summary and Export Screen v1");
   assert_(screen.includes("backToWeightPricing"), "guard redirects to pricing");
   assert_(!screen.includes("analysis-summary"), "no analysis-summary redirect");
   assert_(toolbar.includes("חזרה לתמחור"), "back action");
-  assert_(toolbar.includes("שמור טיוטה"), "save draft");
-  assert_(toolbar.includes("הטיוטה נשמרה"), "save success copy");
+  assert_(toolbar.includes("חיפוש פריט"), "search");
+  assert_(toolbar.includes("data-final-quotation-search"), "search field");
+  assert_(!toolbar.includes("שמור טיוטה"), "save draft removed");
   assert_(toolbar.includes("ייצא Excel"), "excel");
   assert_(toolbar.includes("ייצא PDF"), "pdf");
   assert_(pricingToolbar.includes("המשך לסיכום"), "pricing continue");
@@ -313,8 +314,13 @@ function mockRow(partial: {
     "utf8"
   );
   assert_(excelSrc.includes('addWorksheet("הצעת מחיר"'), "sheet name");
-  assert_(excelSrc.includes("autoFilter"), "autofilter");
+  assert_(!excelSrc.includes("autoFilter"), "no autofilter");
+  assert_(!excelSrc.includes("frozen"), "no freeze panes");
   assert_(excelSrc.includes("הערות להצעה"), "excel notes");
+  assert_(excelSrc.includes("FFF2F4F7"), "soft header fill");
+  assert_(excelSrc.includes('"₪"#,##0.00'), "ils number format");
+  assert_(excelSrc.includes('horizontal: "right"'), "rtl cell align");
+  assert_(excelSrc.includes("showGridLines: false"), "no gridlines");
   assert_(!excelSrc.includes("גאומטריה"), "excel no geometry col");
   assert_(!excelSrc.includes("renderExistingDxfThumbnail"), "excel no thumbnails");
 
@@ -374,6 +380,10 @@ function mockRow(partial: {
   assert_(metaForm.includes("מספר הצעה"), "number");
   assert_(metaForm.includes('type="date"'), "date input");
   assert_(metaForm.includes('data-field="quotationNumber"'), "manual number");
+  assert_(metaForm.includes("Building2"), "customer icon");
+  assert_(metaForm.includes("FolderKanban"), "project icon");
+  assert_(metaForm.includes("CalendarDays"), "date icon");
+  assert_(metaForm.includes("15%"), "section opacity");
 
   const strip = fs.readFileSync(
     path.join(root, "finalQuotation/FinalQuotationSummaryStrip.tsx"),
@@ -382,15 +392,19 @@ function mockRow(partial: {
   for (const label of [
     "מספר פריטים",
     "כמות כוללת",
-    'משקל כולל',
+    'משקל כולל (ק"ג)',
     'סה"כ לפני מע"מ',
     'מע"מ',
-    'סה"כ לתשלום',
+    'סה"כ כולל מע"מ',
   ]) {
     assert_(strip.includes(label), `metric ${label}`);
   }
   assert_(strip.includes('data-summary-position="above-table"'), "above attr");
   assert_(strip.includes("vatRatePercent"), "editable vat");
+  assert_(strip.includes('data-vat-inline="true"'), "inline vat rate");
+  assert_(!strip.includes("פריטים פעילים"), "no bottom badge items");
+  assert_(!strip.includes("כולל מע״מ"), "no bottom badge total");
+  assert_(metaForm.includes('dir="rtl"'), "rtl fields");
 
   console.log("✓ metadata fields + six metrics");
 }

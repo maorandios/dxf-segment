@@ -17,25 +17,26 @@ import {
 } from "../weightPricing/formatWeightPricing";
 import type { FinalQuotationTotals } from "./types";
 
-const VALUE_AREA_CLASS =
-  "relative z-[1] flex min-h-[3.25rem] flex-1 flex-col justify-center";
+const MUTED = "var(--ow-text-muted)";
+const TEXT = "var(--ow-text)";
 
 function MetricCard({
   metricId,
   label,
   icon: Icon,
+  labelExtra,
   children,
-  badge,
 }: {
   metricId: string;
   label: string;
   icon: LucideIcon;
+  /** Optional control rendered in the label row (e.g. VAT rate). */
+  labelExtra?: ReactNode;
   children: ReactNode;
-  badge: string;
 }) {
   return (
     <div
-      className="relative flex h-full min-w-[9rem] shrink-0 flex-col gap-2 overflow-hidden rounded-[var(--ow-radius-lg)] border px-3 py-3 text-right sm:min-w-0"
+      className="relative flex h-full min-w-[9rem] shrink-0 flex-col gap-3 overflow-hidden rounded-[var(--ow-radius-lg)] border px-3.5 py-3.5 text-right sm:min-w-0"
       style={{
         borderColor: "var(--ow-border)",
         backgroundColor:
@@ -43,25 +44,28 @@ function MetricCard({
       }}
       data-metric={metricId}
     >
-      <div className="relative z-[1] flex items-center justify-between gap-2">
-        <span
-          className="text-[12px] font-medium"
-          style={{ color: "var(--ow-text-secondary)" }}
-        >
-          {label}
-        </span>
+      {/* dir=rtl: icon sits on the right of the label, matching other OMEGA cards */}
+      <div
+        className="relative z-[1] flex items-center gap-2.5"
+        dir="rtl"
+      >
         <Icon
           className="h-4 w-4 shrink-0"
-          style={{ color: "var(--ow-text-muted)" }}
+          style={{ color: MUTED }}
           aria-hidden
         />
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span
+            className="text-[12px] font-medium tracking-wide"
+            style={{ color: MUTED }}
+          >
+            {label}
+          </span>
+          {labelExtra}
+        </div>
       </div>
-      <div className={VALUE_AREA_CLASS}>{children}</div>
-      <div
-        className="relative z-[1] text-[11px]"
-        style={{ color: "var(--ow-text-muted)" }}
-      >
-        {badge}
+      <div className="relative z-[1] flex min-h-[2.75rem] flex-1 items-center">
+        {children}
       </div>
     </div>
   );
@@ -86,29 +90,19 @@ export function FinalQuotationSummaryStrip({
       className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
       aria-label="סיכום הצעת מחיר"
     >
-      <MetricCard
-        metricId="itemCount"
-        label="מספר פריטים"
-        icon={Hash}
-        badge="פריטים פעילים"
-      >
+      <MetricCard metricId="itemCount" label="מספר פריטים" icon={Hash}>
         <div
-          className="text-[22px] font-semibold tabular-nums"
-          style={{ color: "var(--ow-text)" }}
+          className="text-[22px] font-semibold tabular-nums leading-none"
+          style={{ color: TEXT }}
         >
           {formatPricingMetricValue(totals.itemCount, 0)}
         </div>
       </MetricCard>
 
-      <MetricCard
-        metricId="totalQuantity"
-        label="כמות כוללת"
-        icon={Package}
-        badge="סכום כמויות"
-      >
+      <MetricCard metricId="totalQuantity" label="כמות כוללת" icon={Package}>
         <div
-          className="text-[22px] font-semibold tabular-nums"
-          style={{ color: "var(--ow-text)" }}
+          className="text-[22px] font-semibold tabular-nums leading-none"
+          style={{ color: TEXT }}
         >
           {formatPricingMetricValue(totals.totalQuantity, 0)}
         </div>
@@ -116,13 +110,12 @@ export function FinalQuotationSummaryStrip({
 
       <MetricCard
         metricId="totalWeightKg"
-        label='משקל כולל'
+        label={'משקל כולל (ק"ג)'}
         icon={Scale}
-        badge='ק"ג'
       >
         <div
-          className="text-[22px] font-semibold tabular-nums"
-          style={{ color: "var(--ow-text)" }}
+          className="text-[22px] font-semibold tabular-nums leading-none"
+          style={{ color: TEXT }}
         >
           {formatPricingWeightKg(totals.totalWeightKg)}
         </div>
@@ -130,13 +123,12 @@ export function FinalQuotationSummaryStrip({
 
       <MetricCard
         metricId="subtotalBeforeVat"
-        label='סה"כ לפני מע"מ'
+        label={'סה"כ לפני מע"מ'}
         icon={CircleDollarSign}
-        badge="לפני מע״מ"
       >
         <div
-          className="text-[20px] font-semibold tabular-nums"
-          style={{ color: "var(--ow-text)" }}
+          className="text-[20px] font-semibold tabular-nums leading-none"
+          style={{ color: TEXT }}
         >
           {formatMoneyIls(totals.subtotalBeforeVat)}
         </div>
@@ -144,48 +136,53 @@ export function FinalQuotationSummaryStrip({
 
       <MetricCard
         metricId="vatAmount"
-        label='מע"מ'
+        label={'מע"מ'}
         icon={Percent}
-        badge="שיעור ניתן לעריכה"
-      >
-        <div className="flex flex-col gap-1">
-          <div
-            className="text-[18px] font-semibold tabular-nums"
-            style={{ color: "var(--ow-text)" }}
+        labelExtra={
+          <span
+            className="inline-flex items-center gap-1 text-[12px] font-medium tracking-wide"
+            style={{ color: MUTED }}
+            data-vat-inline="true"
           >
-            {formatMoneyIls(totals.vatAmount)}
-          </div>
-          <label className="flex items-center gap-1 text-[11px]" style={{ color: "var(--ow-text-muted)" }}>
-            <span>%</span>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              dir="ltr"
-              value={vatRatePercent}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n) && n >= 0) onVatRateChange(n);
-              }}
-              className="h-7 w-14 rounded border bg-[var(--ow-surface,#fff)] px-1 text-[12px] tabular-nums"
-              style={{ borderColor: "var(--ow-border)" }}
-              data-field="vatRatePercent"
-              aria-label='שיעור מע"מ באחוזים'
-            />
-          </label>
+            <span aria-hidden>·</span>
+            <label className="inline-flex items-center gap-0.5">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                dir="rtl"
+                value={vatRatePercent}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n) && n >= 0) onVatRateChange(n);
+                }}
+                className="h-5 w-9 border-0 bg-transparent p-0 text-right text-[12px] font-medium tabular-nums outline-none focus-visible:rounded focus-visible:ring-1 focus-visible:ring-[var(--ow-accent)]"
+                style={{ color: MUTED }}
+                data-field="vatRatePercent"
+                aria-label={'שיעור מע"מ באחוזים'}
+              />
+              <span>%</span>
+            </label>
+          </span>
+        }
+      >
+        <div
+          className="text-[20px] font-semibold tabular-nums leading-none"
+          style={{ color: TEXT }}
+        >
+          {formatMoneyIls(totals.vatAmount)}
         </div>
       </MetricCard>
 
       <MetricCard
         metricId="totalIncludingVat"
-        label='סה"כ לתשלום'
+        label={'סה"כ כולל מע"מ'}
         icon={Boxes}
-        badge="כולל מע״מ"
       >
         <div
-          className="text-[20px] font-semibold tabular-nums"
-          style={{ color: "var(--ow-text)" }}
+          className="text-[20px] font-semibold tabular-nums leading-none"
+          style={{ color: TEXT }}
         >
           {formatMoneyIls(totals.totalIncludingVat)}
         </div>

@@ -18,7 +18,10 @@ export function FinalQuotationNotes({
       className="rounded-2xl border p-4"
       style={{
         borderColor: "var(--ow-border, #e4e7ec)",
-        backgroundColor: "var(--ow-surface, #ffffff)",
+        backgroundColor:
+          "color-mix(in srgb, var(--ow-surface, #ffffff) 15%, transparent)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
       }}
     >
       <h2

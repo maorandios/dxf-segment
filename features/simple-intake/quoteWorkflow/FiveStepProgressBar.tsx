@@ -2,38 +2,40 @@
 
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { simpleIntakeActions } from "../sessionStore";
-import type { OmegaQuoteStage, WorkflowStepState } from "../types";
+import type { WorkflowStepState } from "../types";
 import {
   QUOTE_STEPPER_LABELS,
   QUOTE_STEPPER_ORDER,
   type QuoteStepperId,
 } from "./quoteStageModel";
 
+/**
+ * Display-only quote progress — not interactive (no navigation on click).
+ */
 export function FiveStepProgressBar({
   states,
-  enteredStages,
-  activeStage,
 }: {
   states: Record<QuoteStepperId, WorkflowStepState>;
-  enteredStages: OmegaQuoteStage[];
-  activeStage: OmegaQuoteStage;
+  /** @deprecated Ignored — progress bar is display-only. */
+  enteredStages?: unknown;
+  /** @deprecated Ignored — progress bar is display-only. */
+  activeStage?: unknown;
 }) {
   return (
     <nav
-      className="shrink-0 border-b px-4 py-4 sm:px-8 sm:py-5"
+      className="pointer-events-none shrink-0 border-b px-4 py-4 sm:px-8 sm:py-5"
       style={{
         backgroundColor: "var(--ow-surface)",
         borderColor: "var(--ow-border)",
       }}
       aria-label="שלבי הצעת המחיר"
+      aria-disabled="true"
+      data-quote-progress-interactive="false"
     >
       <ol className="mx-auto grid w-full max-w-[920px] grid-cols-5 items-start">
         {QUOTE_STEPPER_ORDER.map((id, index) => {
           const state = states[id];
           const isLast = index === QUOTE_STEPPER_ORDER.length - 1;
-          const canNavigate =
-            enteredStages.includes(id) && id !== activeStage;
           const fillLine = state === "COMPLETED";
 
           return (
@@ -43,7 +45,7 @@ export function FiveStepProgressBar({
             >
               {!isLast && (
                 <div
-                  className="pointer-events-none absolute start-1/2 top-[18px] z-0 h-[3px] w-full overflow-hidden rounded-full"
+                  className="absolute start-1/2 top-[18px] z-0 h-[3px] w-full overflow-hidden rounded-full"
                   style={{ backgroundColor: "var(--ow-border)" }}
                   aria-hidden
                 >
@@ -57,18 +59,8 @@ export function FiveStepProgressBar({
                 </div>
               )}
 
-              <button
-                type="button"
-                disabled={!canNavigate}
-                onClick={() => {
-                  if (canNavigate) simpleIntakeActions.goToQuoteStage(id);
-                }}
-                className={cn(
-                  "relative z-[1] flex w-full flex-col items-center gap-2 rounded-md text-center transition-opacity duration-180",
-                  canNavigate
-                    ? "cursor-pointer hover:opacity-80"
-                    : "cursor-default"
-                )}
+              <div
+                className="relative z-[1] flex w-full cursor-default flex-col items-center gap-2 rounded-md text-center select-none"
                 aria-current={state === "ACTIVE" ? "step" : undefined}
               >
                 <span
@@ -114,7 +106,7 @@ export function FiveStepProgressBar({
                 >
                   {QUOTE_STEPPER_LABELS[id]}
                 </span>
-              </button>
+              </div>
             </li>
           );
         })}
