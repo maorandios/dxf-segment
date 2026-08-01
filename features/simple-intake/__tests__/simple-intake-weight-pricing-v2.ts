@@ -13,6 +13,8 @@ import {
   applyQuickPricingDefaults,
   assertWeightPricingInvariants,
   buildWeightPricingDiagnostics,
+  buildWeightPricingExcelFilename,
+  buildWeightPricingExcelWorkbook,
   buildWeightPricingGroups,
   buildWeightPricingSummaryPayload,
   calculateWeightPricingGroup,
@@ -22,6 +24,7 @@ import {
   migrateWeightPricingDraft,
   patchGroupPricingInDraft,
   validateWeightPricingGroups,
+  WEIGHT_PRICING_EXCEL_HEADERS,
 } from "../weightPricing";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -431,4 +434,64 @@ console.log("OMEGA — Simplify Weight Pricing by Finish v2");
   console.log("✓ focus does not trap caret after typing price");
 }
 
-console.log("\nOMEGA — Simplify Weight Pricing by Finish v2 — all checks passed.");
+async function testWeightPricingExcelExport(): Promise<void> {
+  const fname = buildWeightPricingExcelFilename({
+    projectName: "פרויקט א",
+    customerName: "לקוח ב",
+    date: new Date(2026, 7, 1),
+  });
+  assertEq(
+    fname,
+    "תמחור הצעה_פרויקט א_לקוח ב_01-08-2026.xlsx",
+    "excel filename format"
+  );
+
+  const draft = createEmptyWeightPricingDraft("q1");
+  draft.defaults = {
+    blackPricePerKg: 10,
+    galvanizedPricePerKg: 12,
+    checkeredPlateAddonPerKg: 1,
+  };
+  const commercial: QuoteItemCommercialOptionsMap = {
+    a: { finish: "BLACK", isCheckeredPlate: false },
+  };
+  const { groups } = buildWeightPricingGroups({
+    approvedRows: [
+      baseRow({
+        id: "a",
+        commercial: { areaM2: 0.01, unitWeightKg: 2, totalWeightKg: 2 },
+      }),
+    ],
+    commercialOptions: commercial,
+    draft,
+  });
+  const wb = await buildWeightPricingExcelWorkbook({
+    groups,
+    defaults: draft.defaults,
+    projectName: "פרויקט א",
+    customerName: "לקוח ב",
+    date: new Date(2026, 7, 1),
+  });
+  assertEq(wb.filename, fname, "workbook filename");
+  assert_(wb.bytes.byteLength > 500, "workbook has bytes");
+  assert_(WEIGHT_PRICING_EXCEL_HEADERS.includes('מחיר סופי לק"ג'), "final price header");
+  assert_(WEIGHT_PRICING_EXCEL_HEADERS.includes("% ניצול"), "utilization header");
+  const excelSrc = fs.readFileSync(
+    path.join(root, "weightPricing/buildWeightPricingExcelWorkbook.ts"),
+    "utf8"
+  );
+  assert_(!excelSrc.includes("autoFilter"), "no header autoFilter");
+  assert_(excelSrc.includes("FFF2F4F7"), "light gray header");
+  console.log("✓ weight pricing excel export");
+}
+
+testWeightPricingExcelExport()
+  .then(() => {
+    console.log(
+      "\nOMEGA — Simplify Weight Pricing by Finish v2 — all checks passed."
+    );
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

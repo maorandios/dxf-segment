@@ -137,7 +137,7 @@ async function main(): Promise<void> {
   assert(!toolbar.includes("חזרה לסיכום"), "summary back gone");
   assert(toolbar.includes("צור מייל פערים"), "email label");
   assert(toolbar.includes("ייצא דוח Excel"), "excel label");
-  assert(toolbar.includes("המשך לרשימה להצעת מחיר") || toolbar.includes("המשך לטבלה המסכמת"), "continue label");
+  assert(toolbar.includes("הצג טבלה מסכמת"), "continue label");
   console.log("✓ three-action toolbar exposed (no upload back)");
 }
 
@@ -374,8 +374,15 @@ async function main(): Promise<void> {
   ]);
   const wb = await buildRoundTripExcelWorkbook({
     rows,
-    quotationName: "בדיקה",
+    projectName: "בדיקה",
+    customerName: "לקוח",
+    date: new Date(2026, 7, 1),
   });
+  assertEq(
+    wb.filename,
+    "דוח השלמת נתונים_בדיקה_לקוח_01-08-2026.xlsx",
+    "excel filename format"
+  );
   assertEq(wb.sheetCount, 1, "one sheet");
   assertEq(wb.statusColumnCount, 0, "no status column");
   assertEq(wb.dataRowCount, rows.length, "all material rows");

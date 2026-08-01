@@ -124,7 +124,8 @@ console.log("OMEGA — Simplify the Final Quote List Screen v1");
   assert(screen.includes("GAP_FIX_PANEL"), "slide panel chrome");
   assert(!screen.includes("FinalQuoteItemPreviewModal"), "old modal removed");
 
-  assert(toolbar.includes("אישור רשימה"), "approve");
+  assert(toolbar.includes("התקדם לתמחור הצעה"), "approve");
+  assert(toolbar.includes("ArrowLeft"), "approve left arrow");
   assert(toolbar.includes("ייצא דוח EXCEL"), "excel");
   assert(toolbar.includes("חזרה"), "back");
   assert(toolbar.includes("חיפוש פריט"), "search");
@@ -135,7 +136,7 @@ console.log("OMEGA — Simplify the Final Quote List Screen v1");
     ? toolbar.indexOf("חזרה")
     : toolbar.indexOf("חזרה");
   const excelIdx = toolbar.indexOf("ייצא דוח EXCEL");
-  const approveIdx = toolbar.indexOf("אישור רשימה");
+  const approveIdx = toolbar.indexOf("התקדם לתמחור הצעה");
   assert(searchIdx < backIdx && backIdx < excelIdx && excelIdx < approveIdx, "RTL action order");
 
   assert(metrics.includes("פריטים"), "card items");

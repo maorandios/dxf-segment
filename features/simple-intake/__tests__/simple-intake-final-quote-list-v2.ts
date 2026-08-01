@@ -325,7 +325,7 @@ console.log("OMEGA — Final Quote List Corrections and Scope Guard v2");
     path.join(root, "workflow/GapWorkspaceToolbar.tsx"),
     "utf8"
   );
-  assert_(toolbar.includes("המשך לרשימה להצעת מחיר"), "continue label");
+  assert_(toolbar.includes("הצג טבלה מסכמת"), "continue label");
   assert_(!toolbar.includes("continueDisabled"), "v3: continue not disabled prop");
   console.log("✓ access selector + progression guards");
 }

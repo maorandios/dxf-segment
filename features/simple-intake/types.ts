@@ -374,6 +374,11 @@ export type SimpleIntakeSession = {
    */
   weightPricingDraft: import("./weightPricing/types").WeightPricingDraft | null;
   /**
+   * Cached pricing-group nesting estimates (physical scope).
+   * Survives leaving/re-entering תמחור so packing does not re-run from scratch.
+   */
+  weightPricingNestingCache: import("./weightPricing/pricingGroupNestingTypes").WeightPricingNestingCache | null;
+  /**
    * Last validated pricing summary payload (set when continuing to summary).
    */
   weightPricingSummaryPayload: import("./weightPricing/types").WeightPricingSummaryPayload | null;

@@ -616,4 +616,52 @@ console.log("OMEGA — Pricing nesting estimate (rectPackEstimate) v1 fix");
   console.log("✓ diagnostics");
 }
 
+{
+  const hookSrc = fs.readFileSync(
+    path.join(root, "weightPricing/usePricingGroupNestingEstimates.ts"),
+    "utf8"
+  );
+  assert_(hookSrc.includes("persistedCache"), "hook accepts session cache");
+  assert_(hookSrc.includes("onPersistCache"), "hook persists estimates");
+  assert_(
+    hookSrc.includes("hydrateResultCacheFromSession"),
+    "hydrates on remount"
+  );
+  assert_(
+    !hookSrc.includes("args.persistedCache,"),
+    "persistedCache not in effect deps (avoids re-run loop)"
+  );
+
+  const screenSrc = fs.readFileSync(
+    path.join(root, "weightPricing/WeightPricingScreen.tsx"),
+    "utf8"
+  );
+  assert_(
+    screenSrc.includes("setWeightPricingNestingCache"),
+    "screen writes nest cache"
+  );
+  assert_(
+    screenSrc.includes("weightPricingNestingCache"),
+    "screen reads nest cache"
+  );
+
+  const storeSrc = fs.readFileSync(path.join(root, "sessionStore.ts"), "utf8");
+  assert_(
+    storeSrc.includes("setWeightPricingNestingCache"),
+    "session action exists"
+  );
+  assert_(
+    storeSrc.includes("weightPricingNestingCache: null"),
+    "cache cleared on reset paths"
+  );
+
+  const typesSrc = fs.readFileSync(path.join(root, "types.ts"), "utf8");
+  assert_(
+    typesSrc.includes("weightPricingNestingCache"),
+    "session type includes nest cache"
+  );
+
+  console.log("✓ nesting cache survives pricing remount");
+}
+
 console.log("\nAll pricing nesting estimate fix checks passed.");

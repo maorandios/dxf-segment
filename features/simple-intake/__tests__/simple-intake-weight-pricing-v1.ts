@@ -42,15 +42,36 @@ console.log("OMEGA — Weight-Based Pricing Screen v1 (wiring only; model → v2
   assert_(store.includes("backToFinalQuoteList"), "back to list");
   assert_(store.includes("advanceToQuotationSummary"), "continue to summary");
   assert_(store.includes("weightPricingDraft"), "draft in session");
+  assert_(
+    store.includes("weightPricingNestingCache"),
+    "nesting cache in session"
+  );
+  assert_(
+    store.includes("setWeightPricingNestingCache"),
+    "set nesting cache action"
+  );
   assert_(shell.includes("WeightPricingScreen"), "shell mounts pricing");
   assert_(screen.includes("advanceToPricing(finalRows)"), "approve passes rows");
   assert_(pricingScreen.includes('title="תמחור הצעת מחיר"'), "screen title");
   assert_(toolbar.includes("חזרה לרשימה"), "back action");
-  assert_(toolbar.includes("שמור תמחור"), "save");
+  assert_(toolbar.includes("ייצא דוח EXCEL"), "excel export");
+  assert_(!toolbar.includes("שמור תמחור"), "no save button");
   assert_(toolbar.includes("המשך לסיכום"), "continue");
+  assert_(toolbar.includes("ArrowLeft"), "continue left arrow");
+  assert_(
+    pricingScreen.includes("buildWeightPricingExcelWorkbook"),
+    "excel workbook wired"
+  );
   assert_(!pricingScreen.includes("StickyActionBar"), "no floating bar");
-  assert_(pricingScreen.includes('data-nesting-enabled="false"'), "no nesting");
-  assert_(metrics.includes("קבוצות תמחור"), "metric groups");
+  assert_(
+    pricingScreen.includes('data-nesting-enabled="estimate"'),
+    "nesting estimate mode"
+  );
+  assert_(
+    pricingScreen.includes("usePricingGroupNestingEstimates"),
+    "nesting hook"
+  );
+  assert_(metrics.includes('משקל כולל (ק"ג)'), "metric total weight");
   assert_(pricingScreen.includes("finish-v2") || pricingScreen.includes("applyQuickPricingDefaults"), "v2 model");
 
   console.log("✓ navigation wiring preserved; pricing model covered by v2");

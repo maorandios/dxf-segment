@@ -2,8 +2,8 @@
 
 import { useId, type ReactNode } from "react";
 import {
+  ArrowLeft,
   ArrowRight,
-  Check,
   FileSpreadsheet,
   Search,
   X,
@@ -65,7 +65,7 @@ function Sep() {
 
 /**
  * RTL visual order inside the panel:
- * חיפוש פריט | חזרה | ייצא דוח EXCEL | אישור רשימה
+ * חיפוש פריט | חזרה | ייצא דוח EXCEL | התקדם לתמחור הצעה
  * (DOM first = visual right in RTL)
  */
 export function FinalQuoteListToolbar({
@@ -155,12 +155,12 @@ export function FinalQuoteListToolbar({
         title={
           approveDisabled
             ? (approveDisabledReason ??
-              "לא ניתן לאשר רשימה ללא פריטים פעילים")
-            : "אישור רשימה"
+              "לא ניתן להתקדם לתמחור ללא פריטים פעילים")
+            : "התקדם לתמחור הצעה"
         }
       >
-        <Check className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-        אישור רשימה
+        התקדם לתמחור הצעה
+        <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
       </Segment>
     </div>
   );

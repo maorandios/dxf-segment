@@ -59,25 +59,40 @@ function PanelShell({
   title,
   children,
   testId,
+  variant = "default",
 }: {
   title: string;
   children: ReactNode;
   testId: string;
+  variant?: "default" | "accent";
 }) {
+  const isAccent = variant === "accent";
   return (
     <div
       className="min-w-0 flex-1 rounded-[var(--ow-radius-lg)] border px-4 py-3"
-      style={{
-        borderColor: "var(--ow-border)",
-        backgroundColor:
-          "color-mix(in srgb, var(--ow-surface) 20%, transparent)",
-      }}
+      style={
+        isAccent
+          ? {
+              borderColor: "var(--ow-accent, #0f766e)",
+              backgroundColor: "var(--ow-accent, #0f766e)",
+            }
+          : {
+              borderColor: "var(--ow-border)",
+              backgroundColor:
+                "color-mix(in srgb, var(--ow-surface) 20%, transparent)",
+            }
+      }
       data-testid={testId}
+      data-rates-panel-variant={isAccent ? "accent" : "default"}
       dir="rtl"
     >
       <div
         className="mb-2 text-[13px] font-semibold"
-        style={{ color: "var(--ow-text)" }}
+        style={{
+          color: isAccent
+            ? "var(--ow-accent-fg, #ffffff)"
+            : "var(--ow-text)",
+        }}
       >
         {title}
       </div>
@@ -85,6 +100,18 @@ function PanelShell({
     </div>
   );
 }
+
+const RATES_CONTROL_STYLE = {
+  borderColor: "var(--ow-accent-soft, #e7f6f3)",
+  backgroundColor: "var(--ow-accent-soft, #e7f6f3)",
+  color: "var(--ow-accent-hover, #115e59)",
+} as const;
+
+const RATES_FIELD_CLASS =
+  "h-9 rounded-xl border shadow-none focus-visible:ring-[var(--ow-accent-hover,#115e59)]";
+
+const RATES_BUTTON_CLASS =
+  "h-9 rounded-xl border px-4 shadow-none hover:brightness-105";
 
 function FilterSelect({
   label,
@@ -213,13 +240,14 @@ export function WeightPricingQuickBar({
       data-weight-pricing-quick-bar="true"
       dir="rtl"
     >
-      <PanelShell title="תעריפים לחיוב" testId="weight-pricing-rates-panel">
+      <PanelShell
+        title="תעריפים לחיוב"
+        testId="weight-pricing-rates-panel"
+        variant="accent"
+      >
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[6.5rem] flex-1 space-y-1">
-            <span
-              className="block text-[11px] font-medium"
-              style={{ color: "var(--ow-text-muted)" }}
-            >
+            <span className="block text-[11px] font-medium text-white/75">
               מחיר שחור לק״ג
             </span>
             <Input
@@ -228,16 +256,14 @@ export function WeightPricingQuickBar({
               step={0.01}
               value={black}
               onChange={(e) => setBlack(e.target.value)}
-              className="h-9 rounded-xl"
+              className={RATES_FIELD_CLASS}
+              style={RATES_CONTROL_STYLE}
               inputMode="decimal"
               data-quick-field="blackPricePerKg"
             />
           </label>
           <label className="min-w-[6.5rem] flex-1 space-y-1">
-            <span
-              className="block text-[11px] font-medium"
-              style={{ color: "var(--ow-text-muted)" }}
-            >
+            <span className="block text-[11px] font-medium text-white/75">
               מחיר מגולוון לק״ג
             </span>
             <Input
@@ -246,16 +272,14 @@ export function WeightPricingQuickBar({
               step={0.01}
               value={galv}
               onChange={(e) => setGalv(e.target.value)}
-              className="h-9 rounded-xl"
+              className={RATES_FIELD_CLASS}
+              style={RATES_CONTROL_STYLE}
               inputMode="decimal"
               data-quick-field="galvanizedPricePerKg"
             />
           </label>
           <label className="min-w-[6.5rem] flex-1 space-y-1">
-            <span
-              className="block text-[11px] font-medium"
-              style={{ color: "var(--ow-text-muted)" }}
-            >
+            <span className="block text-[11px] font-medium text-white/75">
               תוספת פח מרוג לק״ג
             </span>
             <Input
@@ -264,7 +288,8 @@ export function WeightPricingQuickBar({
               step={0.01}
               value={checkered}
               onChange={(e) => setCheckered(e.target.value)}
-              className="h-9 rounded-xl"
+              className={RATES_FIELD_CLASS}
+              style={RATES_CONTROL_STYLE}
               inputMode="decimal"
               data-quick-field="checkeredPlateAddonPerKg"
             />
@@ -272,7 +297,8 @@ export function WeightPricingQuickBar({
           <Button
             type="button"
             variant="outline"
-            className="h-9 rounded-xl px-4 shadow-none"
+            className={RATES_BUTTON_CLASS}
+            style={RATES_CONTROL_STYLE}
             onClick={handleApply}
             data-quick-apply="true"
           >
@@ -281,7 +307,8 @@ export function WeightPricingQuickBar({
           <Button
             type="button"
             variant="outline"
-            className="h-9 rounded-xl px-4 shadow-none"
+            className={RATES_BUTTON_CLASS}
+            style={RATES_CONTROL_STYLE}
             onClick={handleReset}
             data-quick-reset="true"
             title="איפוס תעריפים"

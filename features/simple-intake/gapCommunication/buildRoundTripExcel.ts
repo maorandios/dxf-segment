@@ -136,24 +136,38 @@ export function deriveRoundTripActionHighlights(
 }
 
 function sanitizeFilenamePart(value: string): string {
-  return value
-    .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
+    .replace(/\s+/g, " ")
     .slice(0, 80);
 }
 
-export function buildRoundTripExcelFilename(
-  quotationName: string,
-  date = new Date()
-): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const safe = sanitizeFilenamePart(quotationName) || "quotation";
-  return `OMEGA-השלמת-נתונים-${safe}-${y}-${m}-${d}.xlsx`;
+function formatExportDateHe(date: Date = new Date()): string {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(date.getFullYear());
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+/**
+ * דוח השלמת נתונים_שם פרויקט_שם לקוח_תאריך.xlsx
+ */
+export function buildRoundTripExcelFilename(args: {
+  projectName?: string | null;
+  customerName?: string | null;
+  /** @deprecated use projectName */
+  quotationName?: string | null;
+  date?: Date;
+}): string {
+  const project =
+    sanitizeFilenamePart(args.projectName ?? args.quotationName ?? "") ||
+    "ללא-פרויקט";
+  const customer =
+    sanitizeFilenamePart(args.customerName ?? "") || "ללא-לקוח";
+  const datePart = formatExportDateHe(args.date ?? new Date());
+  return `דוח השלמת נתונים_${project}_${customer}_${datePart}.xlsx`;
 }
 
 function colIndex(key: RoundTripExcelColumnKey): number {
@@ -162,7 +176,11 @@ function colIndex(key: RoundTripExcelColumnKey): number {
 
 export async function buildRoundTripExcelWorkbook(args: {
   rows: ReadonlyArray<GapCommunicationRow>;
-  quotationName: string;
+  /** @deprecated use projectName */
+  quotationName?: string;
+  projectName?: string | null;
+  customerName?: string | null;
+  date?: Date;
 }): Promise<{
   filename: string;
   bytes: Uint8Array;
@@ -185,6 +203,13 @@ export async function buildRoundTripExcelWorkbook(args: {
   const header = sheet.addRow([...OMEGA_ROUND_TRIP_HEADERS]);
   header.font = { bold: true };
   header.alignment = { vertical: "middle", wrapText: true };
+  header.eachCell((cell) => {
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFF2F4F7" },
+    };
+  });
 
   const highlights = deriveRoundTripActionHighlights(args.rows);
   const highlightSet = new Set(
@@ -238,11 +263,6 @@ export async function buildRoundTripExcelWorkbook(args: {
 
   sheet.getRow(1).height = 22;
 
-  sheet.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: OMEGA_ROUND_TRIP_HEADERS.length },
-  };
-
   // Wide notes column so text fits on one line; uniform row heights above.
   const widths = [16, 22, 14, 12, 10, 16, 16, 14, 14, 96];
   widths.forEach((w, i) => {
@@ -253,7 +273,11 @@ export async function buildRoundTripExcelWorkbook(args: {
   const bytes = new Uint8Array(buffer as ArrayBuffer);
 
   return {
-    filename: buildRoundTripExcelFilename(args.quotationName),
+    filename: buildRoundTripExcelFilename({
+      projectName: args.projectName ?? args.quotationName,
+      customerName: args.customerName,
+      date: args.date,
+    }),
     bytes,
     sheetCount: workbook.worksheets.length,
     dataRowCount: args.rows.length,

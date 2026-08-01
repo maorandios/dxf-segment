@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Pencil, Save, X } from "lucide-react";
+import { CircleX, Pencil, Save } from "lucide-react";
 import { EditQuoteDetailsDialog } from "../quoteWorkflow/EditQuoteDetailsDialog";
 import { simpleIntakeActions } from "../sessionStore";
 import type { QuoteWorkspaceDetails } from "../types";
@@ -151,19 +151,22 @@ export function OmegaHeader({
                 setCancelOpen(true);
               }}
             >
-              <X className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+              <CircleX
+                className="h-3.5 w-3.5 shrink-0"
+                strokeWidth={1.75}
+                aria-hidden
+              />
               ביטול הצעת מחיר
             </HeaderSegment>
             <HeaderSep />
             <HeaderSegment
-              primary
               ariaLabel="שמור הצעת מחיר"
               onClick={() => {
                 /* Save is intentionally a no-op for now */
               }}
             >
-              שמור הצעת מחיר
               <Save className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+              שמור הצעת מחיר
             </HeaderSegment>
           </div>
         </div>

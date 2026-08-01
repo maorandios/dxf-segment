@@ -62,6 +62,7 @@ import {
   type WeightPricingDraft,
   type WeightPricingSummaryPayload,
 } from "./weightPricing/types";
+import type { WeightPricingNestingCache } from "./weightPricing/pricingGroupNestingTypes";
 import {
   assertUserResolutionInvariants,
   buildUserResolutionDiagnostics,
@@ -168,6 +169,7 @@ function createEmptySession(): SimpleIntakeSession {
     quoteItemCommercialOptions: {},
     finalQuoteListMembership: null,
     weightPricingDraft: null,
+    weightPricingNestingCache: null,
     weightPricingSummaryPayload: null,
     finalQuotationDraft: null,
     forcedReviewWorkspaceView: null,
@@ -390,6 +392,13 @@ export const simpleIntakeActions = {
     setSession({
       ...session,
       weightPricingDraft: draft,
+    });
+  },
+
+  setWeightPricingNestingCache(cache: WeightPricingNestingCache | null): void {
+    setSession({
+      ...session,
+      weightPricingNestingCache: cache,
     });
   },
 
@@ -731,6 +740,7 @@ export const simpleIntakeActions = {
       quoteItemCommercialOptions: {},
       finalQuoteListMembership: null,
       weightPricingDraft: null,
+      weightPricingNestingCache: null,
       weightPricingSummaryPayload: null,
       finalQuotationDraft: null,
       forcedReviewWorkspaceView: null,
@@ -1337,6 +1347,7 @@ export const simpleIntakeActions = {
       providerCallCount: 0,
       finalQuoteListMembership: null,
       weightPricingDraft: null,
+      weightPricingNestingCache: null,
       weightPricingSummaryPayload: null,
       finalQuotationDraft: null,
       forcedReviewWorkspaceView: null,

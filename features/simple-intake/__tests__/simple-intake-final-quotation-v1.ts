@@ -79,6 +79,29 @@ console.log("OMEGA — Final Quotation Summary and Export Screen v1");
   assert_(!toolbar.includes("שמור טיוטה"), "save draft removed");
   assert_(toolbar.includes("ייצא Excel"), "excel");
   assert_(toolbar.includes("ייצא PDF"), "pdf");
+  assert_(
+    fs.existsSync(path.join(root, "../../public/pdf_animation.json")),
+    "pdf lottie asset"
+  );
+  const pdfToast = fs.readFileSync(
+    path.join(root, "finalQuotation/FinalQuotationPdfExportToast.tsx"),
+    "utf8"
+  );
+  assert_(pdfToast.includes("pdf_animation.json"), "toast uses pdf animation");
+  assert_(
+    pdfToast.includes("מכינים עבורך את הצעת המחיר"),
+    "toast hebrew message"
+  );
+  assert_(pdfToast.includes("ow-cancel-toast"), "toast style");
+  assert_(
+    fs
+      .readFileSync(
+        path.join(root, "finalQuotation/FinalQuotationScreen.tsx"),
+        "utf8"
+      )
+      .includes("FinalQuotationPdfExportToast"),
+    "screen wires pdf toast"
+  );
   assert_(pricingToolbar.includes("המשך לסיכום"), "pricing continue");
   assert_(pricing.includes("advanceToQuotationSummary"), "creates summary payload");
   assert_(screen.includes("REVIEW_WORKSPACE_CONTENT_MAX_PX"), "shared width");
@@ -476,7 +499,9 @@ function mockRow(partial: {
   assert_(metaForm.includes("CalendarDays"), "date icon");
   assert_(metaForm.includes("CalendarClock"), "validity icon");
   assert_(metaForm.includes("lg:grid-cols-5"), "five columns");
-  assert_(metaForm.includes("15%"), "section opacity");
+  assert_(metaForm.includes('data-metadata-panel-variant="accent"'), "accent panel");
+  assert_(metaForm.includes("--ow-accent"), "green accent bg");
+  assert_(metaForm.includes("--ow-accent-soft"), "green tea fields");
 
   const pdfTpl = fs.readFileSync(
     path.join(root, "../../server/pdf/final_quotation_template.html"),

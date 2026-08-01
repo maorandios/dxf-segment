@@ -4,6 +4,9 @@
  * Async nesting estimates per pricing group.
  * Invalidates only on physical-scope signature changes — never on price edits.
  * Uses existing Quick Quote rectPackEstimate via runPricingGroupNestingEstimate.
+ *
+ * Results are hydrated from / written to session nest cache so leaving and
+ * re-entering תמחור does not re-run packing for unchanged physical groups.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +23,7 @@ import {
 import {
   emptyPricingGroupNestingEstimate,
   type PricingGroupNestingEstimate,
+  type WeightPricingNestingCache,
 } from "./pricingGroupNestingTypes";
 import {
   pricingNestingEngineCounters,
@@ -28,6 +32,48 @@ import {
 import type { PricingGroupKey, WeightPricingGroup } from "./types";
 
 type GeometryCache = Map<string, ProcessedGeometry | null>;
+
+function isPersistableEstimate(
+  estimate: PricingGroupNestingEstimate
+): boolean {
+  return (
+    estimate.status === "READY" ||
+    estimate.status === "UNAVAILABLE" ||
+    estimate.status === "ERROR"
+  );
+}
+
+function hydrateResultCacheFromSession(
+  resultCache: Map<string, PricingGroupNestingEstimate>,
+  cache: WeightPricingNestingCache | null | undefined,
+  quotationId: string
+): void {
+  if (!cache || cache.quotationId !== quotationId) return;
+  for (const [signature, estimate] of Object.entries(
+    cache.estimatesBySignature
+  )) {
+    if (!isPersistableEstimate(estimate)) continue;
+    if (resultCache.has(signature)) continue;
+    resultCache.set(signature, estimate);
+  }
+}
+
+function buildPersistableCache(args: {
+  quotationId: string;
+  scopeKey: string;
+  resultCache: Map<string, PricingGroupNestingEstimate>;
+}): WeightPricingNestingCache {
+  const estimatesBySignature: Record<string, PricingGroupNestingEstimate> = {};
+  for (const [signature, estimate] of args.resultCache) {
+    if (!isPersistableEstimate(estimate)) continue;
+    estimatesBySignature[signature] = estimate;
+  }
+  return {
+    quotationId: args.quotationId,
+    scopeKey: args.scopeKey,
+    estimatesBySignature,
+  };
+}
 
 function resolveDxfFile(
   matchedDxfId: string,
@@ -48,6 +94,9 @@ export function usePricingGroupNestingEstimates(args: {
   membership: FinalQuoteListMembership | null | undefined;
   dxfParts: ReadonlyArray<SimpleDxfPart>;
   dxfFiles: ReadonlyArray<File>;
+  quotationId: string;
+  persistedCache: WeightPricingNestingCache | null;
+  onPersistCache: (cache: WeightPricingNestingCache) => void;
 }): {
   estimatesByKey: ReadonlyMap<PricingGroupKey, PricingGroupNestingEstimate>;
   frozenRowsIncludedInNesting: number;
@@ -63,6 +112,10 @@ export function usePricingGroupNestingEstimates(args: {
   const lastSignatureByGroupRef = useRef<Map<PricingGroupKey, string>>(
     new Map()
   );
+  const onPersistRef = useRef(args.onPersistCache);
+  onPersistRef.current = args.onPersistCache;
+  const persistedCacheRef = useRef(args.persistedCache);
+  persistedCacheRef.current = args.persistedCache;
 
   const scopePlan = useMemo(() => {
     let frozenRowsIncludedInNesting = 0;
@@ -104,10 +157,19 @@ export function usePricingGroupNestingEstimates(args: {
 
   useEffect(() => {
     let cancelled = false;
-    const { plans } = scopePlan;
+    const { plans, scopeKey } = scopePlan;
+
+    // Seed from session once per mount/scope — do not depend on persistedCache
+    // in effect deps or writing the cache would re-trigger nesting.
+    hydrateResultCacheFromSession(
+      resultCacheRef.current,
+      persistedCacheRef.current,
+      args.quotationId
+    );
 
     async function run(): Promise<void> {
       const next = new Map<PricingGroupKey, PricingGroupNestingEstimate>();
+      let wroteNewEstimate = false;
 
       for (const plan of plans) {
         const cached = resultCacheRef.current.get(plan.signature);
@@ -192,6 +254,7 @@ export function usePricingGroupNestingEstimates(args: {
           plan.group.groupKey,
           plan.signature
         );
+        wroteNewEstimate = true;
 
         if (!cancelled) {
           setEstimatesByKey((prev) => {
@@ -201,6 +264,31 @@ export function usePricingGroupNestingEstimates(args: {
           });
         }
       }
+
+      if (!cancelled && wroteNewEstimate) {
+        onPersistRef.current(
+          buildPersistableCache({
+            quotationId: args.quotationId,
+            scopeKey,
+            resultCache: resultCacheRef.current,
+          })
+        );
+      } else if (
+        !cancelled &&
+        resultCacheRef.current.size > 0 &&
+        (!persistedCacheRef.current ||
+          persistedCacheRef.current.quotationId !== args.quotationId ||
+          persistedCacheRef.current.scopeKey !== scopeKey)
+      ) {
+        // First mount with full cache hit — still sync scopeKey into session.
+        onPersistRef.current(
+          buildPersistableCache({
+            quotationId: args.quotationId,
+            scopeKey,
+            resultCache: resultCacheRef.current,
+          })
+        );
+      }
     }
 
     void run();
@@ -208,7 +296,7 @@ export function usePricingGroupNestingEstimates(args: {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- physical scopeKey only
-  }, [scopePlan.scopeKey, args.dxfParts, args.dxfFiles]);
+  }, [scopePlan.scopeKey, args.dxfParts, args.dxfFiles, args.quotationId]);
 
   return {
     estimatesByKey,

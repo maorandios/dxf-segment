@@ -73,6 +73,7 @@ export type {
   PricingNestingFailureDetail,
   PricingNestingFailureReasonCode,
   SelectedNestingStockSheet,
+  WeightPricingNestingCache,
 } from "./pricingGroupNestingTypes";
 export {
   pricingGroupNestingUsesExistingEngine,
@@ -147,3 +148,8 @@ export {
 } from "./compactPricingPanelLayout";
 export { WeightPricingScreen } from "./WeightPricingScreen";
 export { WeightPricingGroupDetailsDrawer } from "./WeightPricingGroupDetailsDrawer";
+export {
+  buildWeightPricingExcelWorkbook,
+  buildWeightPricingExcelFilename,
+  WEIGHT_PRICING_EXCEL_HEADERS,
+} from "./buildWeightPricingExcelWorkbook";

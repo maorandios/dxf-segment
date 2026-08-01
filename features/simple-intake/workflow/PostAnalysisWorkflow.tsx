@@ -354,6 +354,7 @@ export function PostAnalysisWorkflow() {
           finalRows={finalRows}
           analysis={analysis}
           quotationName={session.quoteDetails?.projectName ?? "הצעת מחיר"}
+          customerName={session.quoteDetails?.customerName ?? ""}
           materialListRows={session.materialListRows}
           dxfParts={session.dxfParts}
           onContinueToTable={() => openUnifiedTable()}

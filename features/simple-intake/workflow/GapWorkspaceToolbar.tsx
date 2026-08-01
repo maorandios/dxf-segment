@@ -139,9 +139,9 @@ export function GapWorkspaceToolbar({
         action="CONTINUE_TO_FINAL_TABLE"
         onAction={onAction}
         primary
-        title="המשך לרשימה להצעת מחיר"
+        title="הצג טבלה מסכמת"
       >
-        המשך לרשימה להצעת מחיר
+        הצג טבלה מסכמת
         <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
       </Segment>
     </div>

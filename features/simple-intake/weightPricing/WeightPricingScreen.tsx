@@ -12,6 +12,7 @@ import { simpleIntakeActions } from "../sessionStore";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
 import { deriveFinalRows } from "../results/deriveFinalRows";
 import type { FinalIntakeRow } from "../results/types";
+import { downloadBytes } from "../gapCommunication";
 import {
   GAP_FIX_PANEL_EASE,
   GAP_FIX_PANEL_GUTTER_PX,
@@ -28,6 +29,7 @@ import {
   applyQuickPricingDefaults,
   assertWeightPricingInvariants,
   buildWeightPricingDiagnostics,
+  buildWeightPricingExcelWorkbook,
   buildWeightPricingGroups,
   buildWeightPricingSummaryPayload,
   canOpenWeightPricingScreen,
@@ -129,7 +131,7 @@ function readStagePanelBox(contentEl: HTMLElement | null): StagePanelBox {
  */
 export function WeightPricingScreen() {
   const session = useSimpleIntakeSession();
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [validationMessage, setValidationMessage] = useState<string | null>(
     null
   );
@@ -243,6 +245,11 @@ export function WeightPricingScreen() {
     membership,
     dxfParts: session.dxfParts,
     dxfFiles: session.dxfFiles,
+    quotationId,
+    persistedCache: session.weightPricingNestingCache,
+    onPersistCache: (cache) => {
+      simpleIntakeActions.setWeightPricingNestingCache(cache);
+    },
   });
 
   const metrics = useMemo(
@@ -503,7 +510,6 @@ export function WeightPricingScreen() {
         patch,
       });
       simpleIntakeActions.setWeightPricingDraft(next);
-      setSaveSuccess(false);
       setValidationMessage(null);
       setFocusInvalidKey(null);
     },
@@ -520,7 +526,6 @@ export function WeightPricingScreen() {
       ...values,
     });
     simpleIntakeActions.setWeightPricingDraft(next);
-    setSaveSuccess(false);
     setValidationMessage(null);
     setFocusInvalidKey(null);
   }
@@ -530,18 +535,8 @@ export function WeightPricingScreen() {
       session.weightPricingDraft ?? rebuiltDraft
     );
     simpleIntakeActions.setWeightPricingDraft(next);
-    setSaveSuccess(false);
     setValidationMessage(null);
     setFocusInvalidKey(null);
-  }
-
-  function handleSave(): void {
-    simpleIntakeActions.setWeightPricingDraft({
-      ...(session.weightPricingDraft ?? rebuiltDraft),
-      updatedAt: new Date().toISOString(),
-    });
-    setSaveSuccess(true);
-    window.setTimeout(() => setSaveSuccess(false), 2500);
   }
 
   function handleContinue(): void {
@@ -565,6 +560,23 @@ export function WeightPricingScreen() {
     }
     setValidationMessage(null);
     simpleIntakeActions.advanceToQuotationSummary(payload);
+  }
+
+  async function handleExportExcel(): Promise<void> {
+    if (exportBusy) return;
+    setExportBusy(true);
+    try {
+      const result = await buildWeightPricingExcelWorkbook({
+        groups,
+        defaults,
+        nestingEstimatesByKey,
+        projectName: session.quoteDetails?.projectName,
+        customerName: session.quoteDetails?.customerName,
+      });
+      downloadBytes(result.filename, result.bytes);
+    } finally {
+      setExportBusy(false);
+    }
   }
 
   function closeSidePanel(): void {
@@ -686,9 +698,9 @@ export function WeightPricingScreen() {
             <ScreenHeader title="תמחור הצעת מחיר" className="mb-0" />
             <WeightPricingToolbar
               onBack={() => simpleIntakeActions.backToFinalQuoteList()}
-              onSave={handleSave}
+              onExportExcel={() => void handleExportExcel()}
               onContinue={handleContinue}
-              saveSuccess={saveSuccess}
+              exportBusy={exportBusy}
             />
           </div>
 

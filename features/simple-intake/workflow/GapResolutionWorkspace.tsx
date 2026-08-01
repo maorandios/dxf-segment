@@ -262,6 +262,7 @@ export function GapResolutionWorkspace({
   availableCandidatesForRow,
   noDxfFilesUploaded,
   quotationName = "הצעת מחיר",
+  customerName = "",
   materialListRows = [],
   dxfParts = [],
 }: {
@@ -281,6 +282,7 @@ export function GapResolutionWorkspace({
   availableCandidatesForRow: (row: FinalIntakeRow | null) => FinalDxfCandidate[];
   noDxfFilesUploaded: boolean;
   quotationName?: string;
+  customerName?: string;
   materialListRows?: MaterialListRow[];
   dxfParts?: SimpleDxfPart[];
 }) {
@@ -565,7 +567,8 @@ export function GapResolutionWorkspace({
     try {
       const result = await buildRoundTripExcelWorkbook({
         rows: communicationRows,
-        quotationName,
+        projectName: quotationName,
+        customerName,
       });
       downloadBytes(result.filename, result.bytes);
     } finally {

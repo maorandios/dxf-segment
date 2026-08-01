@@ -20,6 +20,7 @@ import { filterFinalQuotationRowsBySearch } from "./filterFinalQuotationRowsBySe
 import { FinalQuotationItemsTable } from "./FinalQuotationItemsTable";
 import { FinalQuotationMetadataForm } from "./FinalQuotationMetadataForm";
 import { FinalQuotationNotes } from "./FinalQuotationNotes";
+import { FinalQuotationPdfExportToast } from "./FinalQuotationPdfExportToast";
 import { FinalQuotationSummaryStrip } from "./FinalQuotationSummaryStrip";
 import { FinalQuotationToolbar } from "./FinalQuotationToolbar";
 import {
@@ -41,6 +42,7 @@ export function FinalQuotationScreen() {
   const session = useSimpleIntakeSession();
   const [searchQuery, setSearchQuery] = useState("");
   const [exportError, setExportError] = useState<string | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
 
   const pricingSummary = session.weightPricingSummaryPayload;
   const canOpen = canOpenFinalQuotationScreen(pricingSummary);
@@ -200,15 +202,20 @@ export function FinalQuotationScreen() {
   }
 
   async function handleExportPdf(): Promise<void> {
-    if (quotationRows.length === 0) return;
+    if (quotationRows.length === 0 || pdfExporting) return;
     setExportError(null);
-    const result = await downloadFinalQuotationPdf({
-      draft,
-      rows: quotationRows,
-      totals,
-    });
-    if (!result.ok) {
-      setExportError(result.error ?? "PDF export failed");
+    setPdfExporting(true);
+    try {
+      const result = await downloadFinalQuotationPdf({
+        draft,
+        rows: quotationRows,
+        totals,
+      });
+      if (!result.ok) {
+        setExportError(result.error ?? "PDF export failed");
+      }
+    } finally {
+      setPdfExporting(false);
     }
   }
 
@@ -238,7 +245,7 @@ export function FinalQuotationScreen() {
             onBack={() => simpleIntakeActions.backToWeightPricing()}
             onExportExcel={() => void handleExportExcel()}
             onExportPdf={() => void handleExportPdf()}
-            exportDisabled={quotationRows.length === 0}
+            exportDisabled={quotationRows.length === 0 || pdfExporting}
           />
         </div>
 
@@ -270,6 +277,8 @@ export function FinalQuotationScreen() {
           </p>
         ) : null}
       </div>
+
+      <FinalQuotationPdfExportToast open={pdfExporting} />
     </div>
   );
 }

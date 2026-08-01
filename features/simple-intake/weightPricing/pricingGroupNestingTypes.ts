@@ -61,6 +61,16 @@ export type PricingGroupNestingEstimate = {
   inputSignature: string | null;
 };
 
+/**
+ * Session-persisted nesting results so remounting תמחור does not re-run packing.
+ * Keyed by quotationId + physical scopeKey; entries keyed by per-group signature.
+ */
+export type WeightPricingNestingCache = {
+  quotationId: string;
+  scopeKey: string;
+  estimatesBySignature: Record<string, PricingGroupNestingEstimate>;
+};
+
 export type PricingNestingDiagnostics = {
   pricingGroupCount: number;
   nestingReadyGroupCount: number;

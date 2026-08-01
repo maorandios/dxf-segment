@@ -491,10 +491,8 @@ assertEq(isActionableMaterialCategory("ITEM_IDENTIFICATION"), true, "id A");
   assert(!toolbar.includes("חזרה לסיכום"), "summary back removed");
   assert(!workspace.includes("BACK_TO_UPLOAD"), "BACK_TO_UPLOAD removed");
   assert(
-    workspace.includes("המשך לרשימה להצעת מחיר") ||
-      toolbar.includes("המשך לרשימה להצעת מחיר") ||
-      workspace.includes("המשך לטבלה המסכמת") ||
-      toolbar.includes("המשך לטבלה המסכמת"),
+    workspace.includes("הצג טבלה מסכמת") ||
+      toolbar.includes("הצג טבלה מסכמת"),
     "manual continue"
   );
   assert(

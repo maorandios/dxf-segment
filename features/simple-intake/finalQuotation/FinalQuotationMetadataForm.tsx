@@ -4,10 +4,11 @@ import type { LucideIcon } from "lucide-react";
 import { Building2, CalendarClock, CalendarDays, FolderKanban, Hash } from "lucide-react";
 import type { FinalQuotationMetadata } from "./types";
 
-const MUTED = "var(--ow-text-muted, #667085)";
-/** Same translucent shell language as metric cards (~15% surface). */
-const SECTION_SURFACE =
-  "color-mix(in srgb, var(--ow-surface, #ffffff) 15%, transparent)";
+const ACCENT_FIELD_STYLE = {
+  borderColor: "var(--ow-accent-soft, #e7f6f3)",
+  backgroundColor: "var(--ow-accent-soft, #e7f6f3)",
+  color: "var(--ow-accent-hover, #115e59)",
+} as const;
 
 const DATE_INPUT_EXTRA = [
   "relative pl-10 pr-3",
@@ -36,11 +37,10 @@ function FieldLabel({
 }) {
   return (
     <span
-      className="mb-1.5 flex items-center gap-1.5 text-[12px] font-medium"
+      className="mb-1.5 flex items-center gap-1.5 text-[12px] font-medium text-white/75"
       dir="rtl"
-      style={{ color: "var(--ow-text-secondary)" }}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: MUTED }} aria-hidden />
+      <Icon className="h-3.5 w-3.5 shrink-0 text-white/70" aria-hidden />
       {children}
     </span>
   );
@@ -54,10 +54,9 @@ export function FinalQuotationMetadataForm({
   onChange: (patch: Partial<FinalQuotationMetadata>) => void;
 }) {
   const fieldClass =
-    "h-10 w-full rounded-lg border bg-[var(--ow-surface,#fff)] px-3 text-right text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ow-accent)]";
-  const border = { borderColor: "var(--ow-border, #e4e7ec)" };
+    "h-10 w-full rounded-lg border px-3 text-right text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ow-accent-hover,#115e59)]";
   const dateStyle = {
-    ...border,
+    ...ACCENT_FIELD_STYLE,
     textAlign: "right" as const,
     direction: "rtl" as const,
   };
@@ -65,17 +64,16 @@ export function FinalQuotationMetadataForm({
   return (
     <section
       data-final-quotation-metadata="true"
-      className="rounded-2xl border p-4"
+      data-metadata-panel-variant="accent"
+      className="rounded-2xl border px-4 py-3"
       style={{
-        borderColor: "var(--ow-border, #e4e7ec)",
-        backgroundColor: SECTION_SURFACE,
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
+        borderColor: "var(--ow-accent, #0f766e)",
+        backgroundColor: "var(--ow-accent, #0f766e)",
       }}
     >
       <h2
         className="mb-3 text-[14px] font-semibold"
-        style={{ color: "var(--ow-text)" }}
+        style={{ color: "var(--ow-accent-fg, #ffffff)" }}
       >
         פרטי ההצעה
       </h2>
@@ -88,7 +86,7 @@ export function FinalQuotationMetadataForm({
             value={metadata.customerName}
             onChange={(e) => onChange({ customerName: e.target.value })}
             className={fieldClass}
-            style={border}
+            style={ACCENT_FIELD_STYLE}
             data-field="customerName"
           />
         </label>
@@ -100,7 +98,7 @@ export function FinalQuotationMetadataForm({
             value={metadata.projectName}
             onChange={(e) => onChange({ projectName: e.target.value })}
             className={fieldClass}
-            style={border}
+            style={ACCENT_FIELD_STYLE}
             data-field="projectName"
           />
         </label>
@@ -143,7 +141,7 @@ export function FinalQuotationMetadataForm({
             value={metadata.quotationNumber}
             onChange={(e) => onChange({ quotationNumber: e.target.value })}
             className={fieldClass}
-            style={{ ...border, textAlign: "right" }}
+            style={{ ...ACCENT_FIELD_STYLE, textAlign: "right" }}
             placeholder="2026-0041"
             data-field="quotationNumber"
           />
