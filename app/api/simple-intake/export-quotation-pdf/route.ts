@@ -16,7 +16,7 @@ import {
 } from "@/server/pdf/resolvePythonExecutable";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const execFileAsync = promisify(execFile);
 
@@ -167,7 +167,7 @@ export async function POST(req: Request) {
       {
         error: message,
         hint:
-          "Local: pip install -r server/requirements-pdf.txt && python -m playwright install chromium — or install Google Chrome. Vercel uses the Node Chromium fallback automatically.",
+          "Local: install Google Chrome (or Python Playwright). On Vercel, Chromium is downloaded from the Sparticuz pack URL on first export.",
       },
       { status: 503 }
     );

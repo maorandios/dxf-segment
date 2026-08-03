@@ -1,10 +1,11 @@
 /**
  * HTML → PDF via Chromium.
- * Local: system Chrome/Edge or puppeteer channel.
- * Vercel: @sparticuz/chromium.
+ * Local: system Chrome/Edge.
+ * Vercel: @sparticuz/chromium-min + remote chromium pack (binaries not in the function bundle).
  */
 
-import type { Browser } from "puppeteer-core";
+import chromium from "@sparticuz/chromium-min";
+import puppeteer, { type Browser } from "puppeteer-core";
 
 const FOOTER_HTML = `
 <div style="width:100%;box-sizing:border-box;padding:4px 20mm 0;font-family:'Segoe UI','Arial Hebrew',Arial,sans-serif;font-size:9px;line-height:1.35;color:#344054;direction:rtl;">
@@ -15,14 +16,29 @@ const FOOTER_HTML = `
 </div>
 `.trim();
 
-async function launchBrowser(): Promise<Browser> {
-  const puppeteer = await import("puppeteer-core");
+/** Hosted chromium pack — keep version in sync with @sparticuz/chromium-min. */
+const DEFAULT_CHROMIUM_PACK =
+  "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.tar";
 
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    const chromium = await import("@sparticuz/chromium");
-    return puppeteer.default.launch({
-      args: chromium.default.args,
-      executablePath: await chromium.default.executablePath(),
+function isServerlessRuntime(): boolean {
+  return Boolean(
+    process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.FINAL_QUOTATION_PDF_ENGINE === "node"
+  );
+}
+
+async function launchBrowser(): Promise<Browser> {
+  if (isServerlessRuntime()) {
+    const packUrl =
+      process.env.CHROMIUM_REMOTE_EXEC_PATH?.trim() || DEFAULT_CHROMIUM_PACK;
+    chromium.setGraphicsMode = false;
+    return puppeteer.launch({
+      args: await puppeteer.defaultArgs({
+        args: chromium.args,
+        headless: "shell",
+      }),
+      executablePath: await chromium.executablePath(packUrl),
       headless: true,
     });
   }
@@ -43,7 +59,7 @@ async function launchBrowser(): Promise<Browser> {
   let lastErr: unknown;
   for (const executablePath of candidates) {
     try {
-      return await puppeteer.default.launch({
+      return await puppeteer.launch({
         executablePath,
         headless: true,
         args: ["--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"],

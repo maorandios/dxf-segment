@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Keep Chromium packages outside the webpack bundle so relative bin paths work.
   serverExternalPackages: [
-    "@sparticuz/chromium",
+    "@sparticuz/chromium-min",
     "puppeteer-core",
     "nunjucks",
   ],
