@@ -1,6 +1,7 @@
 "use client";
 
 import { UserAccountMenu, type UploadScreenUser } from "./UserAccountMenu";
+import { SegmentLogo } from "../ui/SegmentLogo";
 
 export function WorkbookUploadHeader({
   quotationTitle = "הצעת מחיר חדשה",
@@ -19,15 +20,10 @@ export function WorkbookUploadHeader({
     >
       {/* Brand — visual right in RTL (first column) */}
       <div className="min-w-0 justify-self-start text-start">
-        <p
-          className="text-[14px] font-semibold tracking-[0.05em]"
-          style={{ color: "var(--us-text)" }}
-        >
-          OMEGA
-        </p>
+        <SegmentLogo />
         {quotationTitle ? (
           <p
-            className="truncate text-[12px]"
+            className="mt-0.5 truncate text-[12px]"
             style={{ color: "var(--us-text-muted)" }}
           >
             {quotationTitle}

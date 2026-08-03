@@ -19,6 +19,8 @@ export type {
 } from "./deriveWorkflowPresentation";
 export { OmegaAppShell } from "./OmegaAppShell";
 export { OmegaHeader } from "./OmegaHeader";
+export { SegmentLogo } from "./SegmentLogo";
+export { SegmentMarketingFooter } from "./SegmentMarketingFooter";
 export { WorkflowStepper } from "./WorkflowStepper";
 export { MetricStrip } from "./MetricStrip";
 export type { MetricStripItem } from "./MetricStrip";

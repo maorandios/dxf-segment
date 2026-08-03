@@ -78,8 +78,12 @@ export const OMEGA_PROJECT_MANIFEST_SCHEMA_VERSION = "omega-project/v1" as const
 export const OMEGA_PROJECT_SNAPSHOT_SCHEMA_VERSION =
   "omega-project-state/v1" as const;
 
-export const OMEGA_PROJECT_FILE_EXTENSION = ".omega" as const;
+export const OMEGA_PROJECT_FILE_EXTENSION = ".segment" as const;
+/** Legacy extension still accepted when opening older saved quotations. */
+export const OMEGA_PROJECT_LEGACY_FILE_EXTENSION = ".omega" as const;
 export const OMEGA_PROJECT_MIME_TYPE =
+  "application/vnd.segment.quotation+zip" as const;
+export const OMEGA_PROJECT_LEGACY_MIME_TYPE =
   "application/vnd.omega.quotation+zip" as const;
 
 export const OMEGA_PROJECT_PATHS = {

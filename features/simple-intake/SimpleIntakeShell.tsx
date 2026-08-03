@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { AuthScreen, useIsSignedIn } from "@/features/auth";
 import { AnalyzingStep } from "./components/AnalyzingStep";
 import { FailedStep } from "./components/FailedStep";
 import { ReadyStep } from "./components/ReadyStep";
@@ -59,6 +60,7 @@ function HydrationGate({ status }: { status: string }) {
 }
 
 export function SimpleIntakeShell() {
+  const signedIn = useIsSignedIn();
   const session = useSimpleIntakeSession();
 
   const materialSummary = useMemo(
@@ -69,6 +71,10 @@ export function SimpleIntakeShell() {
   const stepperStates = deriveQuoteStepperStates(session.quoteStage, {
     materialNeedsCompletion: materialSummary.incompleteRows > 0,
   });
+
+  if (!signedIn) {
+    return <AuthScreen />;
+  }
 
   const hydrating =
     session.hydrationStatus === "READING_ARCHIVE" ||

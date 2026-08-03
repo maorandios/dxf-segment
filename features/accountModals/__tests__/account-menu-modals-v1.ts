@@ -85,8 +85,8 @@ console.log("OMEGA — Account Menu Modals v1");
   assert_(menu.includes("הגדרות חומרים"), "materials label");
   assert_(menu.includes("חיוב ושימוש"), "billing label");
   assert_(menu.includes("התנתק"), "logout visible");
-  assert_(menu.includes('data-logout-inactive="true"'), "logout inactive marker");
-  assert_(menu.includes("disabled"), "logout disabled");
+  assert_(menu.includes("signOut"), "logout calls signOut");
+  assert_(!menu.includes('data-logout-inactive="true"'), "logout is active");
   assert_(!menu.includes('href="/settings/account"'), "no account page nav");
   assert_(!menu.includes('href="/settings/materials"'), "no materials page nav");
   assert_(!menu.includes('href="/settings/bill-and-usage"'), "no billing page nav");
@@ -94,7 +94,7 @@ console.log("OMEGA — Account Menu Modals v1");
   assert_(menu.includes('openModal("MATERIAL_SETTINGS")'), "opens materials modal");
   assert_(menu.includes('openModal("BILLING_USAGE")'), "opens billing modal");
   assert_(menu.includes("setMenuOpen(false)"), "closes dropdown on open");
-  console.log("✓ account dropdown opens modals, no route links, logout inactive");
+  console.log("✓ account dropdown opens modals, no route links, logout active");
 }
 
 {

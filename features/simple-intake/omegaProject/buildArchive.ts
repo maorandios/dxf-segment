@@ -14,6 +14,7 @@ import { sha256Hex } from "./sha256";
 import {
   OMEGA_PROJECT_FORMAT,
   OMEGA_PROJECT_MANIFEST_SCHEMA_VERSION,
+  OMEGA_PROJECT_MIME_TYPE,
   OMEGA_PROJECT_PATHS,
   type OmegaProjectFileEntry,
   type OmegaProjectManifestV1,
@@ -171,7 +172,7 @@ export async function buildOmegaProjectArchive(args: {
     raw.byteOffset + raw.byteLength
   ) as ArrayBuffer;
   const blob = new Blob([ab], {
-    type: "application/vnd.omega.quotation+zip",
+    type: OMEGA_PROJECT_MIME_TYPE,
   });
 
   return { blob, uncompressedBytes, entryCount, manifest };

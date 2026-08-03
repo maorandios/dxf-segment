@@ -3,6 +3,11 @@
  * browser storage mechanism.
  */
 
+import {
+  OMEGA_PROJECT_FILE_EXTENSION,
+  OMEGA_PROJECT_MIME_TYPE,
+} from "./types";
+
 export function downloadBlobAsFile(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   try {
@@ -48,8 +53,10 @@ export async function trySaveWithFileSystemAccess(
       suggestedName: filename,
       types: [
         {
-          description: "OMEGA Quotation Project",
-          accept: { "application/vnd.omega.quotation+zip": [".omega"] },
+          description: "Segment Quotation Project",
+          accept: {
+            [OMEGA_PROJECT_MIME_TYPE]: [OMEGA_PROJECT_FILE_EXTENSION],
+          },
         },
       ],
     });

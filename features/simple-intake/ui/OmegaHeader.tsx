@@ -8,6 +8,7 @@ import type { QuoteWorkspaceDetails } from "../types";
 import { firstNameFromFullName } from "../workbookUpload/uploadScreenTokens";
 import { useOmegaProjectSave } from "../omegaProject/useOmegaProjectSave";
 import { OmegaProjectBeforeUnload } from "../omegaProject/OmegaProjectBeforeUnload";
+import { SegmentLogo } from "./SegmentLogo";
 
 function HeaderSegment({
   children,
@@ -78,12 +79,7 @@ export function OmegaHeader({
       >
         {/* RTL: first = visual right — brand only */}
         <div className="min-w-0 justify-self-start text-start">
-          <p
-            className="text-[15px] font-semibold tracking-[0.04em]"
-            style={{ color: "var(--ow-text)" }}
-          >
-            OMEGA
-          </p>
+          <SegmentLogo />
         </div>
 
         {/* Center — pencil + project · customer */}

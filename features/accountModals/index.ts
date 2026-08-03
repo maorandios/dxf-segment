@@ -32,6 +32,7 @@ export {
   getSignedInUser,
   getSignedInUserEmail,
   getSignedInUserFullName,
+  getDisplayContactName,
   SIGNED_IN_USER,
 } from "./signedInUser";
 export type { SignedInUser } from "./signedInUser";

@@ -12,6 +12,7 @@ import { setGeometryEntries } from "./geometryRuntimeCache";
 import { sha256Hex } from "./sha256";
 import {
   OMEGA_PROJECT_FILE_EXTENSION,
+  OMEGA_PROJECT_LEGACY_FILE_EXTENSION,
   OMEGA_PROJECT_PATHS,
   type LoadOmegaProjectResult,
   type OmegaProjectLoadWarning,
@@ -20,6 +21,14 @@ import {
 
 const ERR_PREFIX_HE = "לא ניתן לפתוח את קובץ ההצעה";
 
+function hasKnownProjectExtension(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return (
+    lower.endsWith(OMEGA_PROJECT_FILE_EXTENSION) ||
+    lower.endsWith(OMEGA_PROJECT_LEGACY_FILE_EXTENSION)
+  );
+}
+
 export async function loadOmegaProjectFile(
   file: File
 ): Promise<LoadOmegaProjectResult> {
@@ -27,7 +36,7 @@ export async function loadOmegaProjectFile(
   try {
     const warnings: OmegaProjectLoadWarning[] = [];
 
-    if (!file.name.toLowerCase().endsWith(OMEGA_PROJECT_FILE_EXTENSION)) {
+    if (!hasKnownProjectExtension(file.name)) {
       warnings.push({
         code: "EXTENSION_MISMATCH",
         message: `הקובץ אינו בעל סיומת ${OMEGA_PROJECT_FILE_EXTENSION} — נבדק לפי תוכן. / file does not have a ${OMEGA_PROJECT_FILE_EXTENSION} extension — validated by content instead.`,

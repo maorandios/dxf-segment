@@ -376,8 +376,8 @@ async function runAsyncChecks(): Promise<void> {
   assert_(derivedJson[OMEGA_PROJECT_PATHS.DERIVED_DIR + "dxf-geometries.json"] ||
     derivedJson["derived/dxf-geometries.json"], "geometries derived bag");
 
-  const file = new File([blob], "OMEGA-test.omega", {
-    type: "application/vnd.omega.quotation+zip",
+  const file = new File([blob], "SEGMENT-test.segment", {
+    type: "application/vnd.segment.quotation+zip",
   });
 
   // Inspect zip with JSZip
@@ -474,8 +474,8 @@ async function runAsyncChecks(): Promise<void> {
     tampered.byteOffset,
     tampered.byteOffset + tampered.byteLength
   ) as ArrayBuffer;
-  const badFile = new File([tamperedAb], "bad.omega", {
-    type: "application/vnd.omega.quotation+zip",
+  const badFile = new File([tamperedAb], "bad.segment", {
+    type: "application/vnd.segment.quotation+zip",
   });
   let rejected = false;
   try {

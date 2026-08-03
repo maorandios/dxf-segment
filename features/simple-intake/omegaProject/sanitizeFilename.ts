@@ -1,5 +1,5 @@
 /**
- * Filename sanitization for the downloaded .omega file and for archive
+ * Filename sanitization for the downloaded .segment file and for archive
  * paths under sources/dxf/ and sources/material-list/.
  */
 
@@ -26,10 +26,10 @@ function todayIsoDate(): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Builds `OMEGA-{id}-{YYYY-MM-DD}.omega`. */
+/** Builds `SEGMENT-{id}-{YYYY-MM-DD}.segment`. */
 export function buildOmegaProjectFilename(idLabel: string): string {
   const safeId = sanitizePathSegment(idLabel).replace(/\s+/g, "-");
-  return `OMEGA-${safeId}-${todayIsoDate()}${OMEGA_PROJECT_FILE_EXTENSION}`;
+  return `SEGMENT-${safeId}-${todayIsoDate()}${OMEGA_PROJECT_FILE_EXTENSION}`;
 }
 
 /** Sanitize an original uploaded filename for storage under sources/. */
