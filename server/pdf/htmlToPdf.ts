@@ -17,8 +17,10 @@ const FOOTER_HTML = `
 `.trim();
 
 /** Hosted chromium pack — keep version in sync with @sparticuz/chromium-min. */
-const DEFAULT_CHROMIUM_PACK =
-  "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.tar";
+function defaultChromiumPackUrl(): string {
+  const arch = process.arch === "arm64" ? "arm64" : "x64";
+  return `https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.${arch}.tar`;
+}
 
 function isServerlessRuntime(): boolean {
   return Boolean(
@@ -31,7 +33,7 @@ function isServerlessRuntime(): boolean {
 async function launchBrowser(): Promise<Browser> {
   if (isServerlessRuntime()) {
     const packUrl =
-      process.env.CHROMIUM_REMOTE_EXEC_PATH?.trim() || DEFAULT_CHROMIUM_PACK;
+      process.env.CHROMIUM_REMOTE_EXEC_PATH?.trim() || defaultChromiumPackUrl();
     chromium.setGraphicsMode = false;
     return puppeteer.launch({
       args: await puppeteer.defaultArgs({
