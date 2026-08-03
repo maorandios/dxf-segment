@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { resolvePythonExecutable } from "@/server/pdf/resolvePythonExecutable";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -105,17 +106,6 @@ function mergeCompany(
   };
 }
 
-function pythonExecutable(): string {
-  return (
-    process.env.QUOTE_PDF_PYTHON?.trim() ||
-    (process.platform === "win32" ? "python" : "python3")
-  );
-}
-
-function buildPythonArgs(scriptPath: string, inputPath: string, outputPath: string): string[] {
-  return [scriptPath, "--input", inputPath, "--output", outputPath];
-}
-
 function safeFilename(ref: string): string {
   const s = ref.replace(/[^a-zA-Z0-9-_]+/g, "_").slice(0, 80);
   return s || "quotation";
@@ -153,14 +143,17 @@ export async function POST(req: Request) {
   try {
     await writeFile(inputPath, JSON.stringify(payload), "utf8");
 
-    const exe = pythonExecutable();
-    const args = buildPythonArgs(scriptPath, inputPath, outputPath);
-
-    await execFileAsync(exe, args, {
-      cwd: pdfDir,
-      env: { ...process.env, PYTHONUTF8: "1" },
-      maxBuffer: 32 * 1024 * 1024,
-    });
+    const py = resolvePythonExecutable();
+    await execFileAsync(
+      py.command,
+      [...py.prefixArgs, scriptPath, "--input", inputPath, "--output", outputPath],
+      {
+        cwd: pdfDir,
+        env: { ...process.env, PYTHONUTF8: "1" },
+        maxBuffer: 32 * 1024 * 1024,
+        windowsHide: true,
+      }
+    );
 
     const pdf = await readFile(outputPath);
     const name = safeFilename(parsed.quote.quote_number);

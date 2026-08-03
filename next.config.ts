@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: [
+    "@sparticuz/chromium",
+    "puppeteer-core",
+    "nunjucks",
+  ],
   async rewrites() {
     return [
       // Browsers still request /favicon.ico by default

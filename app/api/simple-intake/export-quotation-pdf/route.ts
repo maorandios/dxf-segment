@@ -5,6 +5,15 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import {
+  buildFinalQuotationHtml,
+  type FinalQuotationPdfPayload,
+} from "@/server/pdf/buildFinalQuotationHtml";
+import { htmlToPdfBuffer } from "@/server/pdf/htmlToPdf";
+import {
+  isPythonMissingError,
+  resolvePythonExecutable,
+} from "@/server/pdf/resolvePythonExecutable";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -57,21 +66,52 @@ const bodySchema = z.object({
   }),
 });
 
-function pythonExecutable(): string {
-  return (
-    process.env.QUOTE_PDF_PYTHON?.trim() ||
-    (process.platform === "win32" ? "python" : "python3")
-  );
-}
-
 function safeFilename(ref: string): string {
   const s = ref.replace(/[^a-zA-Z0-9-_]+/g, "_").slice(0, 80);
   return s || "quotation";
 }
 
+async function renderWithPython(
+  payload: FinalQuotationPdfPayload
+): Promise<Buffer> {
+  const pdfDir = path.join(process.cwd(), "server", "pdf");
+  const scriptPath = path.resolve(pdfDir, "render_final_quotation_pdf.py");
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "omega-final-quote-pdf-"));
+  const inputPath = path.join(tmpRoot, "payload.json");
+  const outputPath = path.join(tmpRoot, "out.pdf");
+  try {
+    await writeFile(inputPath, JSON.stringify(payload), "utf8");
+    const py = resolvePythonExecutable();
+    await execFileAsync(
+      py.command,
+      [...py.prefixArgs, scriptPath, "--input", inputPath, "--output", outputPath],
+      {
+        cwd: pdfDir,
+        env: { ...process.env, PYTHONUTF8: "1" },
+        maxBuffer: 32 * 1024 * 1024,
+        timeout: PYTHON_PDF_TIMEOUT_MS,
+        killSignal: "SIGTERM",
+        windowsHide: true,
+      }
+    );
+    return await readFile(outputPath);
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+}
+
+async function renderWithNode(
+  payload: FinalQuotationPdfPayload
+): Promise<Buffer> {
+  const html = buildFinalQuotationHtml(payload);
+  return htmlToPdfBuffer(html);
+}
+
 /**
  * POST /api/simple-intake/export-quotation-pdf
  * Renders the Simple Intake final quotation PDF (portrait, classic header).
+ * Prefers Python Playwright when available; falls back to Node Chromium
+ * (required on Vercel, where `python3` is not installed).
  */
 export async function POST(req: Request) {
   let parsed: z.infer<typeof bodySchema>;
@@ -82,27 +122,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  const pdfDir = path.join(process.cwd(), "server", "pdf");
-  const scriptPath = path.resolve(pdfDir, "render_final_quotation_pdf.py");
-  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "omega-final-quote-pdf-"));
-  const inputPath = path.join(tmpRoot, "payload.json");
-  const outputPath = path.join(tmpRoot, "out.pdf");
-
   try {
-    await writeFile(inputPath, JSON.stringify(parsed), "utf8");
-    await execFileAsync(
-      pythonExecutable(),
-      [scriptPath, "--input", inputPath, "--output", outputPath],
-      {
-        cwd: pdfDir,
-        env: { ...process.env, PYTHONUTF8: "1" },
-        maxBuffer: 32 * 1024 * 1024,
-        timeout: PYTHON_PDF_TIMEOUT_MS,
-        killSignal: "SIGTERM",
-      }
-    );
+    let pdf: Buffer;
+    const preferNode =
+      process.env.VERCEL === "1" ||
+      process.env.FINAL_QUOTATION_PDF_ENGINE === "node";
 
-    const pdf = await readFile(outputPath);
+    if (preferNode) {
+      pdf = await renderWithNode(parsed);
+    } else {
+      try {
+        pdf = await renderWithPython(parsed);
+      } catch (err) {
+        if (!isPythonMissingError(err)) throw err;
+        console.warn(
+          "[export-quotation-pdf] Python unavailable, falling back to Node Chromium",
+          err instanceof Error ? err.message : err
+        );
+        pdf = await renderWithNode(parsed);
+      }
+    }
+
     const name = safeFilename(
       parsed.metadata.quotation_number ||
         parsed.metadata.project_name ||
@@ -121,16 +161,15 @@ export async function POST(req: Request) {
     const message =
       err instanceof Error
         ? err.message
-        : "PDF rendering failed. Is Python Playwright installed?";
+        : "PDF rendering failed. Is Chromium / Python Playwright installed?";
     console.error("[export-quotation-pdf]", err);
     return NextResponse.json(
       {
         error: message,
-        hint: "Install: pip install -r server/requirements-pdf.txt && playwright install chromium",
+        hint:
+          "Local: pip install -r server/requirements-pdf.txt && python -m playwright install chromium — or install Google Chrome. Vercel uses the Node Chromium fallback automatically.",
       },
       { status: 503 }
     );
-  } finally {
-    await rm(tmpRoot, { recursive: true, force: true });
   }
 }
