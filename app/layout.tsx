@@ -32,10 +32,19 @@ export const viewport: Viewport = {
   ],
 };
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+  (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "https://segment.getsegments.co");
+
+const SHARE_DESCRIPTION =
+  "סגמנט הינה מערכת יצירת הצעות מחיר לענף המתכת בישראל, המערכת מבוססת בינה מלאכותית ואלגוריתמים הנדסיים. באמצעותה ניתן להגיע להחלטות עסקיות במהירות ולהפיק הצעת מחיר בהתאם";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "סגמנט — הצעות מחיר לענף המתכת",
-  description:
-    "מערכת יצירת הצעות מחיר לענף המתכת בישראל, מבוססת בינה מלאכותית ואלגוריתמים הנדסיים",
+  description: SHARE_DESCRIPTION,
   manifest: "/manifest.json",
   icons: {
     icon: [{ url: "/fav.svg", type: "image/svg+xml" }],
@@ -48,6 +57,28 @@ export const metadata: Metadata = {
   },
   formatDetection: {
     telephone: false,
+  },
+  openGraph: {
+    type: "website",
+    locale: "he_IL",
+    url: "/",
+    siteName: "סגמנט",
+    title: "סגמנט — הצעות מחיר לענף המתכת",
+    description: SHARE_DESCRIPTION,
+    images: [
+      {
+        url: "/OP.png",
+        width: 1200,
+        height: 630,
+        alt: "סגמנט",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "סגמנט — הצעות מחיר לענף המתכת",
+    description: SHARE_DESCRIPTION,
+    images: ["/OP.png"],
   },
   other: {
     "mobile-web-app-capable": "yes",
