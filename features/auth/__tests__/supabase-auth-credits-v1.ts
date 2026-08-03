@@ -143,7 +143,7 @@ console.log("OMEGA — Supabase Invite-Only Email OTP Authentication and User Cr
     path.join(repoRoot, "features/auth/AuthScreen.tsx"),
     "utf8"
   );
-  assert_(authScreen.includes("כניסה ל-OMEGA"), "login title");
+  assert_(authScreen.includes("התחברות למערכת"), "login title");
   assert_(authScreen.includes("שלח קוד כניסה"), "send otp cta");
   assert_(authScreen.includes("אימות וכניסה"), "verify cta");
   assert_(authScreen.includes("שלח קוד מחדש"), "resend");

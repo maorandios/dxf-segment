@@ -16,6 +16,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import { useRouter } from "next/navigation";
 import { KeyRound, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -47,6 +48,7 @@ const RESEND_COOLDOWN_SEC = 45;
 type Step = "email" | "otp";
 
 export function AuthScreen() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -137,10 +139,8 @@ export function AuthScreen() {
         return;
       }
       setCurrentOmegaUser(json.user);
-      // Soft navigation into the product (proxy also allows authenticated /).
-      if (typeof window !== "undefined") {
-        window.location.assign("/");
-      }
+      // Soft navigate — keep in-memory session; avoid full reload + dark "טוען..." gate.
+      router.replace("/");
     } catch {
       setError("אירעה תקלה באימות הקוד. נסה שוב");
     } finally {
@@ -226,7 +226,7 @@ export function AuthScreen() {
                     className="text-[20px] font-semibold tracking-tight text-[#13202B] sm:text-[22px]"
                     style={{ textAlign: "center" }}
                   >
-                    כניסה ל-OMEGA
+                    התחברות למערכת
                   </h1>
                   <p
                     className="mx-auto mt-2 max-w-[22rem] text-center text-[13px] leading-relaxed text-[#5C6978]"

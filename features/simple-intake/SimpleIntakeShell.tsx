@@ -75,20 +75,23 @@ export function SimpleIntakeShell() {
     materialNeedsCompletion: materialSummary.incompleteRows > 0,
   });
 
-  if (!authReady) {
-    return (
-      <div
-        className="flex min-h-[100dvh] items-center justify-center"
-        dir="rtl"
-        data-auth-bootstrapping="true"
-      >
-        <p className="text-[14px] text-[#5C6978]">טוען...</p>
-      </div>
-    );
-  }
-
+  // No dark "טוען..." gate — if we already have a session, enter the app.
+  // If not signed in yet, keep the login UI (bootstrap finishes in the background).
   if (!signedIn) {
     return <AuthScreen />;
+  }
+
+  // Avoid flashing login while cookie session is still resolving after a soft nav.
+  if (!authReady && !omegaUser) {
+    return (
+      <div
+        className="omega-upload-screen min-h-[100dvh] w-full"
+        dir="rtl"
+        data-auth-bootstrapping="true"
+        style={{ backgroundColor: "#f8fafb" }}
+        aria-busy="true"
+      />
+    );
   }
 
   if (omegaUser && !omegaUser.isActive) {

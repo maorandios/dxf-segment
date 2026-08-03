@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AuthScreen } from "@/features/auth";
 
 export const metadata: Metadata = {
-  title: "כניסה ל-OMEGA",
+  title: "התחברות למערכת",
 };
 
 export default function LoginPage() {
