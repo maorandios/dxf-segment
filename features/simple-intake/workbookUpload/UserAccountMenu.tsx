@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import {
   ChevronDown,
+  CircleUserRound,
   CreditCard,
   Layers,
   LogOut,
@@ -57,13 +58,11 @@ export function UserAccountMenu({ user }: { user: UploadScreenUser }) {
           aria-label="תפריט משתמש"
           data-account-menu-trigger="true"
         >
-          <span
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-            style={{ backgroundColor: "#0F766E" }}
+          <CircleUserRound
+            className="h-7 w-7 shrink-0 text-[#0F766E]"
+            strokeWidth={1.75}
             aria-hidden
-          >
-            {displayName.trim().slice(0, 1) || "מ"}
-          </span>
+          />
           <span className="min-w-0 text-start">
             <span className="block truncate text-[13px] font-medium leading-tight text-[#13202B]">
               {displayName}
