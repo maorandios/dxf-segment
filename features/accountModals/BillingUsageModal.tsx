@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useOmegaCurrentUser } from "@/features/auth";
 import {
   AccountModalShell,
   ACCOUNT_MODAL_COLORS,
 } from "./AccountModalShell";
 import {
+  BILLING_NO_RENEWAL_LABEL,
   BILLING_UNAVAILABLE_LABEL,
   formatBillingCredits,
   formatBillingRenewalDate,
@@ -54,13 +55,14 @@ export function BillingUsageModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const summary = useMemo(
-    () => (open ? getBillingUsageSummary() : getBillingUsageSummary()),
-    [open]
-  );
+  const user = useOmegaCurrentUser();
+  const summary = getBillingUsageSummary();
 
-  const renewalDisplay =
-    formatBillingRenewalDate(summary.renewalDate) ?? BILLING_UNAVAILABLE_LABEL;
+  const isTrial = user?.accountStatus === "trial";
+  const renewalDisplay = isTrial
+    ? BILLING_NO_RENEWAL_LABEL
+    : formatBillingRenewalDate(summary.renewalDate) ??
+      BILLING_UNAVAILABLE_LABEL;
   const creditsDisplay =
     formatBillingCredits(summary.currentCredits) ?? BILLING_UNAVAILABLE_LABEL;
 

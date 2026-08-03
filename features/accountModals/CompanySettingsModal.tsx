@@ -23,7 +23,7 @@ import {
 import {
   companySettingsEqual,
   loadCompanySettings,
-  saveCompanySettings,
+  saveCompanySettingsAsync,
 } from "./companySettingsPersistence";
 import type { CompanySettings } from "./types";
 
@@ -74,6 +74,8 @@ function CompanySettingsBody({
   const [draft, setDraft] = useState<CompanySettings>(initial);
   const [baseline, setBaseline] = useState<CompanySettings>(initial);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [discardConfirm, setDiscardConfirm] = useState(false);
 
   const dirty = useMemo(
@@ -98,8 +100,16 @@ function CompanySettingsBody({
 
   bindRequestClose(requestClose);
 
-  function handleSave(): void {
-    saveCompanySettings(draft);
+  async function handleSave(): Promise<void> {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    const result = await saveCompanySettingsAsync(draft);
+    setSaving(false);
+    if (!result.ok) {
+      setSaveError(result.message);
+      return;
+    }
     const saved = loadCompanySettings();
     setDraft(saved);
     setBaseline(saved);
@@ -260,6 +270,16 @@ function CompanySettingsBody({
         </div>
       ) : null}
 
+      {saveError ? (
+        <p
+          className="mt-3 text-right text-[13px] font-medium text-red-600"
+          role="alert"
+          data-company-settings-error="true"
+        >
+          {saveError}
+        </p>
+      ) : null}
+
       {saveMessage ? (
         <p
           className="mt-3 text-right text-[13px] font-medium"
@@ -271,8 +291,9 @@ function CompanySettingsBody({
       ) : null}
 
       <CompanySettingsActions
-        onSave={handleSave}
+        onSave={() => void handleSave()}
         onCancel={requestClose}
+        saving={saving}
       />
     </>
   );
@@ -281,9 +302,11 @@ function CompanySettingsBody({
 function CompanySettingsActions({
   onSave,
   onCancel,
+  saving = false,
 }: {
   onSave: () => void;
   onCancel: () => void;
+  saving?: boolean;
 }) {
   return (
     <div
@@ -295,14 +318,15 @@ function CompanySettingsActions({
       <button
         type="button"
         onClick={onSave}
-        className="inline-flex h-10 items-center justify-center rounded-xl px-4 text-[13px] font-medium transition-colors"
+        disabled={saving}
+        className="inline-flex h-10 items-center justify-center rounded-xl px-4 text-[13px] font-medium transition-colors disabled:opacity-60"
         style={{
           backgroundColor: ACCOUNT_MODAL_COLORS.accent,
           color: ACCOUNT_MODAL_COLORS.accentFg,
         }}
         data-company-settings-save="true"
       >
-        שמור הגדרות
+        {saving ? "שומר..." : "שמור הגדרות"}
       </button>
       <button
         type="button"

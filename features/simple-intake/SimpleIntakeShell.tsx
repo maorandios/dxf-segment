@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { AuthScreen, useIsSignedIn } from "@/features/auth";
+import { AuthScreen, useAuthBootstrapped, useIsSignedIn, useOmegaCurrentUser, signOut } from "@/features/auth";
 import { AnalyzingStep } from "./components/AnalyzingStep";
 import { FailedStep } from "./components/FailedStep";
 import { ReadyStep } from "./components/ReadyStep";
@@ -22,6 +22,7 @@ import {
 import { WeightPricingScreen } from "./weightPricing";
 import { FinalQuotationScreen } from "./finalQuotation";
 import { OmegaProjectBeforeUnload } from "./omegaProject/OmegaProjectBeforeUnload";
+import { Button } from "@/components/ui/button";
 
 function downloadDebug(debug: Record<string, unknown> | null): void {
   if (!debug) return;
@@ -60,7 +61,9 @@ function HydrationGate({ status }: { status: string }) {
 }
 
 export function SimpleIntakeShell() {
+  const authReady = useAuthBootstrapped();
   const signedIn = useIsSignedIn();
+  const omegaUser = useOmegaCurrentUser();
   const session = useSimpleIntakeSession();
 
   const materialSummary = useMemo(
@@ -72,8 +75,41 @@ export function SimpleIntakeShell() {
     materialNeedsCompletion: materialSummary.incompleteRows > 0,
   });
 
+  if (!authReady) {
+    return (
+      <div
+        className="flex min-h-[100dvh] items-center justify-center"
+        dir="rtl"
+        data-auth-bootstrapping="true"
+      >
+        <p className="text-[14px] text-[#5C6978]">טוען...</p>
+      </div>
+    );
+  }
+
   if (!signedIn) {
     return <AuthScreen />;
+  }
+
+  if (omegaUser && !omegaUser.isActive) {
+    return (
+      <div
+        className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 px-4"
+        dir="rtl"
+        data-auth-blocked="inactive"
+      >
+        <p className="text-[16px] font-medium text-[#13202B]">
+          הגישה לחשבון זה אינה פעילה
+        </p>
+        <Button
+          type="button"
+          onClick={() => void signOut()}
+          className="rounded-2xl"
+        >
+          התנתקות
+        </Button>
+      </div>
+    );
   }
 
   const hydrating =

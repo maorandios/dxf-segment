@@ -150,7 +150,7 @@ export function UserAccountMenu({ user }: { user: UploadScreenUser }) {
           onSelect={(e) => {
             e.preventDefault();
             setMenuOpen(false);
-            signOut();
+            void signOut();
           }}
           data-account-menu-item="LOGOUT"
         >

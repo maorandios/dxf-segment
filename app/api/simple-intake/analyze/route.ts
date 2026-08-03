@@ -12,6 +12,12 @@ import {
   validateMaterialSourceBytes,
   MATERIAL_SOURCE_UNSUPPORTED_HE,
 } from "@/features/simple-intake/materialList/materialSourceTypes";
+import { loadAuthenticatedOmegaUser } from "@/lib/auth/loadOmegaUser";
+import {
+  consumeQuotationCredit,
+  refundQuotationCredit,
+} from "@/lib/auth/credits";
+import { AUTH_MESSAGES } from "@/lib/auth/otpMessages";
 
 export const runtime = "nodejs";
 /** LlamaExtract polling may take up to ~240s; OpenAI material list is shorter. */
@@ -43,6 +49,7 @@ async function readRequest(req: Request): Promise<{
   sourceFilename: string | null;
   sourceMimeType: string | null;
   sourceTypeHint: string | null;
+  analysisIdempotencyKey: string | null;
 }> {
   const contentType = req.headers.get("content-type") ?? "";
   if (contentType.includes("multipart/form-data")) {
@@ -55,6 +62,10 @@ async function readRequest(req: Request): Promise<{
     const sourceTypeHint =
       typeof form.get("sourceType") === "string"
         ? String(form.get("sourceType"))
+        : null;
+    const analysisIdempotencyKey =
+      typeof form.get("analysisIdempotencyKey") === "string"
+        ? String(form.get("analysisIdempotencyKey")).trim() || null
         : null;
 
     const file =
@@ -76,12 +87,14 @@ async function readRequest(req: Request): Promise<{
       sourceFilename,
       sourceMimeType,
       sourceTypeHint,
+      analysisIdempotencyKey,
     };
   }
 
   const body = (await req.json()) as {
     snapshot?: SnapshotBody;
     sourceType?: string;
+    analysisIdempotencyKey?: string;
   };
   return {
     snapshot: body.snapshot ?? null,
@@ -89,6 +102,10 @@ async function readRequest(req: Request): Promise<{
     sourceFilename: body.snapshot?.filename ?? null,
     sourceMimeType: null,
     sourceTypeHint: body.sourceType ?? null,
+    analysisIdempotencyKey:
+      typeof body.analysisIdempotencyKey === "string"
+        ? body.analysisIdempotencyKey.trim() || null
+        : null,
   };
 }
 
@@ -102,9 +119,98 @@ function sanitizeDebug(debug: Record<string, unknown>): Record<string, unknown> 
   return JSON.parse(json) as Record<string, unknown>;
 }
 
+type ChargeState = {
+  key: string;
+  creditsBalance: number;
+  charged: boolean;
+};
+
+async function chargeBeforePaidAnalysis(
+  analysisIdempotencyKey: string | null,
+  started: number
+): Promise<
+  | { ok: true; charge: ChargeState }
+  | { ok: false; response: Response }
+> {
+  if (!analysisIdempotencyKey) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          ok: false,
+          stage: "AI_REQUEST",
+          code: "MISSING_IDEMPOTENCY_KEY",
+          message: AUTH_MESSAGES.insufficientCredits,
+          retryable: false,
+          durationMs: Date.now() - started,
+        },
+        { status: 400 }
+      ),
+    };
+  }
+
+  const consumed = await consumeQuotationCredit(analysisIdempotencyKey);
+  if (!consumed.ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          ok: false,
+          stage: "CREDITS",
+          code: consumed.code,
+          message: consumed.message,
+          creditsBalance: consumed.creditsBalance,
+          retryable: false,
+          durationMs: Date.now() - started,
+        },
+        { status: consumed.code === "INSUFFICIENT_CREDITS" ? 402 : 403 }
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    charge: {
+      key: analysisIdempotencyKey,
+      creditsBalance: consumed.creditsBalance,
+      charged: !consumed.duplicate || true,
+    },
+  };
+}
+
+async function refundIfCharged(charge: ChargeState | null): Promise<number | undefined> {
+  if (!charge) return undefined;
+  const refunded = await refundQuotationCredit(charge.key);
+  return refunded.creditsBalance ?? charge.creditsBalance;
+}
+
+function withCreditsBalance(
+  payload: Record<string, unknown>,
+  creditsBalance: number | undefined
+): Record<string, unknown> {
+  if (creditsBalance == null) return payload;
+  return { ...payload, creditsBalance };
+}
+
 export async function POST(req: Request): Promise<Response> {
   const started = Date.now();
   const provider = getSimpleWorkbookExtractionProvider();
+  let charge: ChargeState | null = null;
+
+  const profile = await loadAuthenticatedOmegaUser();
+  if (!profile.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        stage: "AUTH",
+        code: profile.code,
+        message: profile.message,
+        retryable: false,
+        durationMs: Date.now() - started,
+      },
+      { status: profile.code === "UNAUTHENTICATED" ? 401 : 403 }
+    );
+  }
 
   try {
     const {
@@ -113,6 +219,7 @@ export async function POST(req: Request): Promise<Response> {
       sourceFilename,
       sourceMimeType,
       sourceTypeHint,
+      analysisIdempotencyKey,
     } = await readRequest(req);
 
     const fileName = sourceFilename || snapshot?.filename || "";
@@ -154,39 +261,60 @@ export async function POST(req: Request): Promise<Response> {
         );
       }
 
-      const out = await runOpenAiPdfMaterialListExtraction({
-        pdfBytes: sourceBytes,
-        fileName: validated.fileName,
-        mimeType: validated.mimeType,
-      });
+      const charged = await chargeBeforePaidAnalysis(
+        analysisIdempotencyKey,
+        started
+      );
+      if (!charged.ok) return charged.response;
+      charge = charged.charge;
 
-      return NextResponse.json({
-        ok: true,
-        materialListRows: out.rows,
-        materialListStage: sanitizeDebug(out.materialListStageDebug),
-        qualityGatePassed: out.qualityGatePassed,
-        qualityGate: out.qualityGate,
-        targetedRepair: out.targetedRepair,
-        providerCallCount: out.providerCallCount,
-        model: out.model,
-        durationMs: Date.now() - started,
-        usage: out.usage,
-        costs: {
-          primaryEstimatedCostUsd: out.primaryEstimatedCostUsd,
-          repairEstimatedCostUsd: out.repairEstimatedCostUsd,
-          totalEstimatedCostUsd: out.totalEstimatedCostUsd,
-        },
-        sourceDocument: out.sourceDocument,
-        pdfExtraction: out.pdfExtractionDebug,
-        extractionProvider: "openai",
-        extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
-        result: {
-          status: "SUCCESS",
-          summary: `material-list-v1-pdf:${out.rows.length}`,
-          rows: [],
-          warnings: [],
-        },
-      });
+      try {
+        const out = await runOpenAiPdfMaterialListExtraction({
+          pdfBytes: sourceBytes,
+          fileName: validated.fileName,
+          mimeType: validated.mimeType,
+        });
+
+        return NextResponse.json(
+          withCreditsBalance(
+            {
+              ok: true,
+              materialListRows: out.rows,
+              materialListStage: sanitizeDebug(out.materialListStageDebug),
+              qualityGatePassed: out.qualityGatePassed,
+              qualityGate: out.qualityGate,
+              targetedRepair: out.targetedRepair,
+              providerCallCount: out.providerCallCount,
+              model: out.model,
+              durationMs: Date.now() - started,
+              usage: out.usage,
+              costs: {
+                primaryEstimatedCostUsd: out.primaryEstimatedCostUsd,
+                repairEstimatedCostUsd: out.repairEstimatedCostUsd,
+                totalEstimatedCostUsd: out.totalEstimatedCostUsd,
+              },
+              sourceDocument: out.sourceDocument,
+              pdfExtraction: out.pdfExtractionDebug,
+              extractionProvider: "openai",
+              extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
+              result: {
+                status: "SUCCESS",
+                summary: `material-list-v1-pdf:${out.rows.length}`,
+                rows: [],
+                warnings: [],
+              },
+            },
+            charge.creditsBalance
+          )
+        );
+      } catch (providerErr) {
+        const bal = await refundIfCharged(charge);
+        charge = null;
+        throw Object.assign(
+          providerErr instanceof Error ? providerErr : new Error(String(providerErr)),
+          { __creditsBalanceAfterRefund: bal }
+        );
+      }
     }
 
     if (!snapshot || !Array.isArray(snapshot.sheets)) {
@@ -264,108 +392,173 @@ export async function POST(req: Request): Promise<Response> {
         );
       }
 
-      const out = await runLlamaExtractWorkbook({
-        workbookBytes: sourceBytes,
-        filename: sourceFilename || snapshot.filename || "workbook.xlsx",
-      });
+      const charged = await chargeBeforePaidAnalysis(
+        analysisIdempotencyKey,
+        started
+      );
+      if (!charged.ok) return charged.response;
+      charge = charged.charge;
 
-      const normalizedRows = out.result.rows.map((r) => ({
-        ...r,
-        thicknessMm:
-          typeof r.thicknessMm === "number" && r.thicknessMm > 0
-            ? r.thicknessMm
-            : null,
-        widthMm:
-          typeof r.widthMm === "number" && r.widthMm > 0 ? r.widthMm : null,
-        lengthMm:
-          typeof r.lengthMm === "number" && r.lengthMm > 0 ? r.lengthMm : null,
-      }));
-      const parsed = simpleAiWorkbookResultSchema.safeParse({
-        ...out.result,
-        rows: normalizedRows,
-      });
-      if (!parsed.success) {
+      try {
+        const out = await runLlamaExtractWorkbook({
+          workbookBytes: sourceBytes,
+          filename: sourceFilename || snapshot.filename || "workbook.xlsx",
+        });
+
+        const normalizedRows = out.result.rows.map((r) => ({
+          ...r,
+          thicknessMm:
+            typeof r.thicknessMm === "number" && r.thicknessMm > 0
+              ? r.thicknessMm
+              : null,
+          widthMm:
+            typeof r.widthMm === "number" && r.widthMm > 0 ? r.widthMm : null,
+          lengthMm:
+            typeof r.lengthMm === "number" && r.lengthMm > 0 ? r.lengthMm : null,
+        }));
+        const parsed = simpleAiWorkbookResultSchema.safeParse({
+          ...out.result,
+          rows: normalizedRows,
+        });
+        if (!parsed.success) {
+          const bal = await refundIfCharged(charge);
+          charge = null;
+          return NextResponse.json(
+            withCreditsBalance(
+              {
+                ok: false,
+                stage: "AI_REQUEST",
+                code: "LLAMA_RESULT_SCHEMA_INVALID",
+                message: HEBREW_FAIL_EXCEL,
+                retryable: false,
+                durationMs: Date.now() - started,
+                extractionProvider: "llama-extract",
+                extractionProviderDebug: sanitizeDebug({
+                  ...out.extractionProviderDebug,
+                  schemaIssues: parsed.error.issues.slice(0, 20),
+                }),
+              },
+              bal
+            ),
+            { status: 502 }
+          );
+        }
+
         return NextResponse.json(
-          {
-            ok: false,
-            stage: "AI_REQUEST",
-            code: "LLAMA_RESULT_SCHEMA_INVALID",
-            message: HEBREW_FAIL_EXCEL,
-            retryable: false,
-            durationMs: Date.now() - started,
-            extractionProvider: "llama-extract",
-            extractionProviderDebug: sanitizeDebug({
-              ...out.extractionProviderDebug,
-              schemaIssues: parsed.error.issues.slice(0, 20),
-            }),
-          },
-          { status: 502 }
+          withCreditsBalance(
+            {
+              ok: true,
+              result: parsed.data,
+              providerCallCount: out.providerCallCount,
+              model: out.model,
+              durationMs: Date.now() - started,
+              usage: out.usage,
+              extractionProvider: "llama-extract",
+              extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
+            },
+            charge.creditsBalance
+          )
+        );
+      } catch (providerErr) {
+        const bal = await refundIfCharged(charge);
+        charge = null;
+        throw Object.assign(
+          providerErr instanceof Error ? providerErr : new Error(String(providerErr)),
+          { __creditsBalanceAfterRefund: bal }
         );
       }
-
-      return NextResponse.json({
-        ok: true,
-        result: parsed.data,
-        providerCallCount: out.providerCallCount,
-        model: out.model,
-        durationMs: Date.now() - started,
-        usage: out.usage,
-        extractionProvider: "llama-extract",
-        extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
-      });
     }
 
     // Default: OpenAI Mini material-list v1 (snapshot only; optional one repair).
-    const out = await runOpenAiMaterialListExtraction({ snapshot });
-    return NextResponse.json({
-      ok: true,
-      materialListRows: out.rows,
-      materialListStage: sanitizeDebug(out.materialListStageDebug),
-      qualityGatePassed: out.qualityGatePassed,
-      qualityGate: out.qualityGate,
-      targetedRepair: out.targetedRepair,
-      providerCallCount: out.providerCallCount,
-      model: out.model,
-      durationMs: Date.now() - started,
-      usage: out.usage,
-      costs: {
-        primaryEstimatedCostUsd: out.primaryEstimatedCostUsd,
-        repairEstimatedCostUsd: out.repairEstimatedCostUsd,
-        totalEstimatedCostUsd: out.totalEstimatedCostUsd,
-      },
-      sourceDocument: {
-        sourceType: "EXCEL",
-        fileName: snapshot.filename,
-        mimeType: sourceMimeType,
-        fileSizeBytes: sourceBytes?.length ?? null,
-        excelSheetCount: snapshot.sheets.length,
-        pdfPageCount: null,
-        pdfDetail: null,
-      },
-      extractionProvider: "openai",
-      extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
-      result: {
-        status: "SUCCESS",
-        summary: `material-list-v1:${out.rows.length}`,
-        rows: [],
-        warnings: [],
-      },
-    });
+    {
+      const charged = await chargeBeforePaidAnalysis(
+        analysisIdempotencyKey,
+        started
+      );
+      if (!charged.ok) return charged.response;
+      charge = charged.charge;
+
+      try {
+        const out = await runOpenAiMaterialListExtraction({ snapshot });
+        return NextResponse.json(
+          withCreditsBalance(
+            {
+              ok: true,
+              materialListRows: out.rows,
+              materialListStage: sanitizeDebug(out.materialListStageDebug),
+              qualityGatePassed: out.qualityGatePassed,
+              qualityGate: out.qualityGate,
+              targetedRepair: out.targetedRepair,
+              providerCallCount: out.providerCallCount,
+              model: out.model,
+              durationMs: Date.now() - started,
+              usage: out.usage,
+              costs: {
+                primaryEstimatedCostUsd: out.primaryEstimatedCostUsd,
+                repairEstimatedCostUsd: out.repairEstimatedCostUsd,
+                totalEstimatedCostUsd: out.totalEstimatedCostUsd,
+              },
+              sourceDocument: {
+                sourceType: "EXCEL",
+                fileName: snapshot.filename,
+                mimeType: sourceMimeType,
+                fileSizeBytes: sourceBytes?.length ?? null,
+                excelSheetCount: snapshot.sheets.length,
+                pdfPageCount: null,
+                pdfDetail: null,
+              },
+              extractionProvider: "openai",
+              extractionProviderDebug: sanitizeDebug(out.extractionProviderDebug),
+              result: {
+                status: "SUCCESS",
+                summary: `material-list-v1:${out.rows.length}`,
+                rows: [],
+                warnings: [],
+              },
+            },
+            charge.creditsBalance
+          )
+        );
+      } catch (providerErr) {
+        const bal = await refundIfCharged(charge);
+        charge = null;
+        throw Object.assign(
+          providerErr instanceof Error ? providerErr : new Error(String(providerErr)),
+          { __creditsBalanceAfterRefund: bal }
+        );
+      }
+    }
   } catch (err) {
+    if (charge) {
+      await refundIfCharged(charge);
+      charge = null;
+    }
+
+    const refundBalance =
+      err &&
+      typeof err === "object" &&
+      "__creditsBalanceAfterRefund" in err
+        ? (err as { __creditsBalanceAfterRefund?: number })
+            .__creditsBalanceAfterRefund
+        : undefined;
+
     if (err instanceof LlamaExtractError) {
       return NextResponse.json(
-        {
-          ok: false,
-          stage: "AI_RESPONSE",
-          code: err.code,
-          message: HEBREW_FAIL_EXCEL,
-          retryable:
-            err.code === "LLAMA_POLL_TIMEOUT" ||
-            err.code === "MISSING_LLAMA_API_KEY",
-          durationMs: Date.now() - started,
-          extractionProvider: "llama-extract",
-          extractionProviderDebug: sanitizeDebug(err.debug),
-        },
+        withCreditsBalance(
+          {
+            ok: false,
+            stage: "AI_RESPONSE",
+            code: err.code,
+            message: HEBREW_FAIL_EXCEL,
+            retryable:
+              err.code === "LLAMA_POLL_TIMEOUT" ||
+              err.code === "MISSING_LLAMA_API_KEY",
+            durationMs: Date.now() - started,
+            extractionProvider: "llama-extract",
+            extractionProviderDebug: sanitizeDebug(err.debug),
+          },
+          refundBalance
+        ),
         {
           status:
             err.code === "LLAMA_POLL_TIMEOUT"
@@ -433,15 +626,18 @@ export async function POST(req: Request): Promise<Response> {
                 : HEBREW_FAIL_EXCEL;
 
     return NextResponse.json(
-      {
-        ok: false,
-        stage: "AI_REQUEST",
-        code,
-        message,
-        retryable,
-        durationMs: Date.now() - started,
-        extractionProvider: "openai",
-      },
+      withCreditsBalance(
+        {
+          ok: false,
+          stage: "AI_REQUEST",
+          code,
+          message,
+          retryable,
+          durationMs: Date.now() - started,
+          extractionProvider: "openai",
+        },
+        refundBalance
+      ),
       {
         status:
           code === "PROVIDER_TIMEOUT"
@@ -457,3 +653,4 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 }
+

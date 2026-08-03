@@ -1,35 +1,36 @@
 /**
  * Signed-in account identity shown in the header / account menu.
- * Used for PDF letterhead email and read-only settings display.
- * Prefers the in-memory auth stub session when present (Supabase later).
+ * Driven by Supabase omega_users profile (via auth session).
  */
 
-import { getAuthSession } from "@/features/auth/authSession";
-import { getAppPreferences } from "@/lib/settings/appPreferences";
+import { getAuthSession, getCurrentOmegaUser } from "@/features/auth/authSession";
 
 export type SignedInUser = {
   fullName: string;
   email: string;
 };
 
-/** Fallback identity when no auth session is active (legacy / non-gated surfaces). */
+/** Fallback only when no session — should not appear after OTP login. */
 export const SIGNED_IN_USER: SignedInUser = {
-  fullName: "מאור סבג",
-  email: "Maor.andios@gmail.com",
+  fullName: "משתמש",
+  email: "",
 };
 
-function displayNameFromEmail(email: string): string {
-  const local = email.split("@")[0]?.trim() ?? "";
-  if (!local) return "משתמש";
-  return local;
-}
-
 export function getSignedInUser(): SignedInUser {
+  const user = getCurrentOmegaUser();
+  if (user) {
+    const contact = user.contactName?.trim();
+    const company = user.companyName?.trim();
+    return {
+      email: user.email,
+      fullName: contact || company || "משתמש",
+    };
+  }
   const session = getAuthSession();
   if (session) {
     return {
       email: session.email,
-      fullName: displayNameFromEmail(session.email),
+      fullName: "משתמש",
     };
   }
   return SIGNED_IN_USER;
@@ -45,12 +46,15 @@ export function getSignedInUserFullName(): string {
 
 /**
  * Display name for greetings / header.
- * Prefers company-settings contact name; falls back to signed-in full name.
+ * Prefers contact name → company name → email local-part.
  */
 export function getDisplayContactName(): string {
-  const prefs = getAppPreferences();
-  const fromSettings =
-    typeof prefs.contactName === "string" ? prefs.contactName.trim() : "";
-  if (fromSettings) return fromSettings;
+  const user = getCurrentOmegaUser();
+  if (user) {
+    const contact = user.contactName?.trim();
+    if (contact) return contact;
+    const company = user.companyName?.trim();
+    if (company) return company;
+  }
   return getSignedInUserFullName() || "משתמש";
 }

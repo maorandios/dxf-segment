@@ -1627,10 +1627,16 @@ export const simpleIntakeActions = {
         extractionProvider?: string;
         sourceDocument?: Record<string, unknown>;
         pdfExtraction?: Record<string, unknown>;
+        creditsBalance?: number;
+        code?: string;
       };
       try {
         const form = new FormData();
         form.append("sourceType", sourceType);
+        form.append(
+          "analysisIdempotencyKey",
+          `quotation-analysis:${runId}:${runId}`
+        );
         form.append(
           "source",
           workbookFile,
@@ -1647,15 +1653,29 @@ export const simpleIntakeActions = {
         const res = await fetch("/api/simple-intake/analyze", {
           method: "POST",
           body: form,
+          credentials: "same-origin",
         });
         aiJson = (await res.json()) as typeof aiJson;
         timing.aiCallMs = Date.now() - tAi;
+
+        if (
+          typeof aiJson.creditsBalance === "number" &&
+          Number.isFinite(aiJson.creditsBalance)
+        ) {
+          const { applyCreditsBalance } = await import("@/features/auth/authSession");
+          applyCreditsBalance(aiJson.creditsBalance);
+        }
+
         if (!res.ok || !aiJson.ok) {
+          const insufficient =
+            aiJson.code === "INSUFFICIENT_CREDITS" ||
+            aiJson.stage === "CREDITS";
           const error: SimpleIntakeError = {
-            stage:
-              (aiJson.stage as SimpleIntakeError["stage"]) || "AI_REQUEST",
-            message: aiJson.message || "בקשת ה-AI נכשלה",
-            retryable: aiJson.retryable ?? true,
+            stage: "AI_REQUEST",
+            message: insufficient
+              ? "אין מספיק קרדיטים ליצירת הצעת מחיר חדשה"
+              : aiJson.message || "בקשת ה-AI נכשלה",
+            retryable: insufficient ? false : (aiJson.retryable ?? true),
           };
           timing.totalMs = Date.now() - t0;
           fail(
