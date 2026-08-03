@@ -13,6 +13,7 @@ function isOmegaPath(pathname: string | null): boolean {
 function isFullscreenProductPath(pathname: string | null): boolean {
   if (!pathname) return false;
   return (
+    pathname === "/" ||
     isOmegaPath(pathname) ||
     pathname === "/quotes/simple" ||
     pathname.startsWith("/quotes/simple/")

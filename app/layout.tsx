@@ -5,7 +5,6 @@ import "./globals.css";
 import { RootChrome } from "@/components/layout/RootChrome";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 import { OMEGA_THEME_BOOT_SCRIPT } from "@/lib/theme/omegaColorScheme";
-import messages from "@/messages/he.json";
 
 const notoSansHebrew = Noto_Sans_Hebrew({
   subsets: ["hebrew"],
@@ -34,13 +33,18 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: messages.meta.title,
-  description: messages.meta.description,
+  title: "סגמנט — הצעות מחיר לענף המתכת",
+  description:
+    "מערכת יצירת הצעות מחיר לענף המתכת בישראל, מבוססת בינה מלאכותית ואלגוריתמים הנדסיים",
   manifest: "/manifest.json",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/apple-touch-icon.svg" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Omega",
+    title: "סגמנט",
   },
   formatDetection: {
     telephone: false,
@@ -58,8 +62,8 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl" suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" />
-        <link rel="icon" type="image/svg+xml" href="/icons/icon-192x192.svg" />
       </head>
       <body
         className={`${notoSansHebrew.variable} ${rubik.variable} ${notoSansHebrew.className} antialiased`}

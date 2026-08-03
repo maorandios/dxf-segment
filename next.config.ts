@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return [
+      // Browsers still request /favicon.ico by default
+      {
+        source: "/favicon.ico",
+        destination: "/favicon.svg",
+      },
+    ];
+  },
   async headers() {
     return [
       {
