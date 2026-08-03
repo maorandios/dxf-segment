@@ -47,8 +47,8 @@ export const metadata: Metadata = {
   description: SHARE_DESCRIPTION,
   manifest: "/manifest.json",
   icons: {
-    icon: [{ url: "/fav.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/fav.svg" }],
+    icon: [{ url: "/fav2.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/fav2.svg" }],
   },
   appleWebApp: {
     capable: true,
@@ -93,8 +93,8 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/fav.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/fav.svg" />
+        <link rel="icon" href="/fav2.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/fav2.svg" />
       </head>
       <body
         className={`${notoSansHebrew.variable} ${rubik.variable} ${notoSansHebrew.className} antialiased`}
