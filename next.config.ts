@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       // Browsers still request /favicon.ico by default
       {
         source: "/favicon.ico",
-        destination: "/favicon.svg",
+        destination: "/fav.svg",
       },
     ];
   },

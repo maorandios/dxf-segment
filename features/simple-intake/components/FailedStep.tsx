@@ -27,26 +27,24 @@ export function FailedStep() {
     /pdf/i.test(err?.message ?? "");
 
   return (
-    <div className="flex min-h-[calc(100vh-11rem)] items-center justify-center py-8">
-      <FailureState
-        title={
-          isPdf
-            ? "לא הצלחנו לקרוא את קובץ ה-PDF"
-            : "לא הצלחנו להשלים את הניתוח"
-        }
-        description={
-          isPdf
-            ? "הקובץ נקלט, אך לא ניתן היה לפענח ממנו רשימת חומר בצורה אמינה."
-            : err?.message
-              ? "הקובץ נקלט, אך חלק מהנתונים לא פוענחו בצורה אמינה."
-              : "אירעה שגיאה בעיבוד הקובץ. ניתן לנסות שוב או להחליף קובץ."
-        }
-        canRetry={Boolean(err?.retryable)}
-        onRetry={() => void simpleIntakeActions.analyze()}
-        onReplace={() => simpleIntakeActions.backToFiles()}
-        canDebug={Boolean(session.lastDebug)}
-        onDebug={() => downloadDebug(session.lastDebug)}
-      />
-    </div>
+    <FailureState
+      title={
+        isPdf
+          ? "לא הצלחנו לקרוא את קובץ ה-PDF"
+          : "לא הצלחנו להשלים את הניתוח"
+      }
+      description={
+        isPdf
+          ? "הקובץ נקלט, אך לא ניתן היה לפענח ממנו רשימת חומר בצורה אמינה."
+          : err?.message
+            ? "הקובץ נקלט, אך חלק מהנתונים לא פוענחו בצורה אמינה."
+            : "אירעה שגיאה בעיבוד הקובץ. ניתן לנסות שוב או להחליף קובץ."
+      }
+      canRetry={Boolean(err?.retryable)}
+      onRetry={() => void simpleIntakeActions.analyze()}
+      onReplace={() => simpleIntakeActions.backToFiles()}
+      canDebug={Boolean(session.lastDebug)}
+      onDebug={() => downloadDebug(session.lastDebug)}
+    />
   );
 }

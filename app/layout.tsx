@@ -38,8 +38,8 @@ export const metadata: Metadata = {
     "מערכת יצירת הצעות מחיר לענף המתכת בישראל, מבוססת בינה מלאכותית ואלגוריתמים הנדסיים",
   manifest: "/manifest.json",
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/icons/apple-touch-icon.svg" }],
+    icon: [{ url: "/fav.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/fav.svg" }],
   },
   appleWebApp: {
     capable: true,
@@ -62,8 +62,8 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" />
+        <link rel="icon" href="/fav.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/fav.svg" />
       </head>
       <body
         className={`${notoSansHebrew.variable} ${rubik.variable} ${notoSansHebrew.className} antialiased`}

@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { simpleIntakeActions } from "../sessionStore";
 import { useSimpleIntakeSession } from "../useSimpleIntakeSession";
 import { FailureState } from "../ui";
@@ -22,22 +21,15 @@ export function MaterialListQualityFailedScreen() {
   const session = useSimpleIntakeSession();
 
   return (
-    <div className="flex min-h-[calc(100vh-11rem)] flex-col items-center justify-center gap-4 py-8">
-      <FailureState
-        title="לא הצלחנו להשלים את הניתוח"
-        description="הקובץ נקלט, אך חלק מהנתונים לא פוענחו בצורה אמינה."
-        onRetry={() => void simpleIntakeActions.analyze()}
-        onReplace={() => simpleIntakeActions.backToFiles()}
-        canDebug={Boolean(session.lastDebug)}
-        onDebug={() => downloadDebug(session.lastDebug)}
-      />
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => simpleIntakeActions.showUnresolvedMaterialItems()}
-      >
-        הצג פריטים שלא פוענחו
-      </Button>
-    </div>
+    <FailureState
+      title="לא הצלחנו להשלים את הניתוח"
+      description="הקובץ נקלט, אך חלק מהנתונים לא פוענחו בצורה אמינה."
+      onRetry={() => void simpleIntakeActions.analyze()}
+      onReplace={() => simpleIntakeActions.backToFiles()}
+      canDebug={Boolean(session.lastDebug)}
+      onDebug={() => downloadDebug(session.lastDebug)}
+      secondaryActionLabel="הצג פריטים שלא פוענחו"
+      onSecondaryAction={() => simpleIntakeActions.showUnresolvedMaterialItems()}
+    />
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -50,6 +51,7 @@ export function EmptyState({
   );
 }
 
+/** Bottom toast failure message — same chrome as cancel / validation toasts. */
 export function FailureState({
   title = "לא הצלחנו להשלים את הניתוח",
   description = "הקובץ נקלט, אך חלק מהנתונים לא פוענחו בצורה אמינה.",
@@ -58,6 +60,8 @@ export function FailureState({
   onDebug,
   canRetry = true,
   canDebug,
+  secondaryActionLabel,
+  onSecondaryAction,
 }: {
   title?: string;
   description?: string;
@@ -66,54 +70,109 @@ export function FailureState({
   onDebug?: () => void;
   canRetry?: boolean;
   canDebug?: boolean;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }) {
-  return (
-    <div
-      className="mx-auto w-full max-w-lg rounded-[var(--ow-radius-lg)] border px-6 py-8 text-center"
-      style={{
-        backgroundColor: "var(--ow-surface)",
-        borderColor: "var(--ow-border)",
-        boxShadow: "var(--ow-shadow-sm)",
-      }}
-      role="alert"
-    >
-      <h2
-        className="text-[20px] font-semibold"
-        style={{ color: "var(--ow-text)" }}
-      >
-        {title}
-      </h2>
-      <p
-        className="mt-2 text-[14px] leading-relaxed"
-        style={{ color: "var(--ow-text-secondary)" }}
-      >
-        {description}
-      </p>
-      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
-        {onReplace && (
-          <Button type="button" variant="outline" onClick={onReplace}>
-            החלף קובץ
-          </Button>
-        )}
-        {onRetry && (
-          <Button type="button" disabled={!canRetry} onClick={onRetry}>
-            נסה שוב
-          </Button>
-        )}
-      </div>
-      {onDebug && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="mt-4"
-          disabled={!canDebug}
-          onClick={onDebug}
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60]" dir="rtl" data-failure-toast="true">
+      <div className="ow-toast-scrim absolute inset-0" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
+        <div
+          role="alert"
+          aria-live="assertive"
+          aria-labelledby="failure-toast-title"
+          aria-describedby="failure-toast-desc"
+          className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
+          style={{
+            backgroundColor: "#ffffff",
+            borderColor: "#E5E9EE",
+            color: "#13202B",
+            textAlign: "center",
+          }}
         >
-          הורד נתוני אבחון
-        </Button>
-      )}
-    </div>
+          <p
+            id="failure-toast-title"
+            className="text-center text-[15px] font-semibold"
+            style={{ color: "#13202B", textAlign: "center" }}
+          >
+            {title}
+          </p>
+          <p
+            id="failure-toast-desc"
+            className="mt-1.5 text-center text-[13px] leading-relaxed"
+            style={{ color: "#5C6978", textAlign: "center" }}
+          >
+            {description}
+          </p>
+
+          <div className="mt-4 flex items-center justify-center">
+            <div
+              role="group"
+              aria-label="פעולות שגיאה"
+              className="inline-flex max-w-full overflow-hidden rounded-2xl border"
+              style={{
+                borderColor: "var(--ow-border, #e4e7ec)",
+                backgroundColor: "var(--ow-surface, #ffffff)",
+              }}
+            >
+              {onReplace ? (
+                <button
+                  type="button"
+                  onClick={onReplace}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                >
+                  החלף קובץ
+                </button>
+              ) : null}
+              {onReplace && onRetry ? (
+                <span
+                  aria-hidden
+                  className="h-full w-px shrink-0 self-stretch"
+                  style={{ backgroundColor: "var(--ow-border, #e4e7ec)" }}
+                />
+              ) : null}
+              {onRetry ? (
+                <button
+                  type="button"
+                  disabled={!canRetry}
+                  onClick={onRetry}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-[var(--ow-accent)] px-5 text-[13px] font-medium text-[var(--ow-accent-fg)] transition-colors hover:bg-[var(--ow-accent-hover,#115e59)] disabled:opacity-50"
+                >
+                  נסה שוב
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {(onDebug || (secondaryActionLabel && onSecondaryAction)) && (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+              {secondaryActionLabel && onSecondaryAction ? (
+                <button
+                  type="button"
+                  onClick={onSecondaryAction}
+                  className="text-[12px] font-medium text-[#0F766E] underline decoration-[#0F766E]/35 underline-offset-2 hover:text-[#0B625C]"
+                >
+                  {secondaryActionLabel}
+                </button>
+              ) : null}
+              {onDebug ? (
+                <button
+                  type="button"
+                  disabled={!canDebug}
+                  onClick={onDebug}
+                  className="text-[12px] font-medium text-[#5C6978] underline decoration-[#5C6978]/40 underline-offset-2 hover:text-[#13202B] disabled:opacity-40"
+                >
+                  הורד נתוני אבחון
+                </button>
+              ) : null}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
