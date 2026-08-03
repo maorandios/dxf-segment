@@ -25,19 +25,23 @@ export function FailedStep() {
     detectMaterialSourceTypeFromName(session.workbookFile?.name ?? "") ===
       "PDF" ||
     /pdf/i.test(err?.message ?? "");
+  const isConfigError =
+    /מפתח|API|מודל|OPENAI|Vercel|\.env/i.test(err?.message ?? "");
 
   return (
     <FailureState
       title={
         isPdf
           ? "לא הצלחנו לקרוא את קובץ ה-PDF"
-          : "לא הצלחנו להשלים את הניתוח"
+          : isConfigError
+            ? "לא ניתן להריץ ניתוח"
+            : "לא הצלחנו להשלים את הניתוח"
       }
       description={
         isPdf
           ? "הקובץ נקלט, אך לא ניתן היה לפענח ממנו רשימת חומר בצורה אמינה."
-          : err?.message
-            ? "הקובץ נקלט, אך חלק מהנתונים לא פוענחו בצורה אמינה."
+          : err?.message?.trim()
+            ? err.message
             : "אירעה שגיאה בעיבוד הקובץ. ניתן לנסות שוב או להחליף קובץ."
       }
       canRetry={Boolean(err?.retryable)}

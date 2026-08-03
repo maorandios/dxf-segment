@@ -417,8 +417,10 @@ export async function POST(req: Request): Promise<Response> {
     const message =
       code === "PROVIDER_TIMEOUT"
         ? "תם הזמן המוקצב לבקשת ה-AI"
-        : code === "MISSING_API_KEY" || code === "MISSING_MODEL_ENV"
-          ? "חסר מפתח או מודל לניתוח"
+        : code === "MISSING_API_KEY"
+          ? "חסר מפתח OpenAI בשרת. הוסיפו OPENAI_API_KEY בהגדרות הסביבה (Vercel או .env.local) והפעילו מחדש."
+        : code === "MISSING_MODEL_ENV"
+          ? "חסר שם מודל לניתוח. בדקו את SIMPLE_INTAKE_OPENAI_MODEL."
           : messageHe
             ? messageHe
             : code === "EMPTY_MATERIAL_LIST"
