@@ -8,6 +8,10 @@ import { useEffect, useMemo, useState } from "react";
 import { parseDxfFile } from "@/lib/parsers/dxfParser";
 import type { ProcessedGeometry } from "@/types";
 import { cn } from "@/lib/utils";
+import {
+  getGeometryByFilename,
+  trackParseInvocation,
+} from "../omegaProject/geometryRuntimeCache";
 
 async function readFileText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -18,10 +22,20 @@ async function readFileText(file: File): Promise<string> {
   });
 }
 
+/**
+ * Prefer geometry restored from a .omega project cache.
+ * Only parse the DXF file on a cache miss (and never count that as a "load"
+ * parse when the cache already had the answer).
+ */
 export async function loadProcessedGeometryFromDxfFile(
   file: File
 ): Promise<ProcessedGeometry | null> {
+  const cached = getGeometryByFilename(file.name);
+  if (cached !== undefined) {
+    return cached;
+  }
   try {
+    trackParseInvocation("parse");
     const content = await readFileText(file);
     const parsed = parseDxfFile(
       content,
@@ -181,7 +195,6 @@ export function SimpleDxfGeometryPreviewLoader({
 
   useEffect(() => {
     let cancelled = false;
-    setGeometry(null);
     if (!file) return;
     void loadProcessedGeometryFromDxfFile(file).then((geo) => {
       if (!cancelled) setGeometry(geo);

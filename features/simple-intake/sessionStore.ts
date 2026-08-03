@@ -74,6 +74,13 @@ import {
   type MaterialRowFieldOverrides,
 } from "./materialRowUserResolution";
 import { parseSimpleDxfFiles } from "./parseSimpleDxfFiles";
+import {
+  bumpProjectRevision,
+  clearGeometryCache,
+  openOmegaProjectTransactionally,
+  resetProjectDirtyState,
+  type OmegaProjectHydrationStatus,
+} from "./omegaProject";
 import type { DimensionMismatchResolution } from "./results/types";
 import type {
   OmegaQuoteStage,
@@ -175,6 +182,7 @@ function createEmptySession(): SimpleIntakeSession {
     forcedReviewWorkspaceView: null,
     materialRowUserResolutions: {},
     confirmedManualMatchIds: [],
+    hydrationStatus: "IDLE",
   };
 }
 
@@ -185,8 +193,14 @@ function emit(): void {
   for (const l of listeners) l();
 }
 
-function setSession(next: SimpleIntakeSession): void {
+function setSession(
+  next: SimpleIntakeSession,
+  opts?: { fromHydration?: boolean; skipDirtyBump?: boolean }
+): void {
   session = next;
+  if (!opts?.fromHydration && !opts?.skipDirtyBump) {
+    bumpProjectRevision();
+  }
   emit();
 }
 
@@ -249,7 +263,55 @@ export function subscribeSimpleIntake(listener: Listener): () => void {
 
 export const simpleIntakeActions = {
   reset(): void {
-    setSession(createEmptySession());
+    clearGeometryCache();
+    resetProjectDirtyState();
+    setSession(createEmptySession(), { skipDirtyBump: true });
+  },
+
+  setHydrationStatus(status: OmegaProjectHydrationStatus): void {
+    if (session.hydrationStatus === status) return;
+    setSession({ ...session, hydrationStatus: status }, { skipDirtyBump: true });
+  },
+
+  /**
+   * Atomically replace the entire session after a successful .omega load.
+   * Does not bump dirty revision (freshly loaded = clean).
+   */
+  replaceSessionFromHydration(next: SimpleIntakeSession): void {
+    setSession(
+      {
+        ...next,
+        hydrationStatus: "READY",
+      },
+      { fromHydration: true }
+    );
+  },
+
+  /**
+   * Open a portable .omega project file. Current work is only replaced after
+   * full validation succeeds.
+   */
+  async openOmegaProjectFile(file: File): Promise<{
+    ok: boolean;
+    error?: string;
+    warnings?: string[];
+  }> {
+    const outcome = await openOmegaProjectTransactionally(file, {
+      getHydrationStatus: () => getSimpleIntakeSession().hydrationStatus,
+      setHydrationStatus: (status) => {
+        simpleIntakeActions.setHydrationStatus(status);
+      },
+      replaceSessionFromHydration: (next) => {
+        simpleIntakeActions.replaceSessionFromHydration(next);
+      },
+    });
+    if (!outcome.ok) {
+      return { ok: false, error: outcome.error };
+    }
+    return {
+      ok: true,
+      warnings: outcome.warnings.map((w) => w.message),
+    };
   },
 
   /** Developer diagnostics merge — does not change workflow state. */
@@ -281,6 +343,7 @@ export const simpleIntakeActions = {
       quoteStage: "DXF_INTAKE",
       status: "DXF_UPLOAD",
       enteredQuoteStages: markEntered([], "DXF_INTAKE"),
+      hydrationStatus: "READY",
     });
     return true;
   },
@@ -707,7 +770,9 @@ export const simpleIntakeActions = {
   },
 
   clearFiles(): void {
-    setSession(createEmptySession());
+    clearGeometryCache();
+    resetProjectDirtyState();
+    setSession(createEmptySession(), { skipDirtyBump: true });
   },
 
   backToFiles(): void {
@@ -1306,6 +1371,13 @@ export const simpleIntakeActions = {
   async analyze(): Promise<void> {
     if (!session.workbookFile) return;
     if (session.status === "ANALYZING") return;
+    // Never auto-start AI while importing a portable project.
+    if (
+      session.hydrationStatus !== "IDLE" &&
+      session.hydrationStatus !== "READY"
+    ) {
+      return;
+    }
 
     const workbookFile = session.workbookFile;
     const sourceType =

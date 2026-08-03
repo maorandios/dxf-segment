@@ -6,6 +6,8 @@ import { EditQuoteDetailsDialog } from "../quoteWorkflow/EditQuoteDetailsDialog"
 import { simpleIntakeActions } from "../sessionStore";
 import type { QuoteWorkspaceDetails } from "../types";
 import { firstNameFromFullName } from "../workbookUpload/uploadScreenTokens";
+import { useOmegaProjectSave } from "../omegaProject/useOmegaProjectSave";
+import { OmegaProjectBeforeUnload } from "../omegaProject/OmegaProjectBeforeUnload";
 
 function HeaderSegment({
   children,
@@ -58,6 +60,7 @@ export function OmegaHeader({
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const { saveLabel, saveBusy, saveError, saveProject } = useOmegaProjectSave();
 
   const confirmCancel = () => {
     setCancelOpen(false);
@@ -160,17 +163,29 @@ export function OmegaHeader({
             </HeaderSegment>
             <HeaderSep />
             <HeaderSegment
-              ariaLabel="שמור הצעת מחיר"
+              ariaLabel="שמור הצעה"
               onClick={() => {
-                /* Save is intentionally a no-op for now */
+                if (saveBusy) return;
+                void saveProject();
               }}
             >
               <Save className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-              שמור הצעת מחיר
+              {saveLabel}
             </HeaderSegment>
           </div>
+          {saveError ? (
+            <p
+              className="ms-2 max-w-[12rem] text-[11px] leading-snug"
+              style={{ color: "#B42318" }}
+              role="alert"
+            >
+              {saveError}
+            </p>
+          ) : null}
         </div>
       </header>
+
+      <OmegaProjectBeforeUnload />
 
       <EditQuoteDetailsDialog
         open={editOpen}

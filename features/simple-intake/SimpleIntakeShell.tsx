@@ -20,6 +20,7 @@ import {
 } from "./quoteWorkflow";
 import { WeightPricingScreen } from "./weightPricing";
 import { FinalQuotationScreen } from "./finalQuotation";
+import { OmegaProjectBeforeUnload } from "./omegaProject/OmegaProjectBeforeUnload";
 
 function downloadDebug(debug: Record<string, unknown> | null): void {
   if (!debug) return;
@@ -34,6 +35,29 @@ function downloadDebug(debug: Record<string, unknown> | null): void {
   URL.revokeObjectURL(url);
 }
 
+function HydrationGate({ status }: { status: string }) {
+  const label =
+    status === "READING_ARCHIVE"
+      ? "קורא את קובץ ההצעה..."
+      : status === "VALIDATING" || status === "MIGRATING"
+        ? "בודק את קובץ ההצעה..."
+        : status === "HYDRATING"
+          ? "טוען את ההצעה..."
+          : "טוען...";
+  return (
+    <div
+      className="flex min-h-[100vh] min-h-[100dvh] flex-col items-center justify-center"
+      dir="rtl"
+      data-omega-hydration-gate="true"
+    >
+      <p className="text-[15px] font-medium" style={{ color: "var(--ow-text)" }}>
+        {label}
+      </p>
+      <OmegaProjectBeforeUnload />
+    </div>
+  );
+}
+
 export function SimpleIntakeShell() {
   const session = useSimpleIntakeSession();
 
@@ -45,6 +69,16 @@ export function SimpleIntakeShell() {
   const stepperStates = deriveQuoteStepperStates(session.quoteStage, {
     materialNeedsCompletion: materialSummary.incompleteRows > 0,
   });
+
+  const hydrating =
+    session.hydrationStatus === "READING_ARCHIVE" ||
+    session.hydrationStatus === "VALIDATING" ||
+    session.hydrationStatus === "MIGRATING" ||
+    session.hydrationStatus === "HYDRATING";
+
+  if (hydrating) {
+    return <HydrationGate status={session.hydrationStatus} />;
+  }
 
   if (!session.quoteDetails || session.quoteStage === "QUOTE_SETUP") {
     return <QuoteSetupScreen />;

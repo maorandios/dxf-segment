@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { simpleIntakeActions } from "../sessionStore";
 import { WorkbookUploadHeader } from "../workbookUpload/WorkbookUploadHeader";
 import { getSignedInUser } from "@/features/accountModals/signedInUser";
+import { OpenExistingProjectControl } from "../omegaProject/OpenExistingProjectControl";
+import { OmegaProjectBeforeUnload } from "../omegaProject/OmegaProjectBeforeUnload";
 import "../workbookUpload/upload-screen.css";
 
 function hasMeaningfulText(value: string): boolean {
@@ -73,6 +75,9 @@ export function QuoteSetupScreen() {
             >
               הזן את פרטי הפרויקט כדי לפתוח סביבת עבודה חדשה להצעה.
             </p>
+            <div className="mt-5 flex w-full justify-center">
+              <OpenExistingProjectControl />
+            </div>
           </div>
 
           <form
@@ -156,6 +161,7 @@ export function QuoteSetupScreen() {
           </form>
         </div>
       </main>
+      <OmegaProjectBeforeUnload />
     </div>
   );
 }

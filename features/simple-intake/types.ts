@@ -401,6 +401,11 @@ export type SimpleIntakeSession = {
    * Confirmed manual DXF match result-row IDs (session-persisted).
    */
   confirmedManualMatchIds: string[];
+  /**
+   * Portable .omega project hydration gate.
+   * Route guards / AI / DXF parse must wait until READY (or IDLE with no project).
+   */
+  hydrationStatus: import("./omegaProject/types").OmegaProjectHydrationStatus;
 };
 
 export const SIMPLE_INTAKE_TIMEOUT_MS = 120_000;
