@@ -61,6 +61,15 @@ Do **not** make `{{ .ConfirmationURL }}` the primary login action.
 
 Also enable Email OTP / disable password signup in Auth providers as appropriate for invite-only.
 
+**Disable Confirm email** (required for OTP-only login):
+
+Authentication → Providers → Email → **Confirm email** → **OFF**
+
+If Confirm email stays ON, first-time Auth users may receive a signup-confirmation
+message before the 6-digit code. The app also pre-creates a confirmed Auth user
+for allowlisted emails so OTP is sent without a confirmation step — but turn
+Confirm email off in the Dashboard as well.
+
 ## 6. Production SMTP
 
 Configure custom SMTP in Supabase Auth settings for reliable delivery.

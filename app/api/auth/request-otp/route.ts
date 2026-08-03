@@ -5,6 +5,7 @@ import {
   normalizeEmail,
 } from "@/lib/auth/normalizeEmail";
 import { isActiveAllowlistedEmail } from "@/lib/auth/loadOmegaUser";
+import { ensureConfirmedAllowlistedAuthUser } from "@/lib/auth/ensureAuthUser";
 import {
   AUTH_MESSAGES,
   mapOtpRequestError,
@@ -15,7 +16,14 @@ export const runtime = "nodejs";
 
 /**
  * Friendly server-side email precheck + OTP send.
- * Authoritative allowlist enforcement also happens in Before User Created Hook.
+ *
+ * Flow for allowlisted emails:
+ * 1. Reject if not an active omega_users row
+ * 2. Ensure a confirmed auth.users row exists (no Confirm-signup email)
+ * 3. Send six-digit Email OTP only
+ *
+ * Authoritative allowlist also remains on the Before User Created Hook
+ * for any non-admin Auth creation path.
  */
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -40,12 +48,16 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
+    // Create/confirm Auth user via service role so OTP is not preceded by
+    // a Confirm signup email on first login.
+    await ensureConfirmedAllowlistedAuthUser(normalized);
+
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.signInWithOtp({
       email: normalized,
       options: {
-        // Allow Auth user creation; Before User Created Hook is authoritative.
-        shouldCreateUser: true,
+        // User already exists and is confirmed — OTP only.
+        shouldCreateUser: false,
       },
     });
 

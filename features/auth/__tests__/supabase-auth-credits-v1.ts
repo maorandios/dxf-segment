@@ -160,9 +160,16 @@ console.log("OMEGA — Supabase Invite-Only Email OTP Authentication and User Cr
     "utf8"
   );
   assert_(requestOtp.includes("signInWithOtp"), "uses signInWithOtp");
-  assert_(requestOtp.includes("shouldCreateUser: true"), "allows first-time create");
+  assert_(
+    requestOtp.includes("shouldCreateUser: false"),
+    "OTP only after confirmed auth user exists"
+  );
+  assert_(
+    requestOtp.includes("ensureConfirmedAllowlistedAuthUser"),
+    "pre-creates confirmed allowlisted auth user"
+  );
   assert_(requestOtp.includes("isActiveAllowlistedEmail"), "server precheck");
-  assert_(!requestOtp.includes("shouldCreateUser: false"), "not false for allowlisted");
+  assert_(!requestOtp.includes("shouldCreateUser: true"), "does not create via OTP signup");
 }
 
 {
