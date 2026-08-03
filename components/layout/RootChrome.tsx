@@ -14,6 +14,8 @@ function isFullscreenProductPath(pathname: string | null): boolean {
   if (!pathname) return false;
   return (
     pathname === "/" ||
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
     isOmegaPath(pathname) ||
     pathname === "/quotes/simple" ||
     pathname.startsWith("/quotes/simple/")
