@@ -13,6 +13,10 @@ export interface AppPreferences {
   companyWebsite?: string;
   /** Multi-line allowed; shown on PDF letterhead when set. */
   companyAddress?: string;
+  /** Company registration / ח.פ — always stored as text (preserve leading zeroes). */
+  companyRegistrationNumber?: string;
+  /** Company contact person name. */
+  contactName?: string;
 }
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {

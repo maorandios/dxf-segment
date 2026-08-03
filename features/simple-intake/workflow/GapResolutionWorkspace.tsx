@@ -1101,56 +1101,59 @@ export function GapResolutionWorkspace({
         </div>
       </div>
 
-      {continueWarnOpen ? (
-        <div className="fixed inset-0 z-[60]" dir="rtl">
-          <button
-            type="button"
-            className="ow-toast-scrim absolute inset-0"
-            aria-label="סגור"
-            onClick={() => setContinueWarnOpen(false)}
-          />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
-            <div
-              role="alert"
-              aria-live="assertive"
-              data-testid="gap-continue-block-message"
-              className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
-              style={{
-                backgroundColor: "#ffffff",
-                borderColor: "#E5E9EE",
-                color: "#13202B",
-                textAlign: "center",
-              }}
-            >
-              <p
-                className="text-center text-[15px] font-semibold"
-                style={{ color: "#13202B", textAlign: "center" }}
-              >
-                לא ניתן להתקדם
-              </p>
-              <p
-                className="mt-1.5 text-center text-[13px] leading-relaxed"
-                style={{ color: "#5C6978", textAlign: "center" }}
-              >
-                {continueBlockMessage ??
-                  (continueBlockedCount > 0
-                    ? `לא ניתן להתקדם — נותרו ${continueBlockedCount.toLocaleString("he-IL")} פריטים פעילים שדורשים טיפול.`
-                    : "לא ניתן להתקדם כל עוד קיימים פריטים פעילים שדורשים טיפול.")}
-              </p>
-              <div className="mt-4 flex items-center justify-center">
-                <button
-                  type="button"
-                  onClick={() => setContinueWarnOpen(false)}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
-                  style={{ borderColor: "var(--ow-border, #e4e7ec)" }}
+      {continueWarnOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[60]" dir="rtl">
+              <button
+                type="button"
+                className="ow-toast-scrim absolute inset-0"
+                aria-label="סגור"
+                onClick={() => setContinueWarnOpen(false)}
+              />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-5 sm:pb-7">
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  data-testid="gap-continue-block-message"
+                  className="ow-cancel-toast pointer-events-auto w-full max-w-lg rounded-2xl border p-4 shadow-[0_12px_40px_rgba(15,23,42,0.12)] sm:p-5"
+                  style={{
+                    backgroundColor: "#ffffff",
+                    borderColor: "#E5E9EE",
+                    color: "#13202B",
+                    textAlign: "center",
+                  }}
                 >
-                  הבנתי
-                </button>
+                  <p
+                    className="text-center text-[15px] font-semibold"
+                    style={{ color: "#13202B", textAlign: "center" }}
+                  >
+                    לא ניתן להתקדם
+                  </p>
+                  <p
+                    className="mt-1.5 text-center text-[13px] leading-relaxed"
+                    style={{ color: "#5C6978", textAlign: "center" }}
+                  >
+                    {continueBlockMessage ??
+                      (continueBlockedCount > 0
+                        ? `לא ניתן להתקדם — נותרו ${continueBlockedCount.toLocaleString("he-IL")} פריטים פעילים שדורשים טיפול.`
+                        : "לא ניתן להתקדם כל עוד קיימים פריטים פעילים שדורשים טיפול.")}
+                  </p>
+                  <div className="mt-4 flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setContinueWarnOpen(false)}
+                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border bg-transparent px-5 text-[13px] font-medium text-[var(--ow-text)] transition-colors hover:bg-[var(--ow-surface-muted,#f2f4f7)]"
+                      style={{ borderColor: "var(--ow-border, #e4e7ec)" }}
+                    >
+                      הבנתי
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body
+          )
+        : null}
 
       <GapEmailModal
         open={emailOpen}

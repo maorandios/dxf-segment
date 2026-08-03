@@ -30,6 +30,12 @@ function loadRaw(): AppPreferences {
         typeof parsed.companyAddress === "string"
           ? parsed.companyAddress
           : undefined,
+      companyRegistrationNumber:
+        typeof parsed.companyRegistrationNumber === "string"
+          ? parsed.companyRegistrationNumber
+          : undefined,
+      contactName:
+        typeof parsed.contactName === "string" ? parsed.contactName : undefined,
     };
   } catch {
     return DEFAULT_APP_PREFERENCES;

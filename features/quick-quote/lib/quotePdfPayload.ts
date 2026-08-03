@@ -152,7 +152,8 @@ export function getDefaultPdfCompany(): QuotePdfCompanyBlock {
     phone: (p.companyPhone?.trim() ?? base.phone) || "",
     website: (p.companyWebsite?.trim() ?? base.website) || "",
     address: (p.companyAddress?.trim() ?? base.address) || "",
-    registrationNumber: base.registrationNumber || "",
+    registrationNumber:
+      (p.companyRegistrationNumber?.trim() || base.registrationNumber) || "",
   };
 }
 

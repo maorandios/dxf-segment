@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRef, useState } from "react";
 import { ChevronDown, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import { openAccountModal } from "@/features/accountModals";
 
 const dividerClass = "w-px shrink-0 self-stretch bg-white/[0.08]";
 
@@ -25,13 +27,13 @@ const MAIN_NAV: {
   { labelKey: "nav.clients", href: "/clients" },
 ];
 
-const SETTINGS_LINKS: {
+const SETTINGS_ACTIONS: {
   labelKey: "nav.accountSettings" | "nav.materialsConfig" | "nav.billAndUsage";
-  href: string;
+  modal: "COMPANY_SETTINGS" | "MATERIAL_SETTINGS" | "BILLING_USAGE";
 }[] = [
-  { labelKey: "nav.accountSettings", href: "/settings/account" },
-  { labelKey: "nav.materialsConfig", href: "/settings/materials" },
-  { labelKey: "nav.billAndUsage", href: "/settings/bill-and-usage" },
+  { labelKey: "nav.accountSettings", modal: "COMPANY_SETTINGS" },
+  { labelKey: "nav.materialsConfig", modal: "MATERIAL_SETTINGS" },
+  { labelKey: "nav.billAndUsage", modal: "BILLING_USAGE" },
 ];
 
 function linkActive(pathname: string, href: string): boolean {
@@ -46,6 +48,8 @@ const navCellClass =
 export function AppTopBar() {
   const pathname = usePathname();
   const settingsActive = pathname.startsWith("/settings");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null);
 
   return (
     <header className="sticky top-0 z-50 w-full shrink-0 border-b border-white/[0.08] bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
@@ -92,9 +96,10 @@ export function AppTopBar() {
             })}
 
             <div className="flex min-h-0 min-w-0 items-stretch">
-              <DropdownMenu>
+              <DropdownMenu open={settingsOpen} onOpenChange={setSettingsOpen}>
                 <DropdownMenuTrigger asChild>
                   <button
+                    ref={settingsTriggerRef}
                     type="button"
                     className={cn(
                       navCellClass,
@@ -103,6 +108,7 @@ export function AppTopBar() {
                         ? "bg-white/[0.1] text-foreground"
                         : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
                     )}
+                    data-account-menu-trigger="true"
                   >
                     <span className="min-w-0 truncate">{t("nav.settings")}</span>
                     <ChevronDown
@@ -112,29 +118,46 @@ export function AppTopBar() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[12rem]">
-                  {SETTINGS_LINKS.map(({ labelKey, href }) => (
-                    <DropdownMenuItem key={href} asChild>
-                      <Link href={href} className="cursor-pointer">
-                        {t(labelKey)}
-                      </Link>
+                  {SETTINGS_ACTIONS.map(({ labelKey, modal }) => (
+                    <DropdownMenuItem
+                      key={modal}
+                      className="cursor-pointer"
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setSettingsOpen(false);
+                        openAccountModal(modal, settingsTriggerRef.current);
+                      }}
+                      data-account-menu-item={modal}
+                    >
+                      {t(labelKey)}
                     </DropdownMenuItem>
                   ))}
+                  <DropdownMenuItem
+                    disabled
+                    className="opacity-60"
+                    title="לא זמין כרגע"
+                    aria-disabled="true"
+                    data-logout-inactive="true"
+                  >
+                    {t("layout.logout")}
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </nav>
         </div>
 
-        {/* RTL: second cluster → inline-start (left); logout */}
+        {/* RTL: second cluster → inline-start (left); logout (inactive) */}
         <div className="flex shrink-0 items-center self-center">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground opacity-50"
             aria-label={t("layout.logoutAria")}
-            title={t("layout.logout")}
-            onClick={() => {}}
+            title="לא זמין כרגע"
+            disabled
+            data-logout-inactive="true"
           >
             <LogOut className="h-4 w-4" />
           </Button>

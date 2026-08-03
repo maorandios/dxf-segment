@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { useRef, useState } from "react";
 import {
   ChevronDown,
   CreditCard,
   Layers,
+  LogOut,
   Mail,
   Settings,
   User,
@@ -16,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { openAccountModal } from "@/features/accountModals";
 
 export type UploadScreenUser = {
   fullName: string | null;
@@ -27,18 +29,32 @@ const DEMO_EMAIL = "Maor.andios@gmail.com";
 const menuItemClass =
   "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-[#13202B] focus:bg-[#F2F5F7] focus:text-[#13202B] data-[highlighted]:bg-[#F2F5F7]";
 
+const disabledItemClass =
+  "gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-[#98A2B3] opacity-60 data-[disabled]:pointer-events-none data-[disabled]:opacity-60";
+
 export function UserAccountMenu({ user }: { user: UploadScreenUser }) {
   const email = user.email?.trim() || DEMO_EMAIL;
   const displayName = user.fullName?.trim() || "משתמש";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  function openModal(
+    type: "COMPANY_SETTINGS" | "MATERIAL_SETTINGS" | "BILLING_USAGE"
+  ): void {
+    setMenuOpen(false);
+    openAccountModal(type, triggerRef.current);
+  }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           className="flex max-w-[min(280px,70vw)] items-center gap-2 rounded-full border bg-white py-2 pe-2.5 ps-3.5 transition-colors duration-150 hover:bg-[#F5F8F9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F766E]"
           style={{ borderColor: "#D6DEE6" }}
           aria-label="תפריט משתמש"
+          data-account-menu-trigger="true"
         >
           <span
             className="us-ltr min-w-0 truncate text-[13px] font-medium text-[#13202B]"
@@ -62,6 +78,7 @@ export function UserAccountMenu({ user }: { user: UploadScreenUser }) {
           borderColor: "#E5E9EE",
           color: "#13202B",
         }}
+        data-account-menu-dropdown="true"
       >
         <div className="space-y-1.5 px-2.5 py-2">
           <div className="flex items-center gap-2.5">
@@ -81,23 +98,50 @@ export function UserAccountMenu({ user }: { user: UploadScreenUser }) {
           </div>
         </div>
         <DropdownMenuSeparator className="mx-1 my-1 bg-[#E5E9EE]" />
-        <DropdownMenuItem asChild className={menuItemClass}>
-          <Link href="/settings/account">
-            <Settings className="h-4 w-4 text-[#8B96A3]" aria-hidden />
-            הגדרות
-          </Link>
+        <DropdownMenuItem
+          className={menuItemClass}
+          onSelect={(e) => {
+            e.preventDefault();
+            openModal("COMPANY_SETTINGS");
+          }}
+          data-account-menu-item="COMPANY_SETTINGS"
+        >
+          <Settings className="h-4 w-4 text-[#8B96A3]" aria-hidden />
+          הגדרות
         </DropdownMenuItem>
-        <DropdownMenuItem asChild className={menuItemClass}>
-          <Link href="/settings/materials">
-            <Layers className="h-4 w-4 text-[#8B96A3]" aria-hidden />
-            הגדרת חומרים
-          </Link>
+        <DropdownMenuItem
+          className={menuItemClass}
+          onSelect={(e) => {
+            e.preventDefault();
+            openModal("MATERIAL_SETTINGS");
+          }}
+          data-account-menu-item="MATERIAL_SETTINGS"
+        >
+          <Layers className="h-4 w-4 text-[#8B96A3]" aria-hidden />
+          הגדרות חומרים
         </DropdownMenuItem>
-        <DropdownMenuItem asChild className={menuItemClass}>
-          <Link href="/settings/bill-and-usage">
-            <CreditCard className="h-4 w-4 text-[#8B96A3]" aria-hidden />
-            חיוב ושימוש
-          </Link>
+        <DropdownMenuItem
+          className={menuItemClass}
+          onSelect={(e) => {
+            e.preventDefault();
+            openModal("BILLING_USAGE");
+          }}
+          data-account-menu-item="BILLING_USAGE"
+        >
+          <CreditCard className="h-4 w-4 text-[#8B96A3]" aria-hidden />
+          חיוב ושימוש
+        </DropdownMenuItem>
+        <DropdownMenuSeparator className="mx-1 my-1 bg-[#E5E9EE]" />
+        <DropdownMenuItem
+          disabled
+          className={disabledItemClass}
+          title="לא זמין כרגע"
+          aria-disabled="true"
+          data-account-menu-item="LOGOUT"
+          data-logout-inactive="true"
+        >
+          <LogOut className="h-4 w-4 text-[#98A2B3]" aria-hidden />
+          התנתק
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

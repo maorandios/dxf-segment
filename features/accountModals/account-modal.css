@@ -1,0 +1,59 @@
+/* Account modal motion + toast-matching light gray blur scrim */
+
+@keyframes ow-account-modal-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ow-account-modal-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 42vh));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes ow-account-modal-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 28vh));
+  }
+}
+
+.ow-account-modal-scrim {
+  background-color: rgba(15, 23, 42, 0.28);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+  animation: ow-account-modal-scrim-in 200ms ease-out both;
+}
+
+.ow-account-modal-panel {
+  transform: translate(-50%, -50%);
+}
+
+.ow-account-modal-panel[data-state="open"] {
+  animation: ow-account-modal-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ow-account-modal-panel[data-state="closed"] {
+  animation: ow-account-modal-out 220ms ease-in both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ow-account-modal-scrim,
+  .ow-account-modal-panel[data-state="open"],
+  .ow-account-modal-panel[data-state="closed"] {
+    animation-duration: 1ms !important;
+  }
+}
