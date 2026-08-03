@@ -10,6 +10,29 @@
   <div class="doc">
     <header class="doc-header">
       <div class="header-main">
+        <div class="header-company">
+          <div class="company-col">
+            <div class="company-field">
+              <span class="company-label">שם החברה</span>
+              <span class="company-value">{{ company_name or "—" }}</span>
+            </div>
+            <div class="company-field">
+              <span class="company-label">כתובת</span>
+              <span class="company-value company-address">{{ company_address or "—" }}</span>
+            </div>
+          </div>
+          <div class="company-col">
+            <div class="company-field">
+              <span class="company-label">מספר ח.פ</span>
+              <span class="company-value company-mono" dir="ltr">{{ company_registration or "—" }}</span>
+            </div>
+            <div class="company-field">
+              <span class="company-label">דוא״ל</span>
+              <span class="company-value company-mono" dir="ltr">{{ company_email or "—" }}</span>
+            </div>
+          </div>
+        </div>
+
         <div class="header-title-block">
           <div class="header-title-row">
             <span class="header-title">הצעת מחיר</span>
@@ -23,29 +46,6 @@
               <span class="header-date-value" dir="ltr">{{ quotation_date or "—" }}</span>
               <span class="header-date-label">בתוקף עד</span>
               <span class="header-date-value" dir="ltr">{{ quotation_validity_date or "—" }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="header-company">
-          <div class="company-col">
-            <div class="company-field">
-              <span class="company-label">שם החברה</span>
-              <span class="company-value">{{ company_name or "—" }}</span>
-            </div>
-            <div class="company-field">
-              <span class="company-label">כתובת</span>
-              <span class="company-value">{{ company_address or "—" }}</span>
-            </div>
-          </div>
-          <div class="company-col">
-            <div class="company-field">
-              <span class="company-label">מספר ח.פ</span>
-              <span class="company-value" dir="ltr">{{ company_registration or "—" }}</span>
-            </div>
-            <div class="company-field">
-              <span class="company-label">דוא״ל</span>
-              <span class="company-value" dir="ltr">{{ company_email or "—" }}</span>
             </div>
           </div>
         </div>

@@ -1,13 +1,27 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Building2,
+  Hash,
+  Mail,
+  MapPin,
+  Phone,
+  UserRound,
+} from "lucide-react";
 import {
   AccountModalShell,
   ACCOUNT_MODAL_COLORS,
 } from "./AccountModalShell";
 import {
   companySettingsEqual,
-  isValidOptionalEmail,
   loadCompanySettings,
   saveCompanySettings,
 } from "./companySettingsPersistence";
@@ -19,20 +33,23 @@ const fieldClass =
 function Field({
   id,
   label,
+  icon: Icon,
   children,
   error,
 }: {
   id: string;
   label: string;
+  icon: LucideIcon;
   children: ReactNode;
   error?: string | null;
 }) {
   return (
     <label className="block space-y-1.5" htmlFor={id}>
       <span
-        className="block text-[12px] font-medium"
+        className="flex items-center gap-1.5 text-[12px] font-medium"
         style={{ color: ACCOUNT_MODAL_COLORS.muted }}
       >
+        <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
         {label}
       </span>
       {children}
@@ -56,7 +73,6 @@ function CompanySettingsBody({
   const initial = loadCompanySettings();
   const [draft, setDraft] = useState<CompanySettings>(initial);
   const [baseline, setBaseline] = useState<CompanySettings>(initial);
-  const [emailError, setEmailError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [discardConfirm, setDiscardConfirm] = useState(false);
 
@@ -66,9 +82,9 @@ function CompanySettingsBody({
   );
 
   function patch(field: keyof CompanySettings, value: string): void {
+    if (field === "email") return;
     setDraft((prev) => ({ ...prev, [field]: value }));
     setSaveMessage(null);
-    if (field === "email") setEmailError(null);
   }
 
   function requestClose(): void {
@@ -83,10 +99,6 @@ function CompanySettingsBody({
   bindRequestClose(requestClose);
 
   function handleSave(): void {
-    if (!isValidOptionalEmail(draft.email)) {
-      setEmailError("כתובת דוא״ל אינה תקינה");
-      return;
-    }
     saveCompanySettings(draft);
     const saved = loadCompanySettings();
     setDraft(saved);
@@ -106,7 +118,7 @@ function CompanySettingsBody({
         data-company-settings-form="true"
         dir="rtl"
       >
-        <Field id={`${baseId}-name`} label="שם חברה">
+        <Field id={`${baseId}-name`} label="שם חברה" icon={Building2}>
           <input
             id={`${baseId}-name`}
             type="text"
@@ -119,23 +131,23 @@ function CompanySettingsBody({
             data-field="companyName"
           />
         </Field>
-        <Field id={`${baseId}-reg`} label="ח.פ">
+        <Field id={`${baseId}-reg`} label="ח.פ" icon={Hash}>
           <input
             id={`${baseId}-reg`}
             type="text"
             inputMode="text"
-            dir="ltr"
+            dir="rtl"
             autoComplete="off"
             value={draft.companyRegistrationNumber}
             onChange={(e) =>
               patch("companyRegistrationNumber", e.target.value)
             }
             className={fieldClass}
-            style={{ ...border, textAlign: "left" }}
+            style={border}
             data-field="companyRegistrationNumber"
           />
         </Field>
-        <Field id={`${baseId}-address`} label="כתובת">
+        <Field id={`${baseId}-address`} label="כתובת" icon={MapPin}>
           <input
             id={`${baseId}-address`}
             type="text"
@@ -148,34 +160,44 @@ function CompanySettingsBody({
             data-field="address"
           />
         </Field>
-        <Field id={`${baseId}-phone`} label="טלפון">
+        <Field id={`${baseId}-phone`} label="טלפון" icon={Phone}>
           <input
             id={`${baseId}-phone`}
             type="tel"
-            dir="ltr"
+            dir="rtl"
             autoComplete="tel"
             value={draft.phone}
             onChange={(e) => patch("phone", e.target.value)}
             className={fieldClass}
-            style={{ ...border, textAlign: "left" }}
+            style={border}
             data-field="phone"
           />
         </Field>
-        <Field id={`${baseId}-email`} label='דוא"ל' error={emailError}>
-          <input
-            id={`${baseId}-email`}
-            type="email"
-            dir="ltr"
-            autoComplete="email"
-            value={draft.email}
-            onChange={(e) => patch("email", e.target.value)}
-            className={fieldClass}
-            style={{ ...border, textAlign: "left" }}
+        <div className="block space-y-1.5">
+          <span
+            className="flex items-center gap-1.5 text-[12px] font-medium"
+            style={{ color: ACCOUNT_MODAL_COLORS.muted }}
+          >
+            <Mail className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            דוא&quot;ל
+          </span>
+          <div
+            className="flex h-10 w-full items-center justify-end rounded-lg border px-3 text-right text-[13px]"
+            style={{
+              borderColor: ACCOUNT_MODAL_COLORS.border,
+              backgroundColor: "#F2F4F7",
+              color: ACCOUNT_MODAL_COLORS.muted,
+            }}
+            dir="rtl"
             data-field="email"
-            aria-invalid={emailError ? true : undefined}
-          />
-        </Field>
-        <Field id={`${baseId}-contact`} label="שם איש קשר">
+            data-email-readonly="true"
+            title="כתובת הדוא״ל משויכת לחשבון המחובר"
+            aria-readonly="true"
+          >
+            <span className="min-w-0 truncate">{draft.email}</span>
+          </div>
+        </div>
+        <Field id={`${baseId}-contact`} label="שם איש קשר" icon={UserRound}>
           <input
             id={`${baseId}-contact`}
             type="text"
@@ -208,7 +230,7 @@ function CompanySettingsBody({
           >
             יש שינויים שלא נשמרו. לסגור בכל זאת?
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2" dir="ltr">
             <button
               type="button"
               className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-[13px] font-medium"
@@ -238,44 +260,62 @@ function CompanySettingsBody({
         </div>
       ) : null}
 
-      <div
-        className="mt-4 flex flex-wrap items-center justify-start gap-2 border-t pt-3"
-        style={{ borderColor: ACCOUNT_MODAL_COLORS.border }}
-      >
-        <button
-          type="button"
-          onClick={handleSave}
-          className="inline-flex h-10 items-center justify-center rounded-xl px-4 text-[13px] font-medium transition-colors"
-          style={{
-            backgroundColor: ACCOUNT_MODAL_COLORS.accent,
-            color: ACCOUNT_MODAL_COLORS.accentFg,
-          }}
-          data-company-settings-save="true"
+      {saveMessage ? (
+        <p
+          className="mt-3 text-right text-[13px] font-medium"
+          style={{ color: ACCOUNT_MODAL_COLORS.accent }}
+          data-company-settings-saved="true"
         >
-          שמור הגדרות
-        </button>
-        <button
-          type="button"
-          onClick={requestClose}
-          className="inline-flex h-10 items-center justify-center rounded-xl border bg-transparent px-4 text-[13px] font-medium transition-colors hover:bg-[#F2F4F7]"
-          style={{
-            borderColor: ACCOUNT_MODAL_COLORS.border,
-            color: ACCOUNT_MODAL_COLORS.text,
-          }}
-        >
-          ביטול
-        </button>
-        {saveMessage ? (
-          <span
-            className="ms-auto text-[13px] font-medium"
-            style={{ color: ACCOUNT_MODAL_COLORS.accent }}
-            data-company-settings-saved="true"
-          >
-            {saveMessage}
-          </span>
-        ) : null}
-      </div>
+          {saveMessage}
+        </p>
+      ) : null}
+
+      <CompanySettingsActions
+        onSave={handleSave}
+        onCancel={requestClose}
+      />
     </>
+  );
+}
+
+function CompanySettingsActions({
+  onSave,
+  onCancel,
+}: {
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="mt-4 flex flex-wrap items-center justify-start gap-2 border-t pt-3"
+      style={{ borderColor: ACCOUNT_MODAL_COLORS.border }}
+      dir="ltr"
+      data-company-settings-actions="true"
+    >
+      <button
+        type="button"
+        onClick={onSave}
+        className="inline-flex h-10 items-center justify-center rounded-xl px-4 text-[13px] font-medium transition-colors"
+        style={{
+          backgroundColor: ACCOUNT_MODAL_COLORS.accent,
+          color: ACCOUNT_MODAL_COLORS.accentFg,
+        }}
+        data-company-settings-save="true"
+      >
+        שמור הגדרות
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="inline-flex h-10 items-center justify-center rounded-xl border bg-transparent px-4 text-[13px] font-medium transition-colors hover:bg-[#F2F4F7]"
+        style={{
+          borderColor: ACCOUNT_MODAL_COLORS.border,
+          color: ACCOUNT_MODAL_COLORS.text,
+        }}
+      >
+        ביטול
+      </button>
+    </div>
   );
 }
 
@@ -296,6 +336,8 @@ export function CompanySettingsModal({
         requestCloseRef.current();
       }}
       title="הגדרות חברה"
+      titleIcon={Building2}
+      description="עדכנו את פרטי החברה שיופיעו בהצעות מחיר ובמסמכים מיוצאים."
       closeAriaLabel="סגור הגדרות חברה"
     >
       {open ? (

@@ -18,13 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { openAccountModal } from "@/features/accountModals";
+import { getSignedInUserEmail } from "@/features/accountModals/signedInUser";
 
 export type UploadScreenUser = {
   fullName: string | null;
   email: string | null;
 };
-
-const DEMO_EMAIL = "Maor.andios@gmail.com";
 
 const menuItemClass =
   "cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-[#13202B] focus:bg-[#F2F5F7] focus:text-[#13202B] data-[highlighted]:bg-[#F2F5F7]";
@@ -33,7 +32,7 @@ const disabledItemClass =
   "gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-[#98A2B3] opacity-60 data-[disabled]:pointer-events-none data-[disabled]:opacity-60";
 
 export function UserAccountMenu({ user }: { user: UploadScreenUser }) {
-  const email = user.email?.trim() || DEMO_EMAIL;
+  const email = user.email?.trim() || getSignedInUserEmail();
   const displayName = user.fullName?.trim() || "משתמש";
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);

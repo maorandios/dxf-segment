@@ -1,5 +1,6 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -18,19 +19,24 @@ export function AccountModalShell({
   open,
   onOpenChange,
   title,
+  titleIcon: TitleIcon,
   closeAriaLabel,
   description,
   children,
   footer,
+  footerAlign = "start",
   contentClassName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  titleIcon?: LucideIcon;
   closeAriaLabel: string;
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
+  /** Physical side for footer actions. Use "start" for left in LTR button rows. */
+  footerAlign?: "start" | "end";
   contentClassName?: string;
 }) {
   return (
@@ -64,12 +70,19 @@ export function AccountModalShell({
           >
             <div className="min-w-0 space-y-1 text-right">
               <DialogPrimitive.Title
-                className="text-[16px] font-semibold leading-snug tracking-normal"
+                className="flex items-center gap-2 text-[16px] font-semibold leading-snug tracking-normal"
                 style={{ color: TEXT }}
               >
+                {TitleIcon ? (
+                  <TitleIcon
+                    className="h-4 w-4 shrink-0"
+                    style={{ color: "var(--ow-accent, #0f766e)" }}
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                ) : null}
                 {title}
-              </DialogPrimitive.Title>
-              {description ? (
+              </DialogPrimitive.Title>              {description ? (
                 <DialogPrimitive.Description
                   className="text-[13px] leading-relaxed"
                   style={{ color: MUTED }}
@@ -100,8 +113,12 @@ export function AccountModalShell({
 
           {footer ? (
             <div
-              className="flex shrink-0 flex-wrap items-center justify-start gap-2 border-t px-5 py-3"
+              className={cn(
+                "flex shrink-0 flex-wrap items-center gap-2 border-t px-5 py-3",
+                footerAlign === "end" ? "justify-end" : "justify-start"
+              )}
               style={{ borderColor: BORDER }}
+              dir="ltr"
             >
               {footer}
             </div>

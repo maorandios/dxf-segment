@@ -28,3 +28,10 @@ export { CompanySettingsModal } from "./CompanySettingsModal";
 export { BillingUsageModal } from "./BillingUsageModal";
 export { MaterialSettingsModal } from "./MaterialSettingsModal";
 export { AccountModalsHost } from "./AccountModalsHost";
+export {
+  getSignedInUser,
+  getSignedInUserEmail,
+  getSignedInUserFullName,
+  SIGNED_IN_USER,
+} from "./signedInUser";
+export type { SignedInUser } from "./signedInUser";

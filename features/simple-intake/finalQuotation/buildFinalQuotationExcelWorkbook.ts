@@ -4,6 +4,7 @@
  */
 
 import ExcelJS from "exceljs";
+import { appendExcelCompanyFooter } from "../excelExport/appendExcelCompanyFooter";
 import {
   formatCheckeredPlateExportHe,
   formatFinishLabelHe,
@@ -259,6 +260,8 @@ export async function buildFinalQuotationExcelWorkbook(args: {
     sheet.mergeCells(notesRow.number, 1, notesRow.number, 6);
     notesRow.height = Math.min(120, 20 + notesText.split("\n").length * 16);
   }
+
+  appendExcelCompanyFooter(sheet);
 
   // Column widths from design workbook
   sheet.getColumn(1).width = 18;

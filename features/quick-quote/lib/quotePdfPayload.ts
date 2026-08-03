@@ -3,6 +3,7 @@
  */
 
 import { getAppPreferences } from "@/lib/settings/appPreferences";
+import { getSignedInUserEmail } from "@/features/accountModals/signedInUser";
 import { MATERIAL_TYPE_LABELS, type MaterialType } from "@/types/materials";
 import {
   materialPricingRowKey,
@@ -141,14 +142,22 @@ function envCompanyDefaults(): QuotePdfCompanyBlock {
   };
 }
 
-/** Company block for PDF and finalize step: Settings overrides, then env, then fallbacks. */
+/** Company block for PDF and finalize step: Settings overrides, then env, then fallbacks.
+ * Email always comes from the signed-in account (same as the main-screen header).
+ */
 export function getDefaultPdfCompany(): QuotePdfCompanyBlock {
   const base = envCompanyDefaults();
-  if (typeof window === "undefined") return base;
+  const signedInEmail = getSignedInUserEmail();
+  if (typeof window === "undefined") {
+    return {
+      ...base,
+      email: signedInEmail || base.email || "",
+    };
+  }
   const p = getAppPreferences();
   return {
     name: (p.companyName?.trim() || base.name) || "Fabrication partner",
-    email: (p.companyEmail?.trim() ?? base.email) || "",
+    email: signedInEmail || (p.companyEmail?.trim() ?? base.email) || "",
     phone: (p.companyPhone?.trim() ?? base.phone) || "",
     website: (p.companyWebsite?.trim() ?? base.website) || "",
     address: (p.companyAddress?.trim() ?? base.address) || "",

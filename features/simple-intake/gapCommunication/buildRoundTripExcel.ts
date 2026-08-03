@@ -3,6 +3,7 @@
  */
 
 import ExcelJS from "exceljs";
+import { appendExcelCompanyFooter } from "../excelExport/appendExcelCompanyFooter";
 import { buildRoundTripExcelNote } from "./buildRoundTripExcelNote";
 import type {
   GapCommunicationRow,
@@ -262,6 +263,8 @@ export async function buildRoundTripExcelWorkbook(args: {
   });
 
   sheet.getRow(1).height = 22;
+
+  appendExcelCompanyFooter(sheet);
 
   // Wide notes column so text fits on one line; uniform row heights above.
   const widths = [16, 22, 14, 12, 10, 16, 16, 14, 14, 96];

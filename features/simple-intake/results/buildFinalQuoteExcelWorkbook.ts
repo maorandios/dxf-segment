@@ -4,6 +4,7 @@
  */
 
 import ExcelJS from "exceljs";
+import { appendExcelCompanyFooter } from "../excelExport/appendExcelCompanyFooter";
 import {
   formatCheckeredPlateExportHe,
   formatFinishLabelHe,
@@ -156,6 +157,8 @@ export async function buildFinalQuoteExcelWorkbook(args: {
       }
     }
   }
+
+  appendExcelCompanyFooter(sheet);
 
   // Reasonable column widths for RTL Hebrew headers
   const widths = [14, 8, 10, 12, 12, 12, 14, 14, 14, 14, 10, 10];

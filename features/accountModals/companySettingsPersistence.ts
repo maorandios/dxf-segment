@@ -7,6 +7,7 @@ import {
   getAppPreferences,
   saveAppPreferences,
 } from "@/lib/settings/appPreferences";
+import { getSignedInUserEmail } from "./signedInUser";
 import { emptyCompanySettings, type CompanySettings } from "./types";
 
 /** Optional email: empty is valid; non-empty must look like an email. */
@@ -26,7 +27,8 @@ export function loadCompanySettings(): CompanySettings {
         : "",
     address: typeof p.companyAddress === "string" ? p.companyAddress : "",
     phone: typeof p.companyPhone === "string" ? p.companyPhone : "",
-    email: typeof p.companyEmail === "string" ? p.companyEmail : "",
+    /** Email is account identity — always the signed-in address, not editable prefs. */
+    email: getSignedInUserEmail(),
     contactName: typeof p.contactName === "string" ? p.contactName : "",
   };
 }
@@ -34,6 +36,7 @@ export function loadCompanySettings(): CompanySettings {
 /**
  * Persist company modal fields through the existing AppPreferences boundary.
  * Registration number is always stored as a string (never Number).
+ * Signed-in email is never overwritten from this form.
  */
 export function saveCompanySettings(settings: CompanySettings): void {
   const base = getAppPreferences();
@@ -45,7 +48,6 @@ export function saveCompanySettings(settings: CompanySettings): void {
       typeof reg === "string" && reg.trim() ? reg.trim() : undefined,
     companyAddress: settings.address.trim() || undefined,
     companyPhone: settings.phone.trim() || undefined,
-    companyEmail: settings.email.trim() || undefined,
     contactName: settings.contactName.trim() || undefined,
   });
 }
@@ -59,7 +61,6 @@ export function companySettingsEqual(
     a.companyRegistrationNumber === b.companyRegistrationNumber &&
     a.address === b.address &&
     a.phone === b.phone &&
-    a.email === b.email &&
     a.contactName === b.contactName
   );
 }

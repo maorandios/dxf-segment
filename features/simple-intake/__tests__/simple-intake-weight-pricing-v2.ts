@@ -482,6 +482,7 @@ async function testWeightPricingExcelExport(): Promise<void> {
   );
   assert_(!excelSrc.includes("autoFilter"), "no header autoFilter");
   assert_(excelSrc.includes("FFF2F4F7"), "light gray header");
+  assert_(excelSrc.includes("appendExcelCompanyFooter"), "company footer on export");
   console.log("✓ weight pricing excel export");
 }
 

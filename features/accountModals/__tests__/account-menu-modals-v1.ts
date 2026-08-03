@@ -26,6 +26,10 @@ import {
   getBillingUsageSummary,
 } from "../billingUsageSummary";
 import {
+  getSignedInUserEmail,
+  SIGNED_IN_USER,
+} from "../signedInUser";
+import {
   getAppPreferences,
   saveAppPreferences,
 } from "@/lib/settings/appPreferences";
@@ -114,6 +118,12 @@ console.log("OMEGA — Account Menu Modals v1");
     "utf8"
   );
   assert_(companySrc.includes("שם חברה"), "field company name");
+  assert_(companySrc.includes("Building2"), "title/company icon");
+  assert_(companySrc.includes("עדכנו את פרטי החברה"), "subtitle");
+  assert_(companySrc.includes('dir="ltr"'), "ltr footer for left actions");
+  assert_(companySrc.includes("data-company-settings-actions"), "actions row");
+  assert_(companySrc.includes('data-email-readonly="true"'), "email readonly");
+  assert_(!companySrc.includes('data-field="email"\n            type="email"'), "no editable email input");
   assert_(companySrc.includes("ח.פ"), "field registration");
   assert_(companySrc.includes("כתובת"), "field address");
   assert_(companySrc.includes("טלפון"), "field phone");
@@ -132,7 +142,22 @@ console.log("OMEGA — Account Menu Modals v1");
   assert_(isValidOptionalEmail(""), "empty email ok");
   assert_(isValidOptionalEmail("a@b.co"), "valid email");
   assert_(!isValidOptionalEmail("not-an-email"), "invalid email");
-  console.log("✓ company email validation");
+  assertEq(
+    loadCompanySettings().email,
+    getSignedInUserEmail(),
+    "settings email is signed-in email"
+  );
+  assertEq(
+    getSignedInUserEmail(),
+    SIGNED_IN_USER.email,
+    "signed-in email matches header source"
+  );
+  const pdfSrc = fs.readFileSync(
+    path.join(repoRoot, "features/quick-quote/lib/quotePdfPayload.ts"),
+    "utf8"
+  );
+  assert_(pdfSrc.includes("getSignedInUserEmail"), "pdf uses signed-in email");
+  console.log("✓ signed-in email for PDF + readonly settings");
 }
 
 {
@@ -142,7 +167,11 @@ console.log("OMEGA — Account Menu Modals v1");
     const loaded = loadCompanySettings();
     assertEq(loaded.companyName, "", "no fake company name");
     assertEq(loaded.companyRegistrationNumber, "", "no fake registration");
-    assertEq(loaded.email, "", "no fake email");
+    assertEq(
+      loaded.email,
+      getSignedInUserEmail(),
+      "email is signed-in account email"
+    );
 
     saveCompanySettings({
       ...emptyCompanySettings(),

@@ -391,6 +391,12 @@ async function main(): Promise<void> {
   assertEq(OMEGA_ROUND_TRIP_HEADERS[0], "שם הפריט", "part name header");
   assertEq(OMEGA_ROUND_TRIP_HEADERS[9], "הערות", "notes last");
 
+  const excelSrc = fs.readFileSync(
+    path.join(root, "gapCommunication/buildRoundTripExcel.ts"),
+    "utf8"
+  );
+  assert(excelSrc.includes("appendExcelCompanyFooter"), "company footer on export");
+
   // Source dims preserved separately from DXF
   const ready = rows[0]!;
   assertEq(ready.sourceWidthMm, 100, "source width preserved");
@@ -455,6 +461,40 @@ async function main(): Promise<void> {
   assertEq(parsed.ignoredNotesCells, 1, "notes ignored");
   // DXF dims must not become width/length
   assert(parsed.rows[0]!.widthMm !== 999, "no trust excel dxf width");
+
+  // Company footer rows must not be imported as parts
+  const withFooter = {
+    sheets: [
+      {
+        sheetName: "רשימת פריטים",
+        rows: [
+          ...snapshot.sheets[0]!.rows,
+          { rowNumber: 3, cells: [{ text: "" }] },
+          {
+            rowNumber: 4,
+            cells: [{ text: "שם החברה" }, { text: "חברת בדיקה" }],
+          },
+          {
+            rowNumber: 5,
+            cells: [{ text: "מספר ח.פ" }, { text: "123" }],
+          },
+          {
+            rowNumber: 6,
+            cells: [{ text: "כתובת" }, { text: "רחוב 1" }],
+          },
+          {
+            rowNumber: 7,
+            cells: [{ text: 'דוא"ל' }, { text: "a@b.com" }],
+          },
+        ],
+      },
+    ],
+  };
+  assertEq(
+    parseOmegaRoundTripWorkbook(withFooter).length,
+    1,
+    "footer rows ignored on re-import"
+  );
 
   const nonOmega = {
     sheets: [

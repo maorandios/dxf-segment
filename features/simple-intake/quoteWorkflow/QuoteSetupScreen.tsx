@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { simpleIntakeActions } from "../sessionStore";
 import { WorkbookUploadHeader } from "../workbookUpload/WorkbookUploadHeader";
+import { getSignedInUser } from "@/features/accountModals/signedInUser";
 import "../workbookUpload/upload-screen.css";
 
 function hasMeaningfulText(value: string): boolean {
@@ -42,7 +43,7 @@ export function QuoteSetupScreen() {
     >
       <WorkbookUploadHeader
         quotationTitle=""
-        user={{ fullName: "מאור סבג", email: "Maor.andios@gmail.com" }}
+        user={getSignedInUser()}
       />
 
       <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10">

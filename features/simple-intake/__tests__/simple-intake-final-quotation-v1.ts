@@ -363,6 +363,7 @@ function mockRow(partial: {
     path.join(root, "finalQuotation/buildFinalQuotationExcelWorkbook.ts"),
     "utf8"
   );
+  assert_(excelSrc.includes("appendExcelCompanyFooter"), "company footer on export");
   assert_(excelSrc.includes('addWorksheet("הצעת מחיר"'), "sheet name");
   assert_(!excelSrc.includes("autoFilter"), "no autofilter");
   assert_(!excelSrc.includes("frozen"), "no freeze panes");

@@ -5,6 +5,7 @@
 import { deriveApprovalStatus } from "../materialList/completeness";
 import type { MaterialListRow } from "../materialList/types";
 import type { SimpleWorkbookSnapshot } from "../types";
+import { isExcelCompanyFooterLabel } from "../excelExport/appendExcelCompanyFooter";
 import {
   OMEGA_ROUND_TRIP_HEADERS,
   OMEGA_ROUND_TRIP_PART_HEADER_ALIASES,
@@ -135,6 +136,9 @@ export function parseOmegaRoundTripWorkbook(
       .every((t) => t.trim() === "");
     if (allEmpty) continue;
 
+    // Company footer at sheet bottom — never import as material rows.
+    if (isExcelCompanyFooterLabel(texts[0] ?? "")) continue;
+
     const partId = trimOrNull(texts[0] ?? "");
     const dxfFileName = trimOrNull(texts[1] ?? "");
     const material = trimOrNull(texts[2] ?? "");
@@ -219,6 +223,9 @@ export function parseOmegaRoundTripWorkbookWithMeta(
       .slice(0, OMEGA_ROUND_TRIP_HEADERS.length)
       .every((t) => t.trim() === "");
     if (allEmpty) continue;
+
+    // Company footer at sheet bottom — never import as material rows.
+    if (isExcelCompanyFooterLabel(texts[0] ?? "")) continue;
 
     if ((texts[7] ?? "").trim() !== "") ignoredInformationalDxfDimensionCells += 1;
     if ((texts[8] ?? "").trim() !== "") ignoredInformationalDxfDimensionCells += 1;
