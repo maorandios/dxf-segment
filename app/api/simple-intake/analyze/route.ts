@@ -614,6 +614,11 @@ export async function POST(req: Request): Promise<Response> {
           ? "חסר מפתח OpenAI בשרת. הוסיפו OPENAI_API_KEY בהגדרות הסביבה (Vercel או .env.local) והפעילו מחדש."
         : code === "MISSING_MODEL_ENV"
           ? "חסר שם מודל לניתוח. בדקו את SIMPLE_INTAKE_OPENAI_MODEL."
+        : code === "model_not_found" ||
+            /does not have access to model/i.test(
+              err instanceof Error ? err.message : ""
+            )
+          ? "לפרויקט OpenAI אין גישה למודל gpt-5.4-mini. הפעילו את המודל בפרויקט OpenAI, או השתמשו במפתח מפרויקט שיש לו גישה אליו."
           : messageHe
             ? messageHe
             : code === "EMPTY_MATERIAL_LIST"
