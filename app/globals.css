@@ -31,6 +31,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-google-sans), "Google Sans", sans-serif;
 }
 
 /*
@@ -43,6 +44,8 @@
  */
 :root {
   color-scheme: dark;
+  --font-noto-sans-hebrew: var(--font-google-sans);
+  --font-rubik: var(--font-google-sans);
   --background: 180 25% 4.7%; /* #090F0F */
   --foreground: 0 0% 100%;
 
@@ -161,7 +164,7 @@ html.light {
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: var(--font-noto-sans-hebrew), "Noto Sans Hebrew", sans-serif;
+  font-family: var(--font-google-sans), "Google Sans", sans-serif;
   /* Tight body copy: −2% where supported (~−0.02em fallback). */
   letter-spacing: -0.02em;
   letter-spacing: -2%;
@@ -330,7 +333,7 @@ select:-webkit-autofill:focus {
 .omega-app {
   background: var(--omega-page-bg);
   transition: background-color 0.35s ease;
-  font-family: var(--font-rubik), "Rubik", sans-serif;
+  font-family: var(--font-google-sans), "Google Sans", sans-serif;
 }
 
 .omega-app-surface-header {

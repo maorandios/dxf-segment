@@ -1,22 +1,55 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_Hebrew, Rubik } from "next/font/google";
+import localFont from "next/font/local";
 import Script from "next/script";
 import "./globals.css";
 import { RootChrome } from "@/components/layout/RootChrome";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 import { OMEGA_THEME_BOOT_SCRIPT } from "@/lib/theme/omegaColorScheme";
 
-const notoSansHebrew = Noto_Sans_Hebrew({
-  subsets: ["hebrew"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-noto-sans-hebrew",
-  display: "swap",
-});
-
-const rubik = Rubik({
-  subsets: ["hebrew", "latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-rubik",
+const googleSans = localFont({
+  src: [
+    {
+      path: "../public/fonts/google-sans/GoogleSans-Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/google-sans/GoogleSans-Italic.ttf",
+      weight: "400",
+      style: "italic",
+    },
+    {
+      path: "../public/fonts/google-sans/GoogleSans-Medium.ttf",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/google-sans/GoogleSans-MediumItalic.ttf",
+      weight: "500",
+      style: "italic",
+    },
+    {
+      path: "../public/fonts/google-sans/GoogleSans-SemiBold.ttf",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/google-sans/GoogleSans-SemiBoldItalic.ttf",
+      weight: "600",
+      style: "italic",
+    },
+    {
+      path: "../public/fonts/google-sans/GoogleSans-Bold.ttf",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/google-sans/GoogleSans-BoldItalic.ttf",
+      weight: "700",
+      style: "italic",
+    },
+  ],
+  variable: "--font-google-sans",
   display: "swap",
 });
 
@@ -97,7 +130,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/fav2.svg" />
       </head>
       <body
-        className={`${notoSansHebrew.variable} ${rubik.variable} ${notoSansHebrew.className} antialiased`}
+        className={`${googleSans.variable} ${googleSans.className} antialiased`}
       >
         <Script
           id="omega-theme-boot"

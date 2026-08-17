@@ -457,7 +457,7 @@ export function ProfilePreview2D({
         }
         style={{
           fontFamily:
-            'var(--font-noto-sans-hebrew), "Noto Sans Hebrew", sans-serif',
+            'var(--font-google-sans), "Google Sans", sans-serif',
           /* Do not inherit body letter-spacing (-2%) — it crams CAD dimension strings. */
           letterSpacing: 0,
         }}

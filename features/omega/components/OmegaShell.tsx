@@ -43,7 +43,7 @@ export function OmegaShell({ children }: { children: React.ReactNode }) {
   }, [panelOpen]);
 
   return (
-    <div dir="rtl" className="omega-app min-h-svh w-full font-[var(--font-rubik)]">
+    <div dir="rtl" className="omega-app min-h-svh w-full font-[var(--font-google-sans)]">
       {/* App bar */}
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between px-4 bg-[var(--omega-surface)] shadow-sm">
         <button
